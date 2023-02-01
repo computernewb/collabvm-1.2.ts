@@ -1,0 +1,22 @@
+{
+  "name": "collabvm1.ts",
+  "version": "1.0.0",
+  "description": "replacement for collabvm 1.2.11 because the old one :boom:",
+  "main": "build/index.js",
+  "scripts": {
+    "build": "tsc",
+    "serve": "node build/index.js"
+  },
+  "author": "Elijah R",
+  "license": "GPL-3.0",
+  "dependencies": {
+    "@types/node": "^18.11.18",
+    "@types/ws": "^8.5.4",
+    "fs": "^0.0.1-security",
+    "mnemonist": "^0.39.5",
+    "rfb2": "^0.2.2",
+    "toml": "^3.0.0",
+    "typescript": "^4.9.5",
+    "ws": "^8.12.0"
+  }
+}

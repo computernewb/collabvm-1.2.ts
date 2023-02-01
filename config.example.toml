@@ -1,0 +1,48 @@
+[http]
+host = "127.0.0.1"
+port = 6004
+# Whether the server is behind a reverse proxy, like NGINX
+proxying = true
+# IPs allowed to access the server in proxy mode.
+# 99% of the time this will only be 127.0.0.1
+proxyAllowedIps = ["127.0.0.1"]
+
+[vm]
+qemuArgs = "qemu-system-x86_64"
+vncPort = 5900
+snapshots = true
+qmpSockDir = "/tmp/"
+
+[collabvm]
+node = "acoolvm"
+displayname = "A <b>Really</b> Cool CollabVM Instance"
+motd = "welcome!"
+# Command used to ban an IP.
+# Use $IP to specify an ip and (optionally) use $NAME to specify a username
+bancmd = "iptables -A INPUT -s $IP -j REJECT"
+moderatorEnabled = true
+usernameblacklist = ["jjjj"]
+maxChatLength = 100
+# Temporarily mute a user if they send more than x messages in n seconds
+automute = {enabled = true, seconds = 5, messages = 5}
+# How long a temporary mute lasts, in seconds
+tempMuteTime = 30
+# How long a turn lasts, in seconds
+turnTime = 20
+# SHA256 sum of the admin and mod passwords. This can be generated with the following command:
+# printf "<password>" | sha256sum -
+# Example hash is hunter2 and hunter3
+adminpass = "f52fbd32b2b3b86ff88ef6c490628285f482af15ddcb29541f94bcf526a3f6c7"
+modpass = "fb8c2e2b85ca81eb4350199faddd983cb26af3064614e737ea9f479621cfa57a"
+[collabvm.moderatorPermissions]
+# What a moderator can and can't do
+restore = true
+reboot = true
+ban = true
+forcevote = true
+mute = true
+kick = true
+bypassturn = true
+rename = true
+grabip = true
+xss = true
