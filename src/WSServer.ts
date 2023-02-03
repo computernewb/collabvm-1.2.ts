@@ -1,14 +1,19 @@
 import {WebSocketServer, WebSocket} from 'ws';
 import * as http from 'http';
-import IConfig from './IConfig';
+import IConfig from './IConfig.js';
 import internal from 'stream';
-import * as Utilities from './Utilities';
-import { User, Rank } from './User';
-import * as guacutils from './guacutils';
+import * as Utilities from './Utilities.js';
+import { User, Rank } from './User.js';
+import * as guacutils from './guacutils.js';
 import * as fs from 'fs';
-import { CircularBuffer, Queue } from 'mnemonist';
+// I hate that you have to do it like this
+import CircularBuffer from 'mnemonist/circular-buffer.js';
+import Queue from 'mnemonist/queue.js';
 import { createHash } from 'crypto';
 import { isIP } from 'net';
+import QEMUVM from './QEMUVM.js';
+import Framebuffer from './Framebuffer.js';
+import sharp, { Sharp } from 'sharp';
 
 export default class WSServer {
     private Config : IConfig;
@@ -21,7 +26,9 @@ export default class WSServer {
     private TurnInterval? : NodeJS.Timer;
     private TurnIntervalRunning : boolean;
     private ModPerms : number;
-    constructor(config : IConfig) {
+    private VM : QEMUVM;
+    private framebuffer : Framebuffer;
+    constructor(config : IConfig, vm : QEMUVM) {
         this.ChatHistory = new CircularBuffer<{user:string,msg:string}>(Array, 5);
         this.TurnQueue = new Queue<User>();
         this.TurnTime = 0;
@@ -33,6 +40,12 @@ export default class WSServer {
         this.socket = new WebSocketServer({noServer: true});
         this.server.on('upgrade', (req : http.IncomingMessage, socket : internal.Duplex, head : Buffer) => this.httpOnUpgrade(req, socket, head));
         this.socket.on('connection', (ws : WebSocket, req : http.IncomingMessage) => this.onConnection(ws, req));
+        var initSize = vm.getSize();
+        this.framebuffer = new Framebuffer();
+        this.newsize(initSize);
+        this.VM = vm;
+        this.VM.on("dirtyrect", (j, x, y, w, h) => this.newrect(j, x, y, w, h));
+        this.VM.on("size", (s) => this.newsize(s));
     }
 
     listen() {
@@ -123,13 +136,12 @@ export default class WSServer {
         //@ts-ignore
         this.clients.forEach((c) => c.sendMsg(guacutils.encode("remuser", "1", user.username)));
     }
-    fuck = fs.readFileSync("/home/elijah/Pictures/thumb.txt").toString();
-    private onMessage(client : User, message : string) {
+    private async onMessage(client : User, message : string) {
         var msgArr = guacutils.decode(message);
         if (msgArr.length < 1) return;
         switch (msgArr[0]) {
             case "list":
-                client.sendMsg(guacutils.encode("list", this.Config.collabvm.node, this.Config.collabvm.displayname, this.fuck))
+                client.sendMsg(guacutils.encode("list", this.Config.collabvm.node, this.Config.collabvm.displayname, await this.getThumbnail()));
                 break;
             case "connect":
                 if (!client.username || msgArr.length !== 2 || msgArr[1] !== this.Config.collabvm.node) {
@@ -140,8 +152,10 @@ export default class WSServer {
                 client.sendMsg(guacutils.encode("connect", "1", "1", "1", "0"));
                 if (this.Config.collabvm.motd) client.sendMsg(guacutils.encode("chat", "", this.Config.collabvm.motd));
                 if (this.ChatHistory.size !== 0) client.sendMsg(this.getChatHistoryMsg());
-                client.sendMsg(guacutils.encode("size", "0", "400", "300"));
-                client.sendMsg(guacutils.encode("png", "0", "0", "0", "0", this.fuck));
+                client.sendMsg(guacutils.encode("size", "0", this.framebuffer.size.width.toString(), this.framebuffer.size.height.toString()));
+                var jpg = await sharp(await this.framebuffer.getFb(), {raw: {height: this.framebuffer.size.height, width: this.framebuffer.size.width, channels: 4}}).jpeg().toBuffer();
+                var jpg64 = jpg.toString("base64");
+                client.sendMsg(guacutils.encode("png", "0", "0", "0", "0", jpg64));
                 break;
             case "rename":
                 if (!client.RenameRateLimit.request()) return;
@@ -231,6 +245,23 @@ export default class WSServer {
                 }
                 this.sendTurnUpdate();
                 break;
+            case "mouse":
+                if (this.TurnQueue.peek() !== client && client.rank !== Rank.Admin) return;
+                if (!this.VM.vnc) throw new Error("VNC Client was undefined");
+                var x = parseInt(msgArr[1]);
+                var y = parseInt(msgArr[2]);
+                var mask = parseInt(msgArr[3]);
+                if (x === undefined || y === undefined || mask === undefined) return;
+                this.VM.vnc.pointerEvent(x, y, mask);
+                break;
+            case "key":
+                if (this.TurnQueue.peek() !== client && client.rank !== Rank.Admin) return;
+                if (!this.VM.vnc) throw new Error("VNC Client was undefined");
+                var keysym = parseInt(msgArr[1]);
+                var down = parseInt(msgArr[2]);
+                if (keysym === undefined || (down !== 0 && down !== 1)) return;
+                this.VM.vnc.keyEvent(keysym, down);
+                break;
             case "admin":
                 if (msgArr.length < 2) return;
                 switch (msgArr[1]) {
@@ -311,5 +342,26 @@ export default class WSServer {
             this.TurnQueue.dequeue();
             this.nextTurn();
         }
+    }
+
+    private async newrect(buff : Buffer, x : number, y : number, width : number, height : number) {
+        var jpg = await sharp(buff, {raw: {height: height, width: width, channels: 4}}).jpeg().toBuffer();
+        var jpg64 = jpg.toString("base64");
+        this.clients.filter(c => c.connectedToNode).forEach(c => c.sendMsg(guacutils.encode("png", "0", "0", x.toString(), y.toString(), jpg64)));
+        this.framebuffer.loadDirtyRect(buff, x, y, width, height);
+    }
+
+    private newsize(size : {height:number,width:number}) {
+        this.framebuffer.setSize(size.width, size.height);
+        this.clients.filter(c => c.connectedToNode).forEach(c => c.sendMsg(guacutils.encode("size", "0", size.width.toString(), size.height.toString())));
+    }
+
+    getThumbnail() : Promise<string> {
+        return new Promise(async (res, rej) => {
+            var jpg = await sharp(await this.framebuffer.getFb(), {raw: {height: this.framebuffer.size.height, width: this.framebuffer.size.width, channels: 4}})
+                .resize(400, 300, {fit: 'fill'})
+                .jpeg().toBuffer();
+            res(jpg.toString("base64"));
+        })
     }
 }

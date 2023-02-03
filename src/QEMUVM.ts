@@ -1,9 +1,9 @@
 import { EventEmitter } from "events";
-import IConfig from "./IConfig";
+import IConfig from "./IConfig.js";
 import * as rfb from 'rfb2';
 import * as fs from 'fs';
-import { spawn, ChildProcess } from "child_process";
-import QMPClient from "./QMPClient";
+import { execa, ExecaChildProcess } from "execa";
+import QMPClient from "./QMPClient.js";
 
 export default class QEMUVM extends EventEmitter {
     vnc? : rfb.RfbClient;
@@ -11,9 +11,16 @@ export default class QEMUVM extends EventEmitter {
     qmpSock : string;
     qmpClient : QMPClient;
     qemuCmd : string;
-    qemuProcess? : ChildProcess;
+    qemuProcess? : ExecaChildProcess;
     qmpErrorLevel : number;
     vncErrorLevel : number;
+    processRestartErrorLevel : number;
+    expectedExit : boolean;
+
+    vncReconnectTimeout? : NodeJS.Timer;
+    qmpReconnectTimeout? : NodeJS.Timer;
+    qemuRestartTimeout? : NodeJS.Timer;
+
     constructor(Config : IConfig) {
         super();
         if (Config.vm.vncPort < 5900) {
@@ -25,12 +32,15 @@ export default class QEMUVM extends EventEmitter {
         this.qemuCmd = `${Config.vm.qemuArgs} -snapshot -no-shutdown -vnc 127.0.0.1:${this.vncPort - 5900} -qmp unix:${this.qmpSock},server`;
         this.qmpErrorLevel = 0;
         this.vncErrorLevel = 0;
+        this.processRestartErrorLevel = 0;
+        this.expectedExit = false;
         this.qmpClient = new QMPClient(this.qmpSock);
         this.qmpClient.on('connected', () => this.qmpConnected());
+        this.qmpClient.on('close', () => this.qmpClosed());
     }
 
-    Start() {
-        return new Promise(async (res, rej) => {
+    Start() : Promise<void> {
+        return new Promise<void>(async (res, rej) => {
             if (fs.existsSync(this.qmpSock))
                 try {
                     fs.unlinkSync(this.qmpSock);
@@ -39,20 +49,34 @@ export default class QEMUVM extends EventEmitter {
                     process.exit(-1);
                 }
             var qemuArr = this.qemuCmd.split(" ");
-            this.qemuProcess = spawn(qemuArr[0], qemuArr.slice(1));
-            process.on("beforeExit", () => {
-                this.qemuProcess?.kill(9);
-            });
+            this.qemuProcess = execa(qemuArr[0], qemuArr.slice(1));
             this.qemuProcess.stderr?.on('data', (d) => console.log(d.toString()));
             this.qemuProcess.on('spawn', () => {
-                setTimeout(() => {
-                    this.qmpClient.connect();
+                setTimeout(async () => {
+                    await this.qmpClient.connect();
                 }, 1000)
             });
+            this.qemuProcess.on('exit', () => {
+                if (this.expectedExit) return;
+                clearTimeout(this.qmpReconnectTimeout);
+                clearTimeout(this.vncReconnectTimeout);
+                this.processRestartErrorLevel++;
+                if (this.processRestartErrorLevel > 4) {
+                    console.error("[FATAL] QEMU failed to launch 5 times.");
+                    process.exit(-1);
+                }
+                console.warn("QEMU exited unexpectly. Restarting in 3 seconds...");
+                this.qmpClient.disconnect();
+                this.vnc?.end();
+                this.qemuRestartTimeout = setTimeout(() => this.Start(), 3000);
+            }); 
+            this.once('vncconnect', () => res());
         });
     }
 
     private qmpConnected() {
+        this.qmpErrorLevel = 0;
+        this.processRestartErrorLevel = 0;
         console.log("QMP Connected");
         setTimeout(() => this.startVNC(), 1000);
     }
@@ -62,9 +86,86 @@ export default class QEMUVM extends EventEmitter {
             host: "127.0.0.1",
             port: this.vncPort,
         });
+        this.vnc.on("close", () => this.vncClosed());
+        this.vnc.on("connect", () => this.vncConnected());
+        this.vnc.on("rect", (r) => this.onVNCRect(r));
+        this.vnc.on("resize", (s) => this.onVNCSize(s));
+    }
+
+    getSize() {
+        if (!this.vnc) return {height:0,width:0};
+        return {height: this.vnc.height, width: this.vnc.width}
     }
 
     private qmpClosed() {
+        if (this.expectedExit) return;
+        this.qmpErrorLevel++;
+        if (this.qmpErrorLevel > 4) {
+            console.error("[FATAL] Failed to connect to QMP after 5 attempts");
+            process.exit(1);
+        }
+        console.warn("Failed to connect to QMP. Retrying in 3 seconds...");
+        this.qmpReconnectTimeout = setTimeout(() => this.qmpClient.connect(), 3000);
+    }
 
+    private vncClosed() {
+        if (this.expectedExit) return;
+        this.vncErrorLevel++;
+        if (this.vncErrorLevel > 4) {
+            console.error("[FATAL] Failed to connect to VNC after 5 attempts");
+            process.exit(1);
+        }
+        try {
+            this.vnc?.end();
+        } catch {};
+        console.warn("Failed to connect to VNC. Retrying in 3 seconds...");
+        this.vncReconnectTimeout = setTimeout(() => this.startVNC(), 3000);
+    }
+
+    private vncConnected() {
+        this.emit('vncconnect');
+        this.vncErrorLevel = 0;
+    }
+    private async onVNCRect(rect : any) {
+        var buff = Buffer.alloc(rect.height * rect.width * 4)
+        var offset = 0;
+        for (var i = 0; i < rect.data.length; i += 4) {
+            buff[offset++] = rect.data[i + 2];
+            buff[offset++] = rect.data[i + 1];
+            buff[offset++] = rect.data[i];
+            buff[offset++] = 255;
+        }
+        this.emit("dirtyrect", buff, rect.x, rect.y, rect.width, rect.height);
+        if (!this.vnc) throw new Error();
+        this.vnc.requestUpdate(true, 0, 0, this.vnc.height, this.vnc.width);
+    }
+
+    private onVNCSize(size : any) {
+        this.emit("size", {height: size.height, width: size.width});
+    }
+
+    Reboot() : Promise<void> {
+        return this.qmpClient.reboot();
+    }
+
+    async Restore() {
+        await this.Stop();
+        this.expectedExit = false;
+        this.Start();
+    }
+
+    Stop() : Promise<void> {
+        return new Promise<void>(async (res, rej) => {
+            this.expectedExit = true;
+            this.vnc?.end();
+            this.qmpClient.disconnect();
+            var killTimeout = setTimeout(() => {
+                console.log("Force killing QEMU after 10 seconds of waiting for shutdown");
+                this.qemuProcess?.kill(9);
+            }, 10000)
+            await this.qemuProcess;
+            clearTimeout(killTimeout);
+            res();
+        })
     }
 }

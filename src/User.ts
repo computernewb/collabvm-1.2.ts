@@ -1,8 +1,8 @@
-import * as Utilities from './Utilities';
-import * as guacutils from './guacutils';
+import * as Utilities from './Utilities.js';
+import * as guacutils from './guacutils.js';
 import {WebSocket} from 'ws';
-import IConfig from './IConfig';
-import RateLimiter from './RateLimiter';
+import IConfig from './IConfig.js';
+import RateLimiter from './RateLimiter.js';
 export class User {
     socket : WebSocket;
     nopSendInterval : NodeJS.Timer;

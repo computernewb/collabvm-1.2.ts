@@ -1,4 +1,4 @@
-import { EventEmitter } from "stream";
+import { EventEmitter } from "events";
 
 // Class to ratelimit a resource (chatting, logging in, etc)
 export default class RateLimiter extends EventEmitter {

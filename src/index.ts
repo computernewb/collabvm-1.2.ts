@@ -1,8 +1,8 @@
 import * as toml from 'toml';
-import IConfig from './IConfig';
+import IConfig from './IConfig.js';
 import * as fs from "fs";
-import WSServer from './WSServer';
-import QEMUVM from './QEMUVM';
+import WSServer from './WSServer.js';
+import QEMUVM from './QEMUVM.js';
 
 // Parse the config file
 
@@ -20,10 +20,14 @@ try {
     process.exit(1);
 }
 
-// Fire up the VM
-var VM = new QEMUVM(Config);
-VM.Start();
 
-// Start up the websocket server
-var WS = new WSServer(Config);
-WS.listen();
+async function start() {
+    // Fire up the VM
+    var VM = new QEMUVM(Config);
+    await VM.Start();
+
+    // Start up the websocket server
+    var WS = new WSServer(Config, VM);
+    WS.listen();
+}
+start();
