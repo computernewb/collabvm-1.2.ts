@@ -109,7 +109,7 @@ export class User {
     }
     
     async kick() {
-        this.sendMsg("10.disconnect");
+        this.sendMsg("10.disconnect;");
         this.socket.close();
     }
 }
