@@ -3,6 +3,7 @@ import * as guacutils from './guacutils.js';
 import {WebSocket} from 'ws';
 import IConfig from './IConfig.js';
 import RateLimiter from './RateLimiter.js';
+import { execaCommand } from 'execa';
 export class User {
     socket : WebSocket;
     nopSendInterval : NodeJS.Timer;
@@ -16,6 +17,7 @@ export class User {
     msgsSent : number;
     Config : IConfig;
     IP : string;
+    vote : boolean | null;
     // Rate limiters
     ChatRateLimit : RateLimiter;
     LoginRateLimit : RateLimiter;
@@ -28,6 +30,7 @@ export class User {
         this.socket = ws;
         this.muted = false;
         this.msgsSent = 0;
+        this.vote = null;
         this.socket.on('close', () => {
             clearInterval(this.nopSendInterval);
         });
@@ -94,6 +97,20 @@ export class User {
         clearTimeout(this.tempMuteExpireTimeout);
         this.muted = false;
         this.sendMsg(guacutils.encode("chat", "", "You are no longer muted."));
+    }
+
+    async ban() {
+        // Prevent the user from taking turns or chatting, in case the ban command takes a while
+        this.muted = true;
+        //@ts-ignore
+        var cmd = this.Config.collabvm.bancmd.replace(/\$IP/g, this.IP).replace(/\$NAME/g, this.username);
+        await execaCommand(cmd);
+        this.kick();
+    }
+    
+    async kick() {
+        this.sendMsg("10.disconnect");
+        this.socket.close();
     }
 }
 

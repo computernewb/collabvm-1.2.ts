@@ -29,6 +29,8 @@ automute = {enabled = true, seconds = 5, messages = 5}
 tempMuteTime = 30
 # How long a turn lasts, in seconds
 turnTime = 20
+# How long a reset vote lasts, in seconds
+voteTime = 100
 # SHA256 sum of the admin and mod passwords. This can be generated with the following command:
 # printf "<password>" | sha256sum -
 # Example hash is hunter2 and hunter3

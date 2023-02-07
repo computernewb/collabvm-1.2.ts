@@ -26,6 +26,7 @@ export default interface IConfig {
         };
         tempMuteTime : number;
         turnTime : number;
+        voteTime : number;
         adminpass : string;
         modpass : string;
         moderatorPermissions : Permissions;

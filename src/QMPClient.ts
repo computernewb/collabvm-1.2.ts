@@ -25,10 +25,10 @@ export default class QMPClient extends EventEmitter {
                 this.onClose();
             }
             this.connected = true;
-            this.socket.on('error', (err) => false); // Disable throwing if QMP errors
+            this.socket.on('error', (err) => console.log(err)); // Disable throwing if QMP errors
             this.socket.on('data', (data) => this.onData(data));
             this.socket.on('close', () => this.onClose());
-            this.once('connected', () => res());
+            this.once('connected', () => {res();});
         })
     }
 
@@ -39,10 +39,13 @@ export default class QMPClient extends EventEmitter {
 
     private async onData(data : Buffer) {
         var msgraw = data.toString();
-        var msg = JSON.parse(msgraw);
+        var msg;
+        try {msg = JSON.parse(msgraw);}
+        catch {return;}
         if (msg.QMP) {
-            if (this.sentConnected) return;
+            if (this.sentConnected) {return;};
             await this.execute({ execute: "qmp_capabilities" });
+
             this.emit('connected');
             this.sentConnected = true;
         }
@@ -52,6 +55,11 @@ export default class QMPClient extends EventEmitter {
     private onClose() {
         this.connected = false;
         this.sentConnected = false;
+        if (this.socket.readyState === 'open')
+            this.socket.destroy();
+        this.cmdMutex.cancel();
+        this.cmdMutex.release();
+        this.socket = new Socket();
         this.emit('close');
     }
 
@@ -67,15 +75,18 @@ export default class QMPClient extends EventEmitter {
 
     execute(args : object) {
         return new Promise(async (res, rej) => {
-            var result:any = await this.cmdMutex.runExclusive(() => {
-                // I kinda hate having two promises but IDK how else to do it /shrug
-                return new Promise((reso, reje) => {
-                    this.once('qmpreturn', (e) => {
-                        reso(e);
+            var result:any;
+            try {
+                result = await this.cmdMutex.runExclusive(() => {
+                    // I kinda hate having two promises but IDK how else to do it /shrug
+                    return new Promise((reso, reje) => {
+                        this.once('qmpreturn', (e) => {
+                            reso(e);
+                        });
+                        this.socket.write(JSON.stringify(args));
                     });
-                    this.socket.write(JSON.stringify(args));
                 });
-            });
+            } catch {res({})};
             res(result);
         });
     }
