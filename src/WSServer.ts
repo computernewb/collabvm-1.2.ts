@@ -54,6 +54,11 @@ export default class WSServer {
         this.server = http.createServer();
         this.socket = new WebSocketServer({noServer: true});
         this.server.on('upgrade', (req : http.IncomingMessage, socket : internal.Duplex, head : Buffer) => this.httpOnUpgrade(req, socket, head));
+        this.server.on('request', (req, res) => {
+            res.writeHead(426);
+            res.write("This server only accepts WebSocket connections.");
+            res.end();
+        });
         this.socket.on('connection', (ws : WebSocket, req : http.IncomingMessage) => this.onConnection(ws, req));
         var initSize = vm.getSize();
         this.framebuffer = new Framebuffer();
