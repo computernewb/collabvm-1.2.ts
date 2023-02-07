@@ -471,7 +471,7 @@ export default class WSServer {
     }
 
     getAdduserMsg() : string {
-        var arr : string[] = ["adduser", this.clients.length.toString()];
+        var arr : string[] = ["adduser", this.clients.filter(c=>c.username).length.toString()];
         //@ts-ignore
         this.clients.filter(c=>c.username).forEach((c) => arr.push(c.username, c.rank));
         return guacutils.encode(...arr);
