@@ -175,6 +175,7 @@ export default class WSServer {
                 client.sendMsg(guacutils.encode("size", "0", this.framebuffer.size.width.toString(), this.framebuffer.size.height.toString()));
                 var jpg = await sharp(await this.framebuffer.getFb(), {raw: {height: this.framebuffer.size.height, width: this.framebuffer.size.width, channels: 4}}).jpeg().toBuffer();
                 var jpg64 = jpg.toString("base64");
+                client.sendMsg(guacutils.encode("sync", Date.now().toString()));
                 client.sendMsg(guacutils.encode("png", "0", "0", "0", "0", jpg64));
                 if (this.voteInProgress) this.sendVoteUpdate(client);
                 this.sendTurnUpdate(client);
@@ -544,7 +545,10 @@ export default class WSServer {
     private async newrect(buff : Buffer, x : number, y : number, width : number, height : number) {
         var jpg = await sharp(buff, {raw: {height: height, width: width, channels: 4}}).jpeg().toBuffer();
         var jpg64 = jpg.toString("base64");
-        this.clients.filter(c => c.connectedToNode).forEach(c => c.sendMsg(guacutils.encode("png", "0", "0", x.toString(), y.toString(), jpg64)));
+        this.clients.filter(c => c.connectedToNode).forEach(c => {
+            c.sendMsg(guacutils.encode("sync", Date.now().toString()));
+            c.sendMsg(guacutils.encode("png", "0", "0", x.toString(), y.toString(), jpg64));
+        });
         this.framebuffer.loadDirtyRect(buff, x, y, width, height);
     }
 
