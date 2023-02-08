@@ -42,14 +42,14 @@ export default class QMPClient extends EventEmitter {
         var msg;
         try {msg = JSON.parse(msgraw);}
         catch {return;}
-        if (msg.QMP) {
+        if (msg.QMP !== undefined) {
             if (this.sentConnected) {return;};
             await this.execute({ execute: "qmp_capabilities" });
 
             this.emit('connected');
             this.sentConnected = true;
         }
-        if (msg.return) this.emit("qmpreturn", msg.return);
+        if (msg.return !== undefined) this.emit("qmpreturn", msg.return);
     }
 
     private onClose() {
