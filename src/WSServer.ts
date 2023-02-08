@@ -172,8 +172,8 @@ export default class WSServer {
                 client.sendMsg(guacutils.encode("size", "0", this.VM.framebuffer.width.toString(), this.VM.framebuffer.height.toString()));
                 var jpg = this.VM.framebuffer.toBuffer("image/jpeg");
                 var jpg64 = jpg.toString("base64");
-                client.sendMsg(guacutils.encode("sync", Date.now().toString()));
                 client.sendMsg(guacutils.encode("png", "0", "0", "0", "0", jpg64));
+                client.sendMsg(guacutils.encode("sync", Date.now().toString()));
                 if (this.voteInProgress) this.sendVoteUpdate(client);
                 this.sendTurnUpdate(client);
                 break;
@@ -543,8 +543,8 @@ export default class WSServer {
         var jpg = rect.toBuffer("image/jpeg", {quality: 0.5, progressive: true, chromaSubsampling: true});
         var jpg64 = jpg.toString("base64");
         this.clients.filter(c => c.connectedToNode).forEach(c => {
-            c.sendMsg(guacutils.encode("sync", Date.now().toString()));
             c.sendMsg(guacutils.encode("png", "0", "0", x.toString(), y.toString(), jpg64));
+            c.sendMsg(guacutils.encode("sync", Date.now().toString()));
         });
     }
 
