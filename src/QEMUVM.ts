@@ -4,10 +4,15 @@ import * as rfb from 'rfb2';
 import * as fs from 'fs';
 import { execa, ExecaChildProcess } from "execa";
 import QMPClient from "./QMPClient.js";
+import BatchRects from "./RectBatcher.js";
+import { createCanvas, Canvas, CanvasRenderingContext2D, createImageData } from "canvas";
+import { Mutex } from "async-mutex";
 
 export default class QEMUVM extends EventEmitter {
     vnc? : rfb.RfbClient;
     vncPort : number;
+    framebuffer : Canvas;
+    framebufferCtx : CanvasRenderingContext2D;
     qmpSock : string;
     qmpClient : QMPClient;
     qemuCmd : string;
@@ -17,6 +22,9 @@ export default class QEMUVM extends EventEmitter {
     processRestartErrorLevel : number;
     expectedExit : boolean;
     vncOpen : boolean;
+    vncUpdateInterval? : NodeJS.Timer;
+    rects : {height:number,width:number,x:number,y:number,data:Buffer}[];
+    rectMutex : Mutex;
 
     vncReconnectTimeout? : NodeJS.Timer;
     qmpReconnectTimeout? : NodeJS.Timer;
@@ -34,6 +42,10 @@ export default class QEMUVM extends EventEmitter {
         this.qmpErrorLevel = 0;
         this.vncErrorLevel = 0;
         this.vncOpen = true;
+        this.rects = [];
+        this.rectMutex = new Mutex();
+        this.framebuffer = createCanvas(1, 1);
+        this.framebufferCtx = this.framebuffer.getContext("2d");
         this.processRestartErrorLevel = 0;
         this.expectedExit = false;
         this.qmpClient = new QMPClient(this.qmpSock);
@@ -133,23 +145,51 @@ export default class QEMUVM extends EventEmitter {
         this.vncErrorLevel = 0;
         //@ts-ignore
         this.onVNCSize({height: this.vnc.height, width: this.vnc.width});
+        this.vncUpdateInterval = setInterval(() => this.SendRects(), 33);
     }
-    private async onVNCRect(rect : any) {
-        var buff = Buffer.alloc(rect.height * rect.width * 4)
-        var offset = 0;
-        for (var i = 0; i < rect.data.length; i += 4) {
-            buff[offset++] = rect.data[i + 2];
-            buff[offset++] = rect.data[i + 1];
-            buff[offset++] = rect.data[i];
-            buff[offset++] = 255;
-        }
-        this.emit("dirtyrect", buff, rect.x, rect.y, rect.width, rect.height);
-        if (!this.vnc) throw new Error();
-        if (this.vncOpen)
-            this.vnc.requestUpdate(true, 0, 0, this.vnc.height, this.vnc.width);
+    private onVNCRect(rect : any) {
+        return this.rectMutex.runExclusive(async () => {
+            return new Promise<void>(async (res, rej) => {
+                var buff = Buffer.alloc(rect.height * rect.width * 4)
+                var offset = 0;
+                for (var i = 0; i < rect.data.length; i += 4) {
+                    buff[offset++] = rect.data[i + 2];
+                    buff[offset++] = rect.data[i + 1];
+                    buff[offset++] = rect.data[i];
+                    buff[offset++] = 255;
+                }
+                var imgdata = createImageData(Uint8ClampedArray.from(buff), rect.width, rect.height);
+                this.framebufferCtx.putImageData(imgdata, rect.x, rect.y);
+                this.rects.push({
+                    x: rect.x,
+                    y: rect.y,
+                    height: rect.height,
+                    width: rect.width,
+                    data: buff,
+                });
+                if (!this.vnc) throw new Error();
+                if (this.vncOpen)
+                    this.vnc.requestUpdate(true, 0, 0, this.vnc.height, this.vnc.width);
+                res();
+            })
+        });
+    }
+
+    SendRects() {
+        if (!this.vnc || this.rects.length < 1) return;
+        return this.rectMutex.runExclusive(() => {
+            return new Promise<void>(async (res, rej) => {
+                var rect = await BatchRects(this.framebuffer, [...this.rects]);
+                this.rects = [];
+                this.emit('dirtyrect', rect.data, rect.x, rect.y);
+                res();
+            });
+        })
     }
 
     private onVNCSize(size : any) {
+        if (this.framebuffer.height !== size.height) this.framebuffer.height = size.height;
+        if (this.framebuffer.width !== size.width) this.framebuffer.width = size.width;
         this.emit("size", {height: size.height, width: size.width});
     }
 
@@ -174,6 +214,7 @@ export default class QEMUVM extends EventEmitter {
             this.expectedExit = true;
             this.vncOpen = false;
             this.vnc?.end();
+            clearInterval(this.vncUpdateInterval);
             var killTimeout = setTimeout(() => {
                 console.log("Force killing QEMU after 10 seconds of waiting for shutdown");
                 this.qemuProcess?.kill(9);

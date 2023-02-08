@@ -1,7 +1,7 @@
 import { Mutex } from "async-mutex";
 
 export default class Framebuffer {
-    private fb : Buffer;
+    fb : Buffer;
     private writemutex : Mutex;
     size : {height : number, width : number};
     constructor() {
@@ -15,10 +15,10 @@ export default class Framebuffer {
         this.size.width = w;
         this.fb = Buffer.alloc(size);
     }
-    loadDirtyRect(rect : Buffer, x : number, y : number, width : number, height : number) {
+    loadDirtyRect(rect : Buffer, x : number, y : number, width : number, height : number) : Promise<void> {
         if (this.fb.length < rect.length)
             throw new Error("Dirty rect larger than framebuffer (did you forget to set the size?)");
-        this.writemutex.runExclusive(() => {
+        return this.writemutex.runExclusive(() => {
             return new Promise<void>((res, rej) => {
                 var byteswritten = 0;
                 for (var i = 0; i < height; i++) {

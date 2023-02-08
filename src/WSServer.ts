@@ -11,8 +11,7 @@ import Queue from 'mnemonist/queue.js';
 import { createHash } from 'crypto';
 import { isIP } from 'net';
 import QEMUVM from './QEMUVM.js';
-import Framebuffer from './Framebuffer.js';
-import sharp from 'sharp';
+import { Canvas, createCanvas, CanvasRenderingContext2D } from 'canvas';
 
 export default class WSServer {
     private Config : IConfig;
@@ -37,9 +36,8 @@ export default class WSServer {
     private voteTimeout : number;
     // Interval to keep track
     private voteTimeoutInterval? : NodeJS.Timer;
-    private ModPerms : number;
+    private ModPerms : number;  
     private VM : QEMUVM;
-    private framebuffer : Framebuffer;
     constructor(config : IConfig, vm : QEMUVM) {
         this.ChatHistory = new CircularBuffer<{user:string,msg:string}>(Array, 5);
         this.TurnQueue = new Queue<User>();
@@ -61,10 +59,9 @@ export default class WSServer {
         });
         this.socket.on('connection', (ws : WebSocket, req : http.IncomingMessage) => this.onConnection(ws, req));
         var initSize = vm.getSize();
-        this.framebuffer = new Framebuffer();
         this.newsize(initSize);
         this.VM = vm;
-        this.VM.on("dirtyrect", (j, x, y, w, h) => this.newrect(j, x, y, w, h));
+        this.VM.on("dirtyrect", (j, x, y) => this.newrect(j, x, y));
         this.VM.on("size", (s) => this.newsize(s));
     }
 
@@ -172,8 +169,8 @@ export default class WSServer {
                 client.sendMsg(guacutils.encode("connect", "1", "1", "1", "0"));
                 if (this.Config.collabvm.motd) client.sendMsg(guacutils.encode("chat", "", this.Config.collabvm.motd));
                 if (this.ChatHistory.size !== 0) client.sendMsg(this.getChatHistoryMsg());
-                client.sendMsg(guacutils.encode("size", "0", this.framebuffer.size.width.toString(), this.framebuffer.size.height.toString()));
-                var jpg = await sharp(await this.framebuffer.getFb(), {raw: {height: this.framebuffer.size.height, width: this.framebuffer.size.width, channels: 4}}).jpeg().toBuffer();
+                client.sendMsg(guacutils.encode("size", "0", this.VM.framebuffer.width.toString(), this.VM.framebuffer.height.toString()));
+                var jpg = this.VM.framebuffer.toBuffer("image/jpeg");
                 var jpg64 = jpg.toString("base64");
                 client.sendMsg(guacutils.encode("sync", Date.now().toString()));
                 client.sendMsg(guacutils.encode("png", "0", "0", "0", "0", jpg64));
@@ -542,26 +539,25 @@ export default class WSServer {
         }
     }
 
-    private async newrect(buff : Buffer, x : number, y : number, width : number, height : number) {
-        var jpg = await sharp(buff, {raw: {height: height, width: width, channels: 4}}).jpeg().toBuffer();
+    private async newrect(rect : Canvas, x : number, y : number) {
+        var jpg = rect.toBuffer("image/jpeg");
         var jpg64 = jpg.toString("base64");
         this.clients.filter(c => c.connectedToNode).forEach(c => {
             c.sendMsg(guacutils.encode("sync", Date.now().toString()));
             c.sendMsg(guacutils.encode("png", "0", "0", x.toString(), y.toString(), jpg64));
         });
-        this.framebuffer.loadDirtyRect(buff, x, y, width, height);
     }
 
     private newsize(size : {height:number,width:number}) {
-        this.framebuffer.setSize(size.width, size.height);
         this.clients.filter(c => c.connectedToNode).forEach(c => c.sendMsg(guacutils.encode("size", "0", size.width.toString(), size.height.toString())));
     }
 
     getThumbnail() : Promise<string> {
         return new Promise(async (res, rej) => {
-            var jpg = await sharp(await this.framebuffer.getFb(), {raw: {height: this.framebuffer.size.height, width: this.framebuffer.size.width, channels: 4}})
-                .resize(400, 300, {fit: 'fill'})
-                .jpeg().toBuffer();
+            var cnv = createCanvas(400, 300);
+            var ctx = cnv.getContext("2d");
+            ctx.drawImage(this.VM.framebuffer, 0, 0, 400, 300);
+            var jpg = cnv.toBuffer("image/jpeg");
             res(jpg.toString("base64"));
         })
     }

@@ -14,12 +14,12 @@
     "@types/sharp": "^0.31.1",
     "@types/ws": "^8.5.4",
     "async-mutex": "^0.4.0",
+    "canvas": "^2.11.0",
     "execa": "^6.1.0",
     "fs": "^0.0.1-security",
     "jimp": "^0.16.2",
     "mnemonist": "^0.39.5",
     "rfb2": "github:elijahr2411/node-rfb2",
-    "sharp": "^0.31.3",
     "toml": "^3.0.0",
     "typescript": "^4.9.5",
     "ws": "^8.12.0"
