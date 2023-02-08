@@ -10,8 +10,8 @@ export default async function BatchRects(fb : Canvas, rects : {height:number,wid
         if (r.y < mergedY) mergedY = r.y;
     });
     rects.forEach(r => {
-        if (r.height > mergedHeight) mergedHeight = (r.height + r.y) - mergedY;
-        if (r.width > mergedWidth) mergedWidth = (r.width + r.x) - mergedX; 
+        if (((r.height + r.y) - mergedY) > mergedHeight) mergedHeight = (r.height + r.y) - mergedY;
+        if (((r.width + r.x) - mergedX) > mergedWidth) mergedWidth = (r.width + r.x) - mergedX; 
     });
     var rect = createCanvas(mergedWidth, mergedHeight);
     var ctx = rect.getContext("2d");
