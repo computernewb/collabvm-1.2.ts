@@ -38,25 +38,39 @@ export default class QMPClient extends EventEmitter {
     }
 
     private async onData(data : Buffer) {
-        var msgraw = data.toString();
-        var msg;
-        try {msg = JSON.parse(msgraw);}
-        catch {return;}
+        let msgraw = data.toString();
+        let msg;
+
+        try {
+            msg = JSON.parse(msgraw);
+        } catch {
+            return;
+        }
+
         if (msg.QMP !== undefined) {
-            if (this.sentConnected) {return;};
+            if (this.sentConnected) 
+                return;
+                
             await this.execute({ execute: "qmp_capabilities" });
 
             this.emit('connected');
             this.sentConnected = true;
         }
-        if (msg.return !== undefined) this.emit("qmpreturn", msg.return);
+        if (msg.return !== undefined)
+            this.emit("qmpreturn", msg.return);
+        else
+            // for now just return an empty string.
+            // This is a giant hack but avoids a deadlock
+            this.emit("qmpreturn", '');
     }
 
     private onClose() {
         this.connected = false;
         this.sentConnected = false;
+
         if (this.socket.readyState === 'open')
             this.socket.destroy();
+
         this.cmdMutex.cancel();
         this.cmdMutex.release();
         this.socket = new Socket();
@@ -64,12 +78,16 @@ export default class QMPClient extends EventEmitter {
     }
 
     async reboot() {
-        if (!this.connected) return;
+        if (!this.connected) 
+            return;
+
         await this.execute({"execute": "system_reset"});
     }
 
     async ExitQEMU() {
-        if (!this.connected) return;
+        if (!this.connected) 
+            return;
+
         await this.execute({"execute": "quit"});
     }
 
@@ -86,15 +104,16 @@ export default class QMPClient extends EventEmitter {
                         this.socket.write(JSON.stringify(args));
                     });
                 });
-            } catch {res({})};
+            } catch {
+                res({});
+            }
             res(result);
         });
     }
 
     runMonitorCmd(command : string) {
         return new Promise(async (res, rej) => {
-            var result : any = await this.execute({execute: "human-monitor-command", arguments: {"command-line": command}});
-            res(result);
+            res(await this.execute({execute: "human-monitor-command", arguments: {"command-line": command}}));
         });
     }
 }
