@@ -540,7 +540,7 @@ export default class WSServer {
     }
 
     private async newrect(rect : Canvas, x : number, y : number) {
-        var jpg = rect.toBuffer("image/jpeg");
+        var jpg = rect.toBuffer("image/jpeg", {quality: 0.5, progressive: true, chromaSubsampling: true});
         var jpg64 = jpg.toString("base64");
         this.clients.filter(c => c.connectedToNode).forEach(c => {
             c.sendMsg(guacutils.encode("sync", Date.now().toString()));
