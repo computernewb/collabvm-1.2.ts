@@ -36,6 +36,8 @@ export default class WSServer {
     private voteTimeout : number;
     // Interval to keep track
     private voteTimeoutInterval? : NodeJS.Timer;
+    // Completely disable turns
+    private turnsAllowed : boolean;
     private ModPerms : number;  
     private VM : QEMUVM;
     constructor(config : IConfig, vm : QEMUVM) {
@@ -48,6 +50,7 @@ export default class WSServer {
         this.voteInProgress = false;
         this.voteTime = 0;
         this.voteTimeout = 0;
+        this.turnsAllowed = true;
         this.ModPerms = Utilities.MakeModPerms(this.Config.collabvm.moderatorPermissions);
         this.server = http.createServer();
         this.socket = new WebSocketServer({noServer: true});
@@ -195,6 +198,7 @@ export default class WSServer {
                 client.onMsgSent();
                 break;
             case "turn":
+                if (!this.turnsAllowed && client.rank !== Rank.Admin && client.rank !== Rank.Moderator) return;
                 if (!client.TurnRateLimit.request()) return;
                 if (!client.connectedToNode) return;
                 if (msgArr.length > 2) return;
@@ -410,6 +414,19 @@ export default class WSServer {
                                 this.clients.filter(c => c.rank !== Rank.Admin).forEach(c => c.sendMsg(guacutils.encode("chat", client.username, msgArr[2])));
                                 //@ts-ignore
                                 this.clients.filter(c => c.rank === Rank.Admin).forEach(c => c.sendMsg(guacutils.encode("chat", client.username, Utilities.HTMLSanitize(msgArr[2]))));
+                                break;
+                        }
+                        break;
+                    case "22":
+                        if (client.rank !== Rank.Admin) return;
+                        if (msgArr.length !== 3) return;
+                        switch (msgArr[2]) {
+                            case "0":
+                                this.clearTurns();
+                                this.turnsAllowed = false;
+                                break;
+                            case "1":
+                                this.turnsAllowed = true;
                                 break;
                         }
                         break;
