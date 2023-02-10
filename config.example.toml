@@ -21,7 +21,7 @@ motd = "welcome!"
 # Use $IP to specify an ip and (optionally) use $NAME to specify a username
 bancmd = "iptables -A INPUT -s $IP -j REJECT"
 moderatorEnabled = true
-usernameblacklist = ["jjjj"]
+usernameblacklist = []
 maxChatLength = 100
 # Temporarily mute a user if they send more than x messages in n seconds
 automute = {enabled = true, seconds = 5, messages = 5}
