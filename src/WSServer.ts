@@ -12,6 +12,7 @@ import { createHash } from 'crypto';
 import { isIP } from 'net';
 import QEMUVM from './QEMUVM.js';
 import { Canvas, createCanvas, CanvasRenderingContext2D } from 'canvas';
+import hcaptcha from './hcaptcha.js';
 
 export default class WSServer {
     private Config : IConfig;
@@ -40,6 +41,8 @@ export default class WSServer {
     private turnsAllowed : boolean;
     // Indefinite turn
     private indefiniteTurn : User | null;
+    // Captcha
+    private captcha : hcaptcha;
     private ModPerms : number;  
     private VM : QEMUVM;
     constructor(config : IConfig, vm : QEMUVM) {
@@ -69,6 +72,7 @@ export default class WSServer {
         this.VM = vm;
         this.VM.on("dirtyrect", (j, x, y) => this.newrect(j, x, y));
         this.VM.on("size", (s) => this.newsize(s));
+        this.captcha = new hcaptcha(this.Config);
     }
 
     listen() {
@@ -131,6 +135,8 @@ export default class WSServer {
             ip = req.socket.remoteAddress;
         }
         var user = new User(ws, ip, this.Config);
+        if (this.captcha.checkIpValidated(user.IP))
+            user.captchaValidated = true;
         this.clients.push(user);
         ws.on('close', () => this.connectionClosed(user));
         ws.on('message', (e) => {
@@ -164,10 +170,14 @@ export default class WSServer {
         if (msgArr.length < 1) return;
         switch (msgArr[0]) {
             case "list":
+                if (this.Config.hcaptcha.enabled && !client.captchaValidated && this.Config.hcaptcha.whitelist.indexOf(client.IP) === -1)
+                    client.sendMsg(guacutils.encode("captcha", "0", this.Config.hcaptcha.sitekey));
                 client.sendMsg(guacutils.encode("list", this.Config.collabvm.node, this.Config.collabvm.displayname, await this.getThumbnail()));
                 break;
             case "connect":
-                if (!client.username || msgArr.length !== 2 || msgArr[1] !== this.Config.collabvm.node) {
+                if (!client.username || msgArr.length !== 2 || msgArr[1] !== this.Config.collabvm.node
+                    || (this.Config.hcaptcha.enabled && !client.captchaValidated && this.Config.hcaptcha.whitelist.indexOf(client.IP) === -1)
+                    ) {
                     client.sendMsg(guacutils.encode("connect", "0"));
                     return;
                 }
@@ -182,6 +192,16 @@ export default class WSServer {
                 client.sendMsg(guacutils.encode("sync", Date.now().toString()));
                 if (this.voteInProgress) this.sendVoteUpdate(client);
                 this.sendTurnUpdate(client);
+                break;
+            case "captcha":
+                if (client.captchaValidated || msgArr.length !== 2) return;
+                var result = await this.captcha.validateToken(msgArr[1], client.IP);
+                if (result) {
+                    client.sendMsg(guacutils.encode("captcha", "1"));
+                    client.captchaValidated = true;
+                } else {
+                    client.sendMsg(guacutils.encode("captcha", "2"));
+                }
                 break;
             case "rename":
                 if (!client.RenameRateLimit.request()) return;

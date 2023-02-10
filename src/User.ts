@@ -18,6 +18,7 @@ export class User {
     Config : IConfig;
     IP : string;
     vote : boolean | null;
+    captchaValidated : boolean;
     // Rate limiters
     ChatRateLimit : RateLimiter;
     LoginRateLimit : RateLimiter;
@@ -52,6 +53,7 @@ export class User {
         this.LoginRateLimit.on('limit', () => this.closeConnection());
         this.TurnRateLimit = new RateLimiter(5, 3);
         this.TurnRateLimit.on('limit', () => this.closeConnection());
+        this.captchaValidated = false;
     }
     assignGuestName(existingUsers : string[]) : string {
         var username;
