@@ -50,7 +50,7 @@ export default class WSServer {
         this.Config = config;
         this.voteInProgress = false;
         this.voteTime = 0;
-        this.voteCooldown = this.Config.collabvm.voteCooldown;
+        this.voteCooldown = 0;
         this.ModPerms = Utilities.MakeModPerms(this.Config.collabvm.moderatorPermissions);
         this.server = http.createServer();
         this.socket = new WebSocketServer({noServer: true});
