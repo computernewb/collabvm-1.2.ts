@@ -38,6 +38,10 @@ export default class WSServer {
     private voteCooldown : number;
     // Interval to keep track
     private voteCooldownInterval? : NodeJS.Timer;
+    // Completely disable turns
+    private turnsAllowed : boolean;
+    // Indefinite turn
+    private indefiniteTurn : User | null;
     private ModPerms : number;  
     private VM : QEMUVM;
     constructor(config : IConfig, vm : QEMUVM) {
@@ -51,6 +55,8 @@ export default class WSServer {
         this.voteInProgress = false;
         this.voteTime = 0;
         this.voteCooldown = 0;
+        this.turnsAllowed = true;
+        this.indefiniteTurn = null;
         this.ModPerms = Utilities.MakeModPerms(this.Config.collabvm.moderatorPermissions);
         this.server = http.createServer();
         this.socket = new WebSocketServer({noServer: true});
@@ -209,6 +215,7 @@ export default class WSServer {
                 client.onMsgSent();
                 break;
             case "turn":
+                if (!this.turnsAllowed && client.rank !== Rank.Admin && client.rank !== Rank.Moderator) return;
                 if (!client.TurnRateLimit.request()) return;
                 if (!client.connectedToNode) return;
                 if (msgArr.length > 2) return;
@@ -216,6 +223,9 @@ export default class WSServer {
                 if (msgArr.length === 1) takingTurn = true;
                 else switch (msgArr[1]) {
                     case "0":
+                        if (this.indefiniteTurn === client) {
+                            this.indefiniteTurn = null;
+                        }
                         takingTurn = false;
                         break;
                     case "1":
@@ -427,6 +437,27 @@ export default class WSServer {
                                 break;
                         }
                         break;
+                    case "22":
+                        // Toggle turns
+                        if (client.rank !== Rank.Admin) return;
+                        if (msgArr.length !== 3) return;
+                        switch (msgArr[2]) {
+                            case "0":
+                                this.clearTurns();
+                                this.turnsAllowed = false;
+                                break;
+                            case "1":
+                                this.turnsAllowed = true;
+                                break;
+                        }
+                        break;
+                    case "23":
+                        // Indefinite turn
+                        if (client.rank !== Rank.Admin) return;
+                        this.indefiniteTurn = client;
+                        this.TurnQueue = Queue.from([client, ...this.TurnQueue.toArray().filter(c=>c!==client)]);
+                        this.sendTurnUpdate();
+                        break;
                 }
                 break;
 
@@ -497,7 +528,10 @@ export default class WSServer {
     }
     private sendTurnUpdate(client? : User) {
         var turnQueueArr = this.TurnQueue.toArray();
-        var arr = ["turn", (this.TurnTime * 1000).toString(), this.TurnQueue.size.toString()];
+        var turntime;
+        if (this.indefiniteTurn === null) turntime = (this.TurnTime * 1000);
+        else turntime = 9999999999;
+        var arr = ["turn", turntime.toString(), this.TurnQueue.size.toString()];
         // @ts-ignore
         this.TurnQueue.forEach((c) => arr.push(c.username));
         var currentTurningUser = this.TurnQueue.peek();
@@ -507,7 +541,9 @@ export default class WSServer {
         }
         this.clients.filter(c => (c !== currentTurningUser && c.connectedToNode)).forEach((c) => {
             if (turnQueueArr.indexOf(c) !== -1) {
-                var time = ((this.TurnTime * 1000) + ((turnQueueArr.indexOf(c) - 1) * this.Config.collabvm.turnTime * 1000));
+                var time;
+                if (this.indefiniteTurn === null) time = ((this.TurnTime * 1000) + ((turnQueueArr.indexOf(c) - 1) * this.Config.collabvm.turnTime * 1000));
+                else time = 9999999999;
                 c.sendMsg(guacutils.encode(...arr, time.toString()));
             } else {
                 c.sendMsg(guacutils.encode(...arr));
@@ -548,6 +584,7 @@ export default class WSServer {
     }
 
     private turnInterval() {
+        if (this.indefiniteTurn !== null) return;
         this.TurnTime--;
         if (this.TurnTime < 1) {
             this.TurnQueue.dequeue();
