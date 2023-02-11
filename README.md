@@ -1,3 +1,4 @@
+![Banner image](https://raw.githubusercontent.com/HolyNetworkAdapter/collabvm-1.2.ts/master/cvmserver.png "Banner image")
 # CollabVM1.ts
 This is a drop-in replacement for the dying CollabVM 1.2.11. Currently in beta
 
