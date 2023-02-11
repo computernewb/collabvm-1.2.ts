@@ -99,7 +99,7 @@ export class User {
         // Prevent the user from taking turns or chatting, in case the ban command takes a while
         this.IP.muted = true;
         //@ts-ignore
-        var cmd = this.Config.collabvm.bancmd.replace(/\$IP/g, this.IP).replace(/\$NAME/g, this.username);
+        var cmd = this.Config.collabvm.bancmd.replace(/\$IP/g, this.IP.address).replace(/\$NAME/g, this.username);
         await execaCommand(cmd);
         this.kick();
     }
