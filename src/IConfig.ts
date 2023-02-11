@@ -5,12 +5,6 @@ export default interface IConfig {
         proxying : boolean;
         proxyAllowedIps : string[];
     };
-    hcaptcha : {
-        enabled : boolean;
-        sitekey : string;
-        secret : string;
-        whitelist : string[];
-    };
     vm : {
         qemuArgs : string;
         vncPort : number;
