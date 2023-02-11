@@ -11,6 +11,10 @@ proxyAllowedIps = ["127.0.0.1"]
 qemuArgs = "qemu-system-x86_64"
 vncPort = 5900
 snapshots = true
+# Uncomment qmpHost and qmpPort if you're using Windows.
+#qmpHost = "127.0.0.1"
+#qmpPort = "5800"
+# Comment out qmpSockDir if you're using Windows.
 qmpSockDir = "/tmp/"
 
 [collabvm]
@@ -31,6 +35,8 @@ tempMuteTime = 30
 turnTime = 20
 # How long a reset vote lasts, in seconds
 voteTime = 100
+# How long until another vote can be started, in seconds
+voteCooldown = 180
 # SHA256 sum of the admin and mod passwords. This can be generated with the following command:
 # printf "<password>" | sha256sum -
 # Example hash is hunter2 and hunter3

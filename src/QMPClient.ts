@@ -4,12 +4,14 @@ import { Mutex } from "async-mutex";
 
 export default class QMPClient extends EventEmitter {
     socketfile : string;
+    sockettype: string;
     socket : Socket;
     connected : boolean;
     sentConnected : boolean;
     cmdMutex : Mutex; // So command outputs don't get mixed up
-    constructor(socketfile : string) {
+    constructor(socketfile : string, sockettype: string) {
         super();
+        this.sockettype = sockettype;
         this.socketfile = socketfile;
         this.socket = new Socket();
         this.connected = false;
@@ -20,7 +22,12 @@ export default class QMPClient extends EventEmitter {
         return new Promise((res, rej) => {
             if (this.connected) {res(); return;}
             try {
-                this.socket.connect(this.socketfile);
+                if(this.sockettype == "tcp:") {
+                    let _sock = this.socketfile.split(':');
+                    this.socket.connect(parseInt(_sock[1]), _sock[0]);
+                }else{
+                    this.socket.connect(this.socketfile);
+                }
             } catch (e) {
                 this.onClose();
             }

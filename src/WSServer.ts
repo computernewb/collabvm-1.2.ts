@@ -12,12 +12,14 @@ import { createHash } from 'crypto';
 import { isIP } from 'net';
 import QEMUVM from './QEMUVM.js';
 import { Canvas, createCanvas, CanvasRenderingContext2D } from 'canvas';
+import { IPData } from './IPData.js';
 
 export default class WSServer {
     private Config : IConfig;
     private server : http.Server;
     private socket : WebSocketServer;
     private clients : User[];
+    private ips : IPData[];
     private ChatHistory : CircularBuffer<{user:string,msg:string}>
     private TurnQueue : Queue<User>;
     // Time remaining on the current turn
@@ -33,9 +35,9 @@ export default class WSServer {
     // How much time is left on the vote
     private voteTime : number;
     // How much time until another reset vote can be cast
-    private voteTimeout : number;
+    private voteCooldown : number;
     // Interval to keep track
-    private voteTimeoutInterval? : NodeJS.Timer;
+    private voteCooldownInterval? : NodeJS.Timer;
     // Completely disable turns
     private turnsAllowed : boolean;
     // Indefinite turn
@@ -48,10 +50,11 @@ export default class WSServer {
         this.TurnTime = 0;
         this.TurnIntervalRunning = false;
         this.clients = [];
+        this.ips = [];
         this.Config = config;
         this.voteInProgress = false;
         this.voteTime = 0;
-        this.voteTimeout = 0;
+        this.voteCooldown = 0;
         this.turnsAllowed = true;
         this.indefiniteTurn = null;
         this.ModPerms = Utilities.MakeModPerms(this.Config.collabvm.moderatorPermissions);
@@ -120,7 +123,7 @@ export default class WSServer {
     }
 
     private onConnection(ws : WebSocket, req : http.IncomingMessage) {
-        var ip;
+        var ip: string;
         if (this.Config.http.proxying) {
             //@ts-ignore
             if (!req.proxiedIP) return;
@@ -130,7 +133,17 @@ export default class WSServer {
             if (!req.socket.remoteAddress) return;
             ip = req.socket.remoteAddress;
         }
-        var user = new User(ws, ip, this.Config);
+
+        var _ipdata = this.ips.filter(data => data.address == ip);
+        var ipdata;
+        if(_ipdata.length > 0) {
+            ipdata = _ipdata[0];
+        }else{
+            ipdata = new IPData(ip);
+            this.ips.push(ipdata);
+        }
+
+        var user = new User(ws, ipdata, this.Config);
         this.clients.push(user);
         ws.on('close', () => this.connectionClosed(user));
         ws.on('message', (e) => {
@@ -144,12 +157,13 @@ export default class WSServer {
             this.onMessage(user, msg);
         });
         user.sendMsg(this.getAdduserMsg());
-        console.log(`[Connect] From ${user.IP}`);
+        console.log(`[Connect] From ${user.IP.address}`);
     };
 
     private connectionClosed(user : User) {
+        if(user.IP.vote != null) user.IP.vote = null;
         this.clients.splice(this.clients.indexOf(user), 1);
-        console.log(`[DISCONNECT] From ${user.IP}${user.username ? ` with username ${user.username}` : ""}`);
+        console.log(`[DISCONNECT] From ${user.IP.address}${user.username ? ` with username ${user.username}` : ""}`);
         if (!user.username) return;
         if (this.TurnQueue.toArray().indexOf(user) !== -1) {
             var hadturn = (this.TurnQueue.peek() === user);
@@ -189,7 +203,7 @@ export default class WSServer {
                 break;
             case "chat":
                 if (!client.username) return;
-                if (client.muted) return;
+                if (client.IP.muted) return;
                 if (msgArr.length !== 2) return;
                 var msg = Utilities.HTMLSanitize(msgArr[1]);
                 // One of the things I hated most about the old server is it completely discarded your message if it was too long
@@ -226,7 +240,7 @@ export default class WSServer {
                     if (this.TurnQueue.toArray().indexOf(client) !== -1) return;
                     // If they're muted, also fuck them off.
                     // Send them the turn queue to prevent client glitches
-                    if (client.muted) return;
+                    if (client.IP.muted) return;
                     this.TurnQueue.enqueue(client);
                     if (this.TurnQueue.size === 1) this.nextTurn();
                 } else {
@@ -261,22 +275,22 @@ export default class WSServer {
                 switch (msgArr[1]) {
                     case "1":
                         if (!this.voteInProgress) {
-                            if (this.voteTimeout !== 0) {
-                                client.sendMsg(guacutils.encode("vote", "3", this.voteTimeout.toString()));
+                            if (this.voteCooldown !== 0) {
+                                client.sendMsg(guacutils.encode("vote", "3", this.voteCooldown.toString()));
                                 return;
                             }
                             this.startVote();
                             this.clients.forEach(c => c.sendMsg(guacutils.encode("chat", "", `${client.username} has started a vote to reset the VM.`)));
                         }
-                        else if (client.vote !== true)
+                        else if (client.IP.vote !== true)
                             this.clients.forEach(c => c.sendMsg(guacutils.encode("chat", "", `${client.username} has voted yes.`)));
-                        client.vote = true;
+                        client.IP.vote = true;
                         break;
                     case "0":
                         if (!this.voteInProgress) return;
-                        if (client.vote !== false)
+                        if (client.IP.vote !== false)
                             this.clients.forEach(c => c.sendMsg(guacutils.encode("chat", "", `${client.username} has voted no.`)));
-                        client.vote = false;
+                        client.IP.vote = false;
                         break;
                 }
                 this.sendVoteUpdate();
@@ -397,7 +411,7 @@ export default class WSServer {
                         if (msgArr.length !== 3) return;
                         var user = this.clients.find(c => c.username === msgArr[2]);
                         if (!user) return;
-                        client.sendMsg(guacutils.encode("admin", "19", msgArr[2], user.IP));
+                        client.sendMsg(guacutils.encode("admin", "19", msgArr[2], user.IP.address));
                         break;
                     case "20":
                         // Steal turn
@@ -473,7 +487,9 @@ export default class WSServer {
             }
             if (this.getUsernameList().indexOf(newName) !== -1) {
                 client.assignGuestName(this.getUsernameList());
-                status = "1";
+                if(client.connectedToNode) {
+                    status = "1";
+                }
             } else
             if (!/^[a-zA-Z0-9\ \-\_\.]+$/.test(newName) || newName.length > 20 || newName.length < 3) {
                 client.assignGuestName(this.getUsernameList());
@@ -487,12 +503,12 @@ export default class WSServer {
         //@ts-ignore
         client.sendMsg(guacutils.encode("rename", "0", status, client.username));
         if (hadName) {
-            console.log(`[RENAME] ${client.IP} from ${oldname} to ${client.username}`);
+            console.log(`[RENAME] ${client.IP.address} from ${oldname} to ${client.username}`);
             this.clients.filter(c => c.username !== client.username).forEach((c) =>
             //@ts-ignore
             c.sendMsg(guacutils.encode("rename", "1", oldname, client.username)));
         } else {
-            console.log(`[RENAME] ${client.IP} to ${client.username}`);
+            console.log(`[RENAME] ${client.IP.address} to ${client.username}`);
             this.clients.forEach((c) =>
             //@ts-ignore
             c.sendMsg(guacutils.encode("adduser", "1", client.username, client.rank)));
@@ -624,12 +640,14 @@ export default class WSServer {
         } else {
             this.clients.forEach(c => c.sendMsg(guacutils.encode("chat", "", "The vote to reset the VM has lost.")));
         }
-        this.clients.forEach(c => c.vote = null);
-        this.voteTimeout = 180;
-        this.voteTimeoutInterval = setInterval(() => {
-            this.voteTimeout--;
-            if (this.voteTimeout < 1)
-                clearInterval(this.voteTimeoutInterval);
+        this.clients.forEach(c => {
+            c.IP.vote = null;
+        });
+        this.voteCooldown = this.Config.collabvm.voteCooldown;
+        this.voteCooldownInterval = setInterval(() => {
+            this.voteCooldown--;
+            if (this.voteCooldown < 1)
+                clearInterval(this.voteCooldownInterval);
         }, 1000);
     }
 
@@ -646,7 +664,7 @@ export default class WSServer {
     getVoteCounts() : {yes:number,no:number} {
         var yes = 0;
         var no = 0;
-        this.clients.forEach((c) => {
+        this.ips.forEach((c) => {
             if (c.vote === true) yes++;
             if (c.vote === false) no++;
         });

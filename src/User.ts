@@ -1,6 +1,7 @@
 import * as Utilities from './Utilities.js';
 import * as guacutils from './guacutils.js';
 import {WebSocket} from 'ws';
+import {IPData} from './IPData.js';
 import IConfig from './IConfig.js';
 import RateLimiter from './RateLimiter.js';
 import { execaCommand } from 'execa';
@@ -12,25 +13,20 @@ export class User {
     username? : string;
     connectedToNode : boolean;
     rank : Rank;
-    muted : Boolean;
-    tempMuteExpireTimeout? : NodeJS.Timer;
     msgsSent : number;
     Config : IConfig;
-    IP : string;
-    vote : boolean | null;
+    IP : IPData;
     // Rate limiters
     ChatRateLimit : RateLimiter;
     LoginRateLimit : RateLimiter;
     RenameRateLimit : RateLimiter;
     TurnRateLimit : RateLimiter;
-    constructor(ws : WebSocket, ip : string, config : IConfig, username? : string, node? : string) {
+    constructor(ws : WebSocket, ip : IPData, config : IConfig, username? : string, node? : string) {
         this.IP = ip;
         this.connectedToNode = false;
         this.Config = config;
         this.socket = ws;
-        this.muted = false;
         this.msgsSent = 0;
-        this.vote = null;
         this.socket.on('close', () => {
             clearInterval(this.nopSendInterval);
         });
@@ -86,22 +82,22 @@ export class User {
         this.ChatRateLimit.request();
     }
     mute(permanent : boolean) {
-        this.muted = true;
+        this.IP.muted = true;
         this.sendMsg(guacutils.encode("chat", "", `You have been muted${permanent ? "" : ` for ${this.Config.collabvm.tempMuteTime} seconds`}.`));
         if (!permanent) {
-            clearTimeout(this.tempMuteExpireTimeout);
-            this.tempMuteExpireTimeout = setTimeout(() => this.unmute(), this.Config.collabvm.tempMuteTime * 1000);
+            clearTimeout(this.IP.tempMuteExpireTimeout);
+            this.IP.tempMuteExpireTimeout = setTimeout(() => this.unmute(), this.Config.collabvm.tempMuteTime * 1000);
         }
     }
     unmute() {
-        clearTimeout(this.tempMuteExpireTimeout);
-        this.muted = false;
+        clearTimeout(this.IP.tempMuteExpireTimeout);
+        this.IP.muted = false;
         this.sendMsg(guacutils.encode("chat", "", "You are no longer muted."));
     }
 
     async ban() {
         // Prevent the user from taking turns or chatting, in case the ban command takes a while
-        this.muted = true;
+        this.IP.muted = true;
         //@ts-ignore
         var cmd = this.Config.collabvm.bancmd.replace(/\$IP/g, this.IP).replace(/\$NAME/g, this.username);
         await execaCommand(cmd);
