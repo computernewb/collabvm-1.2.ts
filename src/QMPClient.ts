@@ -68,10 +68,16 @@ export default class QMPClient extends EventEmitter {
         else if(msg.event !== undefined) {
             switch(msg.event) {
                 case "STOP":
+                {
+                    console.log("[INFO] Resetting QEMU...");
+                    this.reboot();
+                    break;
+                }
                 case "RESET":
                 {
-                    this.emit("qmpshutdown");
-                    break
+                    console.log("[INFO] QEMU reset event occurred");
+                    this.resume();
+                    break;
                 };
                 default: {
                     this.emit("qmpreturn", '');
@@ -102,6 +108,13 @@ export default class QMPClient extends EventEmitter {
             return;
 
         await this.execute({"execute": "system_reset"});
+    }
+
+    async resume() {
+        if (!this.connected) 
+            return;
+
+        await this.execute({"execute": "cont"});
     }
 
     async ExitQEMU() {
