@@ -55,6 +55,10 @@ export default class QEMUVM extends EventEmitter {
         this.processRestartErrorLevel = 0;
         this.expectedExit = false;
         this.qmpClient = new QMPClient(this.qmpSock, this.qmpType);
+        this.qmpClient.on('qmpshutdown', () => {
+            console.log("[INFO] QEMU requested shutdown, restarting...");
+            this.Restore();
+        });
         this.qmpClient.on('connected', () => this.qmpConnected());
         this.qmpClient.on('close', () => this.qmpClosed());
     }

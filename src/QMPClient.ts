@@ -65,7 +65,20 @@ export default class QMPClient extends EventEmitter {
         }
         if (msg.return !== undefined)
             this.emit("qmpreturn", msg.return);
-        else
+        else if(msg.event !== undefined) {
+            switch(msg.event) {
+                case "POWERDOWN":
+                case "STOP":
+                {
+                    this.emit("qmpshutdown");
+                    break
+                };
+                default: {
+                    this.emit("qmpreturn", '');
+                    break;
+                }
+            }
+        }else
             // for now just return an empty string.
             // This is a giant hack but avoids a deadlock
             this.emit("qmpreturn", '');
