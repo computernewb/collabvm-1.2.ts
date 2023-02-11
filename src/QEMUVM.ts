@@ -14,6 +14,7 @@ export default class QEMUVM extends EventEmitter {
     framebuffer : Canvas;
     framebufferCtx : CanvasRenderingContext2D;
     qmpSock : string;
+    qmpType: string;
     qmpClient : QMPClient;
     qemuCmd : string;
     qemuProcess? : ExecaChildProcess;
@@ -36,9 +37,14 @@ export default class QEMUVM extends EventEmitter {
             console.error("[FATAL] VNC Port must be 5900 or higher");
             process.exit(1);
         }
-        this.qmpSock = `${Config.vm.qmpSockDir}collab-vm-qmp-${Config.collabvm.node}.sock`;
+        Config.vm.qmpSockDir == null ? this.qmpType = "tcp:" : this.qmpType = "unix:";
+        if(this.qmpType == "tcp:") {
+            this.qmpSock = `${Config.vm.qmpHost}:${Config.vm.qmpPort}`;
+        }else{
+            this.qmpSock = `${Config.vm.qmpSockDir}collab-vm-qmp-${Config.collabvm.node}.sock`;
+        }
         this.vncPort = Config.vm.vncPort;
-        this.qemuCmd = `${Config.vm.qemuArgs} -snapshot -no-shutdown -vnc 127.0.0.1:${this.vncPort - 5900} -qmp unix:${this.qmpSock},server`;
+        this.qemuCmd = `${Config.vm.qemuArgs} -snapshot -no-shutdown -vnc 127.0.0.1:${this.vncPort - 5900} -qmp ${this.qmpType}${this.qmpSock},server`;
         this.qmpErrorLevel = 0;
         this.vncErrorLevel = 0;
         this.vncOpen = true;
@@ -48,7 +54,7 @@ export default class QEMUVM extends EventEmitter {
         this.framebufferCtx = this.framebuffer.getContext("2d");
         this.processRestartErrorLevel = 0;
         this.expectedExit = false;
-        this.qmpClient = new QMPClient(this.qmpSock);
+        this.qmpClient = new QMPClient(this.qmpSock, this.qmpType);
         this.qmpClient.on('connected', () => this.qmpConnected());
         this.qmpClient.on('close', () => this.qmpClosed());
     }
