@@ -15,3 +15,5 @@ The server does not support the admin panel. Instead, there is a configuration f
 We have stuck with QEMU since 2015, but you could possibly add code to make the server connect to a VNC server (or RDP, if you're using VirtualBox) and display that. Note that vote resets won't work.
 ## What platforms can this be run on?
 If it can run a relatively new version of Node and QEMU, then you can run this. This means modern Linux distributions, modern macOS versions and Windows 10 and above.
+## When the VM shuts off, instead of restarting, it freezes.
+This has been fixed already, you are running a copy of the code before February 11th, 2023.
