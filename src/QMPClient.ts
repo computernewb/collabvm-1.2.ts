@@ -67,8 +67,8 @@ export default class QMPClient extends EventEmitter {
             this.emit("qmpreturn", msg.return);
         else if(msg.event !== undefined) {
             switch(msg.event) {
-                case "POWERDOWN":
                 case "STOP":
+                case "RESET":
                 {
                     this.emit("qmpshutdown");
                     break

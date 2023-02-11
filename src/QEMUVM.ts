@@ -220,7 +220,6 @@ export default class QEMUVM extends EventEmitter {
     Resume() : Promise<void> {
         return new Promise(async (res, rej) => {
             if (this.expectedExit) {res(); return;}
-            await this.qmpClient.reboot();
             await this.qmpClient.execute({ "execute": "cont" });
             res();
         });
