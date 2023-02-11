@@ -35,9 +35,9 @@ export default class WSServer {
     // How much time is left on the vote
     private voteTime : number;
     // How much time until another reset vote can be cast
-    private voteTimeout : number;
+    private voteCooldown : number;
     // Interval to keep track
-    private voteTimeoutInterval? : NodeJS.Timer;
+    private voteCooldownInterval? : NodeJS.Timer;
     private ModPerms : number;  
     private VM : QEMUVM;
     constructor(config : IConfig, vm : QEMUVM) {
@@ -49,8 +49,8 @@ export default class WSServer {
         this.ips = [];
         this.Config = config;
         this.voteInProgress = false;
-        this.voteTime = this.Config.collabvm.voteCooldown;
-        this.voteTimeout = 0;
+        this.voteTime = 0;
+        this.voteCooldown = this.Config.collabvm.voteCooldown;
         this.ModPerms = Utilities.MakeModPerms(this.Config.collabvm.moderatorPermissions);
         this.server = http.createServer();
         this.socket = new WebSocketServer({noServer: true});
@@ -264,8 +264,8 @@ export default class WSServer {
                 switch (msgArr[1]) {
                     case "1":
                         if (!this.voteInProgress) {
-                            if (this.voteTimeout !== 0) {
-                                client.sendMsg(guacutils.encode("vote", "3", this.voteTimeout.toString()));
+                            if (this.voteCooldown !== 0) {
+                                client.sendMsg(guacutils.encode("vote", "3", this.voteCooldown.toString()));
                                 return;
                             }
                             this.startVote();
@@ -605,11 +605,11 @@ export default class WSServer {
         this.clients.forEach(c => {
             c.IP.vote = null;
         });
-        this.voteTimeout = this.Config.collabvm.voteCooldown;
-        this.voteTimeoutInterval = setInterval(() => {
-            this.voteTimeout--;
-            if (this.voteTimeout < 1)
-                clearInterval(this.voteTimeoutInterval);
+        this.voteCooldown = this.Config.collabvm.voteCooldown;
+        this.voteCooldownInterval = setInterval(() => {
+            this.voteCooldown--;
+            if (this.voteCooldown < 1)
+                clearInterval(this.voteCooldownInterval);
         }, 1000);
     }
 
