@@ -270,6 +270,7 @@ export default class WSServer {
                 this.VM.vnc.keyEvent(keysym, down);
                 break;
             case "vote":
+                if (!this.turnsAllowed) return;
                 if (!client.connectedToNode) return;
                 if (msgArr.length !== 2) return;
                 if (!client.VoteRateLimit.request()) return;
