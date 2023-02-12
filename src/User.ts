@@ -21,6 +21,7 @@ export class User {
     LoginRateLimit : RateLimiter;
     RenameRateLimit : RateLimiter;
     TurnRateLimit : RateLimiter;
+    VoteRateLimit : RateLimiter;
     constructor(ws : WebSocket, ip : IPData, config : IConfig, username? : string, node? : string) {
         this.IP = ip;
         this.connectedToNode = false;
@@ -48,6 +49,8 @@ export class User {
         this.LoginRateLimit.on('limit', () => this.closeConnection());
         this.TurnRateLimit = new RateLimiter(5, 3);
         this.TurnRateLimit.on('limit', () => this.closeConnection());
+        this.VoteRateLimit = new RateLimiter(3, 3);
+        this.VoteRateLimit.on('limit', () => this.closeConnection());
     }
     assignGuestName(existingUsers : string[]) : string {
         var username;

@@ -272,6 +272,7 @@ export default class WSServer {
             case "vote":
                 if (!client.connectedToNode) return;
                 if (msgArr.length !== 2) return;
+                if (!client.VoteRateLimit.request()) return;
                 switch (msgArr[1]) {
                     case "1":
                         if (!this.voteInProgress) {
