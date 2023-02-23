@@ -162,6 +162,7 @@ export default class WSServer {
 
     private connectionClosed(user : User) {
         if(user.IP.vote != null) user.IP.vote = null;
+        if (this.indefiniteTurn === user) this.indefiniteTurn = null;
         this.clients.splice(this.clients.indexOf(user), 1);
         console.log(`[DISCONNECT] From ${user.IP.address}${user.username ? ` with username ${user.username}` : ""}`);
         if (!user.username) return;
