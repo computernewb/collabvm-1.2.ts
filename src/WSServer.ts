@@ -188,7 +188,7 @@ export default class WSServer {
                     return;
                 }
                 client.connectedToNode = true;
-                client.sendMsg(guacutils.encode("connect", "1", "1", "1", "0"));
+                client.sendMsg(guacutils.encode("connect", "1", "1", this.Config.vm.snapshots ? "1" : "0", "0"));
                 if (this.ChatHistory.size !== 0) client.sendMsg(this.getChatHistoryMsg());
                 if (this.Config.collabvm.motd) client.sendMsg(guacutils.encode("chat", "", this.Config.collabvm.motd));
                 client.sendMsg(guacutils.encode("size", "0", this.VM.framebuffer.width.toString(), this.VM.framebuffer.height.toString()));
@@ -272,6 +272,7 @@ export default class WSServer {
                 this.VM.vnc.keyEvent(keysym, down);
                 break;
             case "vote":
+                if (!this.Config.vm.snapshots) return;
                 if (!this.turnsAllowed) return;
                 if (!client.connectedToNode) return;
                 if (msgArr.length !== 2) return;

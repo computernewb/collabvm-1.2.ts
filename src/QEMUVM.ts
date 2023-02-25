@@ -45,7 +45,8 @@ export default class QEMUVM extends EventEmitter {
             this.qmpSock = `${Config.vm.qmpSockDir}collab-vm-qmp-${Config.collabvm.node}.sock`;
         }
         this.vncPort = Config.vm.vncPort;
-        this.qemuCmd = `${Config.vm.qemuArgs} -snapshot -no-shutdown -vnc 127.0.0.1:${this.vncPort - 5900} -qmp ${this.qmpType}${this.qmpSock},server`;
+        this.qemuCmd = `${Config.vm.qemuArgs} -no-shutdown -vnc 127.0.0.1:${this.vncPort - 5900} -qmp ${this.qmpType}${this.qmpSock},server`;
+        if (Config.vm.snapshots) this.qemuCmd += " -snapshot"
         this.qmpErrorLevel = 0;
         this.vncErrorLevel = 0;
         this.vncOpen = true;
