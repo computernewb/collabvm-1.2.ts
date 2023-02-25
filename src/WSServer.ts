@@ -14,6 +14,7 @@ import QEMUVM from './QEMUVM.js';
 import { Canvas, createCanvas, CanvasRenderingContext2D } from 'canvas';
 import { IPData } from './IPData.js';
 import log from './log.js';
+import VM from './VM.js';
 
 export default class WSServer {
     private Config : IConfig;
@@ -44,8 +45,8 @@ export default class WSServer {
     // Indefinite turn
     private indefiniteTurn : User | null;
     private ModPerms : number;  
-    private VM : QEMUVM;
-    constructor(config : IConfig, vm : QEMUVM) {
+    private VM : VM;
+    constructor(config : IConfig, vm : VM) {
         this.ChatHistory = new CircularBuffer<{user:string,msg:string}>(Array, 5);
         this.TurnQueue = new Queue<User>();
         this.TurnTime = 0;
@@ -254,22 +255,20 @@ export default class WSServer {
                 break;
             case "mouse":
                 if (this.TurnQueue.peek() !== client && client.rank !== Rank.Admin) return;
-                if (!this.VM.vncOpen) return;
-                if (!this.VM.vnc) throw new Error("VNC Client was undefined");
+                if (!this.VM.acceptingInput()) return;
                 var x = parseInt(msgArr[1]);
                 var y = parseInt(msgArr[2]);
                 var mask = parseInt(msgArr[3]);
                 if (x === undefined || y === undefined || mask === undefined) return;
-                this.VM.vnc.pointerEvent(x, y, mask);
+                this.VM.pointerEvent(x, y, mask);
                 break;
             case "key":
                 if (this.TurnQueue.peek() !== client && client.rank !== Rank.Admin) return;
-                if (!this.VM.vncOpen) return;
-                if (!this.VM.vnc) throw new Error("VNC Client was undefined");
+                if (!this.VM.acceptingInput()) return;
                 var keysym = parseInt(msgArr[1]);
                 var down = parseInt(msgArr[2]);
                 if (keysym === undefined || (down !== 0 && down !== 1)) return;
-                this.VM.vnc.keyEvent(keysym, down);
+                this.VM.keyEvent(keysym, down === 1 ? true : false);
                 break;
             case "vote":
                 if (!this.Config.vm.snapshots) return;
@@ -327,6 +326,10 @@ export default class WSServer {
                     case "5":
                         // QEMU Monitor
                         if (client.rank !== Rank.Admin) return;
+                        if (!(this.VM instanceof QEMUVM)) {
+                            client.sendMsg(guacutils.encode("admin", "2", "This is not a QEMU VM and therefore QEMU monitor commands cannot be run."));
+                            return;
+                        }
                         if (msgArr.length !== 4 || msgArr[2] !== this.Config.collabvm.node) return;
                         var output = await this.VM.qmpClient.runMonitorCmd(msgArr[3]);
                         client.sendMsg(guacutils.encode("admin", "2", String(output)));

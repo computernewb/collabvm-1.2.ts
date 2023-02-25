@@ -8,8 +8,9 @@ import BatchRects from "./RectBatcher.js";
 import { createCanvas, Canvas, CanvasRenderingContext2D, createImageData } from "canvas";
 import { Mutex } from "async-mutex";
 import log from "./log.js";
+import VM from "./VM.js";
 
-export default class QEMUVM extends EventEmitter {
+export default class QEMUVM extends VM {
     vnc? : rfb.RfbClient;
     vncPort : number;
     framebuffer : Canvas;
@@ -116,7 +117,7 @@ export default class QEMUVM extends EventEmitter {
         this.vnc.on("resize", (s) => this.onVNCSize(s));
     }
 
-    getSize() {
+    public getSize() {
         if (!this.vnc) return {height:0,width:0};
         return {height: this.vnc.height, width: this.vnc.width}
     }
@@ -239,5 +240,17 @@ export default class QEMUVM extends EventEmitter {
             clearTimeout(killTimeout);
             res();
         })
+    }
+
+    public pointerEvent(x: number, y: number, mask: number) {
+        if (!this.vnc) throw new Error("VNC was not instantiated.");
+        this.vnc.pointerEvent(x, y, mask);
+    }
+    public acceptingInput(): boolean {
+        return this.vncOpen;
+    }
+    public keyEvent(keysym: number, down: boolean): void {
+        if (!this.vnc) throw new Error("VNC was not instantiated.");
+        this.vnc.keyEvent(keysym, down ? 1 : 0);
     }
 }
