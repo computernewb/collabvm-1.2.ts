@@ -66,7 +66,7 @@ export default class QEMUVM extends EventEmitter {
                 try {
                     fs.unlinkSync(this.qmpSock);
                 } catch (e) {
-                    log("ERORR", `Failed to delete existing socket: ${e}`);
+                    log("ERROR", `Failed to delete existing socket: ${e}`);
                     process.exit(-1);
                 }
             var qemuArr = this.qemuCmd.split(" ");
