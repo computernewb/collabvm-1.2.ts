@@ -189,8 +189,8 @@ export default class WSServer {
                 }
                 client.connectedToNode = true;
                 client.sendMsg(guacutils.encode("connect", "1", "1", "1", "0"));
-                if (this.Config.collabvm.motd) client.sendMsg(guacutils.encode("chat", "", this.Config.collabvm.motd));
                 if (this.ChatHistory.size !== 0) client.sendMsg(this.getChatHistoryMsg());
+                if (this.Config.collabvm.motd) client.sendMsg(guacutils.encode("chat", "", this.Config.collabvm.motd));
                 client.sendMsg(guacutils.encode("size", "0", this.VM.framebuffer.width.toString(), this.VM.framebuffer.height.toString()));
                 var jpg = this.VM.framebuffer.toBuffer("image/jpeg");
                 var jpg64 = jpg.toString("base64");
