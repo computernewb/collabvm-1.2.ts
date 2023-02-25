@@ -3,20 +3,23 @@ import IConfig from './IConfig.js';
 import * as fs from "fs";
 import WSServer from './WSServer.js';
 import QEMUVM from './QEMUVM.js';
+import log from './log.js';
+
+log("INFO", "CollabVM Server starting up");
 
 // Parse the config file
 
 var Config : IConfig;
 
 if (!fs.existsSync("config.toml")) {
-    console.error("config.toml not found. Please copy config.example.toml to config.toml and fill out fields.");
+    log("FATAL", "Config.toml not found. Please copy config.example.toml and fill out fields")
     process.exit(1);
 }
 try {
     var configRaw = fs.readFileSync("config.toml").toString();
     Config = toml.parse(configRaw);
 } catch (e) {
-    console.error(`Failed to read or parse the config file: ${e}`);
+    log("FATAL", `Failed to read or parse the config file: ${e}`);
     process.exit(1);
 }
 

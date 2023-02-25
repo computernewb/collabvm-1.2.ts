@@ -13,6 +13,7 @@ import { isIP } from 'net';
 import QEMUVM from './QEMUVM.js';
 import { Canvas, createCanvas, CanvasRenderingContext2D } from 'canvas';
 import { IPData } from './IPData.js';
+import log from './log.js';
 
 export default class WSServer {
     private Config : IConfig;
@@ -157,14 +158,14 @@ export default class WSServer {
             this.onMessage(user, msg);
         });
         user.sendMsg(this.getAdduserMsg());
-        console.log(`[Connect] From ${user.IP.address}`);
+        log("INFO", `Connect from ${user.IP.address}`);
     };
 
     private connectionClosed(user : User) {
         if(user.IP.vote != null) user.IP.vote = null;
         if (this.indefiniteTurn === user) this.indefiniteTurn = null;
         this.clients.splice(this.clients.indexOf(user), 1);
-        console.log(`[DISCONNECT] From ${user.IP.address}${user.username ? ` with username ${user.username}` : ""}`);
+        log("INFO", `Disconnect From ${user.IP.address}${user.username ? ` with username ${user.username}` : ""}`);
         if (!user.username) return;
         if (this.TurnQueue.toArray().indexOf(user) !== -1) {
             var hadturn = (this.TurnQueue.peek() === user);
@@ -506,12 +507,12 @@ export default class WSServer {
         //@ts-ignore
         client.sendMsg(guacutils.encode("rename", "0", status, client.username));
         if (hadName) {
-            console.log(`[RENAME] ${client.IP.address} from ${oldname} to ${client.username}`);
+            log("INFO", `Rename ${client.IP.address} from ${oldname} to ${client.username}`);
             this.clients.filter(c => c.username !== client.username).forEach((c) =>
             //@ts-ignore
             c.sendMsg(guacutils.encode("rename", "1", oldname, client.username)));
         } else {
-            console.log(`[RENAME] ${client.IP.address} to ${client.username}`);
+            log("INFO", `Rename ${client.IP.address} to ${client.username}`);
             this.clients.forEach((c) =>
             //@ts-ignore
             c.sendMsg(guacutils.encode("adduser", "1", client.username, client.rank)));

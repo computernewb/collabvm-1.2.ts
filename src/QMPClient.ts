@@ -1,6 +1,7 @@
 import EventEmitter from "events";
 import { Socket } from "net";
 import { Mutex } from "async-mutex";
+import log from "./log.js";
 
 export default class QMPClient extends EventEmitter {
     socketfile : string;
@@ -32,7 +33,7 @@ export default class QMPClient extends EventEmitter {
                 this.onClose();
             }
             this.connected = true;
-            this.socket.on('error', (err) => console.log(err)); // Disable throwing if QMP errors
+            this.socket.on('error', () => false); // Disable throwing if QMP errors
             this.socket.on('data', (data) => this.onData(data));
             this.socket.on('close', () => this.onClose());
             this.once('connected', () => {res();});
@@ -69,13 +70,13 @@ export default class QMPClient extends EventEmitter {
             switch(msg.event) {
                 case "STOP":
                 {
-                    console.log("[INFO] Resetting QEMU...");
+                    log("INFO", "The VM was shut down, restarting...");
                     this.reboot();
                     break;
                 }
                 case "RESET":
                 {
-                    console.log("[INFO] QEMU reset event occurred");
+                    log("INFO", "QEMU reset event occured");
                     this.resume();
                     break;
                 };
