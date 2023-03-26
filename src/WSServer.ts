@@ -212,7 +212,7 @@ export default class WSServer {
                 var msg = Utilities.HTMLSanitize(msgArr[1]);
                 // One of the things I hated most about the old server is it completely discarded your message if it was too long
                 if (msg.length > this.Config.collabvm.maxChatLength) msg = msg.substring(0, this.Config.collabvm.maxChatLength);
-                if (msg.length < 1) return;
+                if (msg.trim().length < 1) return;
                 //@ts-ignore
                 this.clients.forEach(c => c.sendMsg(guacutils.encode("chat", client.username, msg)));
                 this.ChatHistory.push({user: client.username, msg: msg});
@@ -500,7 +500,7 @@ export default class WSServer {
                     status = "1";
                 }
             } else
-            if (!/^[a-zA-Z0-9\ \-\_\.]+$/.test(newName) || newName.length > 20 || newName.length < 3) {
+            if (!/^[a-zA-Z0-9\ \-\_\.]+$/.test(newName) || newName.length > 20 || newName.trim().length < 3) {
                 client.assignGuestName(this.getUsernameList());
                 status = "2";
             } else
