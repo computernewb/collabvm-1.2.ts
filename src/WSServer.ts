@@ -202,6 +202,7 @@ export default class WSServer {
                 break;
             case "rename":
                 if (!client.RenameRateLimit.request()) return;
+                if (client.IP.muted) return;
                 this.renameUser(client, msgArr[1]);
                 break;
             case "chat":
