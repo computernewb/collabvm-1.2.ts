@@ -514,7 +514,7 @@ export default class WSServer {
         client.sendMsg(guacutils.encode("rename", "0", status, client.username, client.rank));
         if (hadName) {
             log("INFO", `Rename ${client.IP.address} from ${oldname} to ${client.username}`);
-            this.clients.filter(c => c.username !== client.username).forEach((c) =>
+            this.clients.forEach((c) =>
             //@ts-ignore
             c.sendMsg(guacutils.encode("rename", "1", oldname, client.username, client.rank)));
         } else {
