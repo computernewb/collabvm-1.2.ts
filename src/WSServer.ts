@@ -492,7 +492,7 @@ export default class WSServer {
         } else {
             if (hadName && newName === oldname) {
                 //@ts-ignore
-                client.sendMsg(guacutils.encode("rename", "0", "0", client.username));
+                client.sendMsg(guacutils.encode("rename", "0", "0", client.username, client.rank));
                 return;
             }
             if (this.getUsernameList().indexOf(newName) !== -1) {
@@ -511,12 +511,12 @@ export default class WSServer {
             } else client.username = newName;
         }
         //@ts-ignore
-        client.sendMsg(guacutils.encode("rename", "0", status, client.username));
+        client.sendMsg(guacutils.encode("rename", "0", status, client.username, client.rank));
         if (hadName) {
             log("INFO", `Rename ${client.IP.address} from ${oldname} to ${client.username}`);
             this.clients.filter(c => c.username !== client.username).forEach((c) =>
             //@ts-ignore
-            c.sendMsg(guacutils.encode("rename", "1", oldname, client.username)));
+            c.sendMsg(guacutils.encode("rename", "1", oldname, client.username, client.rank)));
         } else {
             log("INFO", `Rename ${client.IP.address} to ${client.username}`);
             this.clients.forEach((c) =>
