@@ -12,6 +12,7 @@ export class User {
     nopRecieveTimeout? : NodeJS.Timer;
     username? : string;
     connectedToNode : boolean;
+    viewMode : number;
     rank : Rank;
     msgsSent : number;
     Config : IConfig;
@@ -25,6 +26,7 @@ export class User {
     constructor(ws : WebSocket, ip : IPData, config : IConfig, username? : string, node? : string) {
         this.IP = ip;
         this.connectedToNode = false;
+        this.viewMode = -1;
         this.Config = config;
         this.socket = ws;
         this.msgsSent = 0;

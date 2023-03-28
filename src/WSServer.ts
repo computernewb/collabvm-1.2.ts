@@ -200,6 +200,41 @@ export default class WSServer {
                 if (this.voteInProgress) this.sendVoteUpdate(client);
                 this.sendTurnUpdate(client);
                 break;
+            case "view":
+                if(client.connectedToNode) return;
+                if(client.username || msgArr.length !== 3 || msgArr[1] !== this.Config.collabvm.node) {
+                    // The use of connect here is intentional.
+                    client.sendMsg(guacutils.encode("connect", "0"));
+                    return;
+                }
+
+                switch(msgArr[2]) {
+                    case "0":
+                        client.viewMode = 0;
+                        break;
+                    case "1":
+                        client.viewMode = 1;
+                        break;
+                    default:
+                        client.sendMsg(guacutils.encode("connect", "0"));
+                        return;
+                }
+                
+                client.sendMsg(guacutils.encode("connect", "1", "1", this.Config.vm.snapshots ? "1" : "0", "0"));
+                if (this.ChatHistory.size !== 0) client.sendMsg(this.getChatHistoryMsg());
+                if (this.Config.collabvm.motd) client.sendMsg(guacutils.encode("chat", "", this.Config.collabvm.motd));
+                
+                if(client.viewMode == 1) {
+                    client.sendMsg(guacutils.encode("size", "0", this.VM.framebuffer.width.toString(), this.VM.framebuffer.height.toString()));
+                    var jpg = this.VM.framebuffer.toBuffer("image/jpeg");
+                    var jpg64 = jpg.toString("base64");
+                    client.sendMsg(guacutils.encode("png", "0", "0", "0", "0", jpg64));
+                    client.sendMsg(guacutils.encode("sync", Date.now().toString()));
+                }
+                
+                if (this.voteInProgress) this.sendVoteUpdate(client);
+                this.sendTurnUpdate(client);
+                break;
             case "rename":
                 if (!client.RenameRateLimit.request()) return;
                 if (client.IP.muted) return;
@@ -604,14 +639,14 @@ export default class WSServer {
     private async newrect(rect : Canvas, x : number, y : number) {
         var jpg = rect.toBuffer("image/jpeg", {quality: 0.5, progressive: true, chromaSubsampling: true});
         var jpg64 = jpg.toString("base64");
-        this.clients.filter(c => c.connectedToNode).forEach(c => {
+        this.clients.filter(c => c.connectedToNode || c.viewMode == 1).forEach(c => {
             c.sendMsg(guacutils.encode("png", "0", "0", x.toString(), y.toString(), jpg64));
             c.sendMsg(guacutils.encode("sync", Date.now().toString()));
         });
     }
 
     private newsize(size : {height:number,width:number}) {
-        this.clients.filter(c => c.connectedToNode).forEach(c => c.sendMsg(guacutils.encode("size", "0", size.width.toString(), size.height.toString())));
+        this.clients.filter(c => c.connectedToNode || c.viewMode == 1).forEach(c => c.sendMsg(guacutils.encode("size", "0", size.width.toString(), size.height.toString())));
     }
 
     getThumbnail() : Promise<string> {
