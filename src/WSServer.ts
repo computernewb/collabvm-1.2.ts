@@ -207,6 +207,7 @@ export default class WSServer {
                 break;
             case "chat":
                 if (!client.username) return;
+                if (!client.connectedToNode) return;
                 if (client.IP.muted) return;
                 if (msgArr.length !== 2) return;
                 var msg = Utilities.HTMLSanitize(msgArr[1]);
