@@ -275,11 +275,14 @@ export default class WSServer {
                         break;
                 }
                 if (takingTurn) {
+                    var currentQueue = this.TurnQueue.toArray();
                     // If the user is already in the queue, fuck them off
-                    if (this.TurnQueue.toArray().indexOf(client) !== -1) return;
+                    if (currentQueue.indexOf(client) !== -1) return;
                     // If they're muted, also fuck them off.
                     // Send them the turn queue to prevent client glitches
                     if (client.IP.muted) return;
+                    // Only allow one active turn per IP address
+                    if(currentQueue.find(user => user.IP.address == client.IP.address)) return;
                     this.TurnQueue.enqueue(client);
                     if (this.TurnQueue.size === 1) this.nextTurn();
                 } else {
