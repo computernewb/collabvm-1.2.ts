@@ -52,6 +52,7 @@ export default class QMPClient extends EventEmitter {
         try {
             msg = JSON.parse(msgraw);
         } catch {
+            this.emit("qmpreturn", '');
             return;
         }
 
