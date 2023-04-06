@@ -2,7 +2,6 @@ import EventEmitter from "events";
 import { Socket } from "net";
 import { Mutex } from "async-mutex";
 import log from "./log.js";
-import { EOL } from 'os'
 
 export default class QMPClient extends EventEmitter {
     socketfile : string;
@@ -47,52 +46,49 @@ export default class QMPClient extends EventEmitter {
     }
 
     private async onData(data : Buffer) {
-        let msgraw = data.toString().split(EOL).filter(n => n);
-        for(var message in msgraw) {
-            let msg;
+        let msgraw = data.toString();
+        let msg;
 
-            try {
-                msg = JSON.parse(msgraw[message]);
-            } catch {
-                this.emit("qmpreturn", "");
-                return;
-            }
-
-            if (msg.QMP !== undefined) {
-                if (this.sentConnected) 
-                    return;
-                    
-                await this.execute({ execute: "qmp_capabilities" });
-
-                this.emit('connected');
-                this.sentConnected = true;
-            }
-            if (msg.return !== undefined)
-                this.emit("qmpreturn", msg.return);
-            else if(msg.event !== undefined) {
-                switch(msg.event) {
-                    case "STOP":
-                    {
-                        log("INFO", "The VM was shut down, restarting...");
-                        this.reboot();
-                        break;
-                    }
-                    case "RESET":
-                    {
-                        log("INFO", "QEMU reset event occured");
-                        this.resume();
-                        break;
-                    };
-                    default: {
-                        this.emit("qmpreturn", "");
-                        break;
-                    }
-                }
-            }else
-                // for now just return an empty string.
-                // This is a giant hack but avoids a deadlock
-                this.emit("qmpreturn", "");
+        try {
+            msg = JSON.parse(msgraw);
+        } catch {
+            return;
         }
+
+        if (msg.QMP !== undefined) {
+            if (this.sentConnected) 
+                return;
+                
+            await this.execute({ execute: "qmp_capabilities" });
+
+            this.emit('connected');
+            this.sentConnected = true;
+        }
+        if (msg.return !== undefined)
+            this.emit("qmpreturn", msg.return);
+        else if(msg.event !== undefined) {
+            switch(msg.event) {
+                case "STOP":
+                {
+                    log("INFO", "The VM was shut down, restarting...");
+                    this.reboot();
+                    break;
+                }
+                case "RESET":
+                {
+                    log("INFO", "QEMU reset event occured");
+                    this.resume();
+                    break;
+                };
+                default: {
+                    this.emit("qmpreturn", '');
+                    break;
+                }
+            }
+        }else
+            // for now just return an empty string.
+            // This is a giant hack but avoids a deadlock
+            this.emit("qmpreturn", '');
     }
 
     private onClose() {
