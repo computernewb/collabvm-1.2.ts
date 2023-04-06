@@ -2,6 +2,7 @@ import EventEmitter from "events";
 import { Socket } from "net";
 import { Mutex } from "async-mutex";
 import log from "./log.js";
+import { EOL } from "os";
 
 export default class QMPClient extends EventEmitter {
     socketfile : string;
@@ -34,7 +35,9 @@ export default class QMPClient extends EventEmitter {
             }
             this.connected = true;
             this.socket.on('error', () => false); // Disable throwing if QMP errors
-            this.socket.on('data', (data) => this.onData(data));
+            this.socket.on('data', (data) => {
+                data.toString().split(EOL).forEach(instr => this.onData(instr));
+            });
             this.socket.on('close', () => this.onClose());
             this.once('connected', () => {res();});
         })
@@ -45,12 +48,11 @@ export default class QMPClient extends EventEmitter {
         this.socket.destroy();
     }
 
-    private async onData(data : Buffer) {
-        let msgraw = data.toString();
+    private async onData(data : string) {
         let msg;
 
         try {
-            msg = JSON.parse(msgraw);
+            msg = JSON.parse(data);
         } catch {
             return;
         }
@@ -64,7 +66,7 @@ export default class QMPClient extends EventEmitter {
             this.emit('connected');
             this.sentConnected = true;
         }
-        if (msg.return !== undefined)
+        if (msg.return !== undefined && Object.keys(msg.return).length)
             this.emit("qmpreturn", msg.return);
         else if(msg.event !== undefined) {
             switch(msg.event) {
@@ -76,14 +78,13 @@ export default class QMPClient extends EventEmitter {
                 }
                 case "RESET":
                 {
-                    log("INFO", "QEMU reset event occured");
-                    this.resume();
+                    if(msg.data.reason == "host-qmp-system-reset") {
+                        log("INFO", "QEMU reset event occured");
+                        this.resume();
+                    }
                     break;
                 };
-                default: {
-                    this.emit("qmpreturn", '');
-                    break;
-                }
+                default: break;
             }
         }else
             // for now just return an empty string.
