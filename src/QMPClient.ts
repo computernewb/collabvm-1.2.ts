@@ -2,6 +2,7 @@ import EventEmitter from "events";
 import { Socket } from "net";
 import { Mutex } from "async-mutex";
 import log from "./log.js";
+import { EOL } from 'os'
 
 export default class QMPClient extends EventEmitter {
     socketfile : string;
@@ -46,7 +47,7 @@ export default class QMPClient extends EventEmitter {
     }
 
     private async onData(data : Buffer) {
-        let msgraw = data.toString().split("\n");
+        let msgraw = data.toString().split(EOL).filter(n => n);
         for(var message in msgraw) {
             let msg;
 
