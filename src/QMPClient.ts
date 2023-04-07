@@ -78,10 +78,8 @@ export default class QMPClient extends EventEmitter {
                 }
                 case "RESET":
                 {
-                    if(msg.data.reason == "host-qmp-system-reset") {
-                        log("INFO", "QEMU reset event occured");
-                        this.resume();
-                    }
+                    log("INFO", "QEMU reset event occured");
+                    this.resume();
                     break;
                 };
                 default: break;
