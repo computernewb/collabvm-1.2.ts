@@ -45,7 +45,7 @@ export class User {
         this.rank = 0;
         this.ChatRateLimit = new RateLimiter(this.Config.collabvm.automute.messages, this.Config.collabvm.automute.seconds);
         this.ChatRateLimit.on('limit', () => this.mute(false));
-        this.RenameRateLimit = new RateLimiter(4, 3);
+        this.RenameRateLimit = new RateLimiter(3, 60);
         this.RenameRateLimit.on('limit', () => this.closeConnection());
         this.LoginRateLimit = new RateLimiter(4, 3);
         this.LoginRateLimit.on('limit', () => this.closeConnection());
