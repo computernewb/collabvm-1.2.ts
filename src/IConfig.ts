@@ -21,6 +21,7 @@ export default interface IConfig {
         moderatorEnabled : boolean;
         usernameblacklist : string[];
         maxChatLength : number;
+        maxChatHistoryLength : number;
         automute : {
             enabled: boolean;
             seconds: number;

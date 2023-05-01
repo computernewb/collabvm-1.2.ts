@@ -27,6 +27,7 @@ bancmd = "iptables -A INPUT -s $IP -j REJECT"
 moderatorEnabled = true
 usernameblacklist = []
 maxChatLength = 100
+maxChatHistoryLength = 10
 # Temporarily mute a user if they send more than x messages in n seconds
 automute = {enabled = true, seconds = 5, messages = 5}
 # How long a temporary mute lasts, in seconds

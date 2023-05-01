@@ -47,13 +47,13 @@ export default class WSServer {
     private ModPerms : number;  
     private VM : VM;
     constructor(config : IConfig, vm : VM) {
-        this.ChatHistory = new CircularBuffer<{user:string,msg:string}>(Array, 5);
+        this.Config = config;
+        this.ChatHistory = new CircularBuffer<{user:string,msg:string}>(Array, this.Config.collabvm.maxChatHistoryLength);
         this.TurnQueue = new Queue<User>();
         this.TurnTime = 0;
         this.TurnIntervalRunning = false;
         this.clients = [];
         this.ips = [];
-        this.Config = config;
         this.voteInProgress = false;
         this.voteTime = 0;
         this.voteCooldown = 0;
