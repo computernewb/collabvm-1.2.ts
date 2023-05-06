@@ -539,7 +539,7 @@ export default class WSServer {
                     status = "1";
                 }
             } else
-            if (!/^[a-zA-Z0-9\ \-\_\.]+$/.test(newName) || newName.length > 20 || newName.trim().length < 3) {
+            if (!/^[a-zA-Z0-9\ \-\_\.]+$/.test(newName) || newName.length > 20 || newName.length < 3) {
                 client.assignGuestName(this.getUsernameList());
                 status = "2";
             } else
