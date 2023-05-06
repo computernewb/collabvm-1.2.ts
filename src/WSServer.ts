@@ -527,6 +527,7 @@ export default class WSServer {
         if (!newName) {
             client.assignGuestName(this.getUsernameList());
         } else {
+            newName = newName.trim();
             if (hadName && newName === oldname) {
                 //@ts-ignore
                 client.sendMsg(guacutils.encode("rename", "0", "0", client.username, client.rank));
