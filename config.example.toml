@@ -6,6 +6,10 @@ proxying = false
 # IPs allowed to access the server in proxy mode.
 # 99% of the time this will only be 127.0.0.1
 proxyAllowedIps = ["127.0.0.1"]
+# Whether the Origin header check is enabled.
+origin = false
+# Origins to accept connections from.
+originAllowedDomains = ["computernewb.com"]
 
 [vm]
 qemuArgs = "qemu-system-x86_64"

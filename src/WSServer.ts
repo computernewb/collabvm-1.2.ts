@@ -85,13 +85,35 @@ export default class WSServer {
             socket.write("HTTP/1.1 400 Bad Request\n\n400 Bad Request");
             socket.destroy();
         }
-        if (
-            req.headers['sec-websocket-protocol'] !== "guacamole" 
-            // || req.headers['origin']?.toLocaleLowerCase() !== "https://computernewb.com"
-        ) {
+
+        if (req.headers['sec-websocket-protocol'] !== "guacamole") {
             killConnection();
             return;
         }
+
+        if (this.Config.http.origin) {
+            // If the client is not sending an Origin header, kill the connection.
+            if(!req.headers.origin) {
+                killConnection();
+                return;
+            }
+
+            // Try to parse the Origin header sent by the client, if it fails, kill the connection.
+            var _host;
+            try {
+                _host = new URL(req.headers.origin.toLowerCase()).hostname;
+            } catch {
+                killConnection();
+                return;
+            }
+
+            // If the domain name is not in the list of allowed origins, kill the connection.
+            if(!this.Config.http.originAllowedDomains.includes(_host)) {
+                killConnection();
+                return;
+            }
+        }
+
         if (this.Config.http.proxying) {
             // If the requesting IP isn't allowed to proxy, kill it
             //@ts-ignore

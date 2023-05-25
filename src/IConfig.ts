@@ -4,6 +4,8 @@ export default interface IConfig {
         port : number;
         proxying : boolean;
         proxyAllowedIps : string[];
+        origin : boolean;
+        originAllowedDomains : string[];
     };
     vm : {
         qemuArgs : string;
