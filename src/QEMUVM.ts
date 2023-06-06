@@ -2,7 +2,7 @@ import { EventEmitter } from "events";
 import IConfig from "./IConfig.js";
 import * as rfb from 'rfb2';
 import * as fs from 'fs';
-import { execa, ExecaChildProcess } from "execa";
+import { execa, ExecaChildProcess, execaCommand } from "execa";
 import QMPClient from "./QMPClient.js";
 import BatchRects from "./RectBatcher.js";
 import { createCanvas, Canvas, CanvasRenderingContext2D, createImageData } from "canvas";
@@ -71,8 +71,7 @@ export default class QEMUVM extends VM {
                     log("ERROR", `Failed to delete existing socket: ${e}`);
                     process.exit(-1);
                 }
-            var qemuArr = this.qemuCmd.split(" ");
-            this.qemuProcess = execa(qemuArr[0], qemuArr.slice(1));
+            this.qemuProcess = execaCommand(this.qemuCmd);
             this.qemuProcess.catch(() => false);
             this.qemuProcess.stderr?.on('data', (d) => log("ERROR", `QEMU sent to stderr: ${d.toString()}`));
             this.qemuProcess.once('spawn', () => {
