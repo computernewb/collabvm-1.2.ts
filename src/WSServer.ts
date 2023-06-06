@@ -276,7 +276,7 @@ export default class WSServer {
                 client.onMsgSent();
                 break;
             case "turn":
-                if (!this.turnsAllowed && client.rank !== Rank.Admin && client.rank !== Rank.Moderator) return;
+                if ((!this.turnsAllowed || this.Config.collabvm.turnwhitelist) && client.rank !== Rank.Admin && client.rank !== Rank.Moderator && client.rank !== Rank.Turn) return;
                 if (!client.TurnRateLimit.request()) return;
                 if (!client.connectedToNode) return;
                 if (msgArr.length > 2) return;
@@ -333,7 +333,7 @@ export default class WSServer {
                 break;
             case "vote":
                 if (!this.Config.vm.snapshots) return;
-                if (!this.turnsAllowed) return;
+                if ((!this.turnsAllowed || this.Config.collabvm.turnwhitelist) && client.rank !== Rank.Admin && client.rank !== Rank.Moderator && client.rank !== Rank.Turn) return;
                 if (!client.connectedToNode) return;
                 if (msgArr.length !== 2) return;
                 if (!client.VoteRateLimit.request()) return;
@@ -377,6 +377,9 @@ export default class WSServer {
                         } else if (this.Config.collabvm.moderatorEnabled && pwdHash === this.Config.collabvm.modpass) {
                             client.rank = Rank.Moderator;
                             client.sendMsg(guacutils.encode("admin", "0", "3", this.ModPerms.toString()));
+                        } else if (this.Config.collabvm.turnwhitelist && pwdHash === this.Config.collabvm.turnpass) {
+                            client.rank = Rank.Turn;
+                            client.sendMsg(guacutils.encode("chat", "", "You may now take turns."));
                         } else {
                             client.sendMsg(guacutils.encode("admin", "0", "0"));
                             return;

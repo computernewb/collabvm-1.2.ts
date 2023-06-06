@@ -119,4 +119,6 @@ export enum Rank {
     Unregistered = 0,
     Admin = 2,
     Moderator = 3,
+    // Giving a good gap between server only internal ranks just in case
+    Turn = 10,
 }

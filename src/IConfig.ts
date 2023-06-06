@@ -35,6 +35,8 @@ export default interface IConfig {
         voteCooldown: number;
         adminpass : string;
         modpass : string;
+        turnwhitelist : boolean;
+        turnpass : string;
         moderatorPermissions : Permissions;
     };
 };
