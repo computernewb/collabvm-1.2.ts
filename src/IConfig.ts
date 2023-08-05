@@ -8,12 +8,17 @@ export default interface IConfig {
         originAllowedDomains : string[];
     };
     vm : {
+        hypervisor : 'qemu' | 'vnc';
         qemuArgs : string;
         vncPort : number;
         snapshots : boolean;
         qmpHost : string | null;
         qmpPort : number | null;
         qmpSockDir : string | null;
+
+        startCmd : string | null;
+        stopCmd : string | null;
+        rebootCmd : string | null;
     };
     collabvm : {
         node : string;

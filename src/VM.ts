@@ -9,4 +9,5 @@ export default abstract class VM extends EventEmitter {
     public abstract keyEvent(keysym : number, down : boolean) : void;
     public abstract Restore() : void;
     public abstract Reboot() : Promise<void>;
+    public abstract Start() : Promise<void>;
 }

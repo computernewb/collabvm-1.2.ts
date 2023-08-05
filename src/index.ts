@@ -3,7 +3,9 @@ import IConfig from './IConfig.js';
 import * as fs from "fs";
 import WSServer from './WSServer.js';
 import QEMUVM from './QEMUVM.js';
+import VNCVM from './VNCVM.js';
 import log from './log.js';
+import VM from './VM.js';
 
 log("INFO", "CollabVM Server starting up");
 
@@ -26,7 +28,14 @@ try {
 
 async function start() {
     // Fire up the VM
-    var VM = new QEMUVM(Config);
+    var VM : VM;
+    switch (Config.vm.hypervisor) {
+        case "vnc":
+            VM = new VNCVM(Config);
+        break;
+        default: // Do not break existing setups
+            VM = new QEMUVM(Config);
+    }
     await VM.Start();
 
     // Start up the websocket server
