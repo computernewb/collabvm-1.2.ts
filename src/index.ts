@@ -32,7 +32,8 @@ async function start() {
     switch (Config.vm.hypervisor) {
         case "vnc":
             VM = new VNCVM(Config);
-        break;
+            break;
+        case "qemu":
         default: // Do not break existing setups
             VM = new QEMUVM(Config);
     }
