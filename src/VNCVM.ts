@@ -214,7 +214,7 @@ export default class VNCVM extends VM {
     Stop() : Promise<void> {
         return new Promise<void>(async (res, rej) => {
             if (this.expectedExit) {res(); return;}
-            if (!this.startCmd) {this.vncOpen = false; this.vnc?.end(); res(); return;}
+            if (!this.startCmd) {this.expectedExit = true; this.vncOpen = false; this.vnc?.end(); res(); return;}
             if (!this.startProcess && !this.stopCmd) throw new Error("VM was not running");
             this.expectedExit = true;
             this.vncOpen = false;
@@ -225,13 +225,14 @@ export default class VNCVM extends VM {
                 this.startProcess?.kill(9);
             }, 10000);
             var closep = new Promise<void>(async (reso, reje) => {
+                if (this.startProcess?.exitCode != null) return reso();
                 this.startProcess?.once('exit', () => reso());
                 this.startProcess?.kill(2);
             });
             var stopp = new Promise<void>((reso, rej) => {
                 if (!this.stopCmd) return reso();
                 let stopProc = execaCommand(this.stopCmd, { shell: true });
-                stopProc.once('exit',()=>{
+                stopProc.once('exit',()=>{console.log('stopProc done!')
                     reso();
                 })
                 stopProc.catch(() => false);
