@@ -232,7 +232,7 @@ export default class VNCVM extends VM {
             var stopp = new Promise<void>((reso, rej) => {
                 if (!this.stopCmd) return reso();
                 let stopProc = execaCommand(this.stopCmd, { shell: true });
-                stopProc.once('exit',()=>{console.log('stopProc done!')
+                stopProc.once('exit',()=>{
                     reso();
                 })
                 stopProc.catch(() => false);
