@@ -80,6 +80,11 @@ export default class VNCVM extends VM {
         this.vnc = rfb.createConnection({
             host: "127.0.0.1",
             port: this.vncPort,
+            encodings: [
+                0, // raw
+                1, // copyrect
+                -223 // resize
+            ]
         });
         this.vnc.on("close", () => this.vncClosed());
         this.vnc.on("error", (err) => {log('ERROR','VNC Error: '+err);});
@@ -121,27 +126,49 @@ export default class VNCVM extends VM {
     private onVNCRect(rect : any) {
         return this.rectMutex.runExclusive(async () => {
             return new Promise<void>(async (res, rej) => {
-                var buff = Buffer.alloc(rect.height * rect.width * 4)
-                var offset = 0;
-                for (var i = 0; i < rect.data.length; i += 4) {
-                    buff[offset++] = rect.data[i + 2];
-                    buff[offset++] = rect.data[i + 1];
-                    buff[offset++] = rect.data[i];
-                    buff[offset++] = 255;
+                switch (rect.encoding) {
+                    case 0: // raw
+                        var buff = Buffer.alloc(rect.height * rect.width * 4)
+                        var offset = 0;
+                        for (var i = 0; i < rect.data.length; i += 4) {
+                            buff[offset++] = rect.data[i + 2];
+                            buff[offset++] = rect.data[i + 1];
+                            buff[offset++] = rect.data[i];
+                            buff[offset++] = 255;
+                        }
+                        var imgdata = createImageData(Uint8ClampedArray.from(buff), rect.width, rect.height);
+                        this.framebufferCtx.putImageData(imgdata, rect.x, rect.y);
+                        this.rects.push({
+                            x: rect.x,
+                            y: rect.y,
+                            height: rect.height,
+                            width: rect.width,
+                            data: buff,
+                        });
+                        if (!this.vnc) throw new Error();
+                        if (this.vncOpen)
+                            this.vnc.requestUpdate(true, 0, 0, this.vnc.width, this.vnc.height);
+                        res();
+                        break;
+                    case 1: // copyrect
+                        // this.emit('copy',{width: rect.width, height: rect.height, srcX: rect.src.x, srcY: rect.src.y, destX: rect.x, destY: rect.y}) // todo: add this when webapp supports copyrect natively
+                        let imgData = this.framebufferCtx.getImageData(rect.src.x,rect.src.y,rect.width,rect.height);
+                        this.framebufferCtx.putImageData(imgData, rect.x, rect.y);
+                        this.rects.push({
+                            x: rect.x,
+                            y: rect.y,
+                            height: rect.height,
+                            width: rect.width,
+                            data: Buffer.from(imgData.data),
+                        });
+                        if (!this.vnc) throw new Error();
+                        if (this.vncOpen)
+                            this.vnc.requestUpdate(true, 0, 0, this.vnc.width, this.vnc.height);
+                        res();
+                        break;
+                    default:
+                        res(); // ignore other encodings
                 }
-                var imgdata = createImageData(Uint8ClampedArray.from(buff), rect.width, rect.height);
-                this.framebufferCtx.putImageData(imgdata, rect.x, rect.y);
-                this.rects.push({
-                    x: rect.x,
-                    y: rect.y,
-                    height: rect.height,
-                    width: rect.width,
-                    data: buff,
-                });
-                if (!this.vnc) throw new Error();
-                if (this.vncOpen)
-                    this.vnc.requestUpdate(true, 0, 0, this.vnc.height, this.vnc.width);
-                res();
             })
         });
     }
@@ -161,6 +188,9 @@ export default class VNCVM extends VM {
     private onVNCSize(size : any) {
         if (this.framebuffer.height !== size.height) this.framebuffer.height = size.height;
         if (this.framebuffer.width !== size.width) this.framebuffer.width = size.width;
+        if (!this.vnc) throw new Error();
+        if (this.vncOpen)
+            this.vnc.requestUpdate(true, 0, 0, this.vnc.width, this.vnc.height);
         this.emit("size", {height: size.height, width: size.width});
     }
 
