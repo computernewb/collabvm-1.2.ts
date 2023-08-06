@@ -12,6 +12,7 @@ import VM from "./VM.js";
 export default class VNCVM extends VM {
     vnc? : rfb.RfbClient;
     vncPort : number;
+    vncPassword? : string;
     framebuffer : Canvas;
     framebufferCtx : CanvasRenderingContext2D;
     startCmd : string;
@@ -35,6 +36,7 @@ export default class VNCVM extends VM {
         this.startCmd = Config.vm.startCmd?.replace(/\$VNCPORT/,this.vncPort.toString()) || '';
         this.stopCmd = Config.vm.stopCmd || '';
         this.rebootCmd = Config.vm.rebootCmd || '';
+        this.vncPassword = Config.vm.vncPass || undefined;
         this.vncErrorLevel = 0;
         this.vncOpen = true;
         this.rects = [];
@@ -80,6 +82,7 @@ export default class VNCVM extends VM {
         this.vnc = rfb.createConnection({
             host: "127.0.0.1",
             port: this.vncPort,
+            password: this.vncPassword,
             encodings: [
                 0, // raw
                 1, // copyrect

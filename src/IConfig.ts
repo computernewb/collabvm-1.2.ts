@@ -19,6 +19,7 @@ export default interface IConfig {
         startCmd : string | null;
         stopCmd : string | null;
         rebootCmd : string | null;
+        vncPass : string | null;
     };
     collabvm : {
         node : string;
