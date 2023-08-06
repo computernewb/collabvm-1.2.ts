@@ -38,13 +38,25 @@ export default class VNCVM extends VM {
         this.rebootCmd = Config.vm.rebootCmd || '';
         this.vncPassword = Config.vm.vncPass || undefined;
         this.vncErrorLevel = 0;
-        this.vncOpen = true;
+        this.vncOpen = false;
         this.rects = [];
         this.rectMutex = new Mutex();
         this.framebuffer = createCanvas(1, 1);
         this.framebufferCtx = this.framebuffer.getContext("2d");
         this.processRestartErrorLevel = 0;
         this.expectedExit = false;
+
+        if (this.stopCmd) {
+            process.on('SIGINT',()=>{
+                process.stdin.resume();
+                let stopProc = execaCommand(this.stopCmd || '', { shell: true });
+                stopProc.once('exit',()=>{
+                    process.exit();
+                });
+                setTimeout(()=>process.exit(),10000); // close process if stopCmd runs for more than 10 seconds
+                stopProc.catch(() => false);
+            })
+        }
     }
 
     Start() : Promise<void> {
@@ -79,6 +91,7 @@ export default class VNCVM extends VM {
     }
 
     private startVNC() {
+        if (this.vncOpen) return;
         this.vnc = rfb.createConnection({
             host: "127.0.0.1",
             port: this.vncPort,
