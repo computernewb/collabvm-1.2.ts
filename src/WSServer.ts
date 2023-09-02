@@ -732,7 +732,10 @@ export default class WSServer {
     }
 
     private newsize(size : {height:number,width:number}) {
-        this.clients.filter(c => c.connectedToNode || c.viewMode == 1).forEach(c => c.sendMsg(guacutils.encode("size", "0", size.width.toString(), size.height.toString())));
+        this.clients.filter(c => c.connectedToNode || c.viewMode == 1).forEach(c => {
+            if (this.screenHidden && c.rank == Rank.Unregistered) return;
+            c.sendMsg(guacutils.encode("size", "0", size.width.toString(), size.height.toString()))
+        });
     }
 
     getThumbnail() : Promise<string> {
