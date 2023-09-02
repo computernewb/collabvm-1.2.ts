@@ -13,8 +13,13 @@ import { isIP } from 'net';
 import QEMUVM from './QEMUVM.js';
 import { Canvas, createCanvas, CanvasRenderingContext2D } from 'canvas';
 import { IPData } from './IPData.js';
+import { read, readFileSync } from 'fs';
 import log from './log.js';
 import VM from './VM.js';
+import { fileURLToPath } from 'url';
+import path from 'path';
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 export default class WSServer {
     private Config : IConfig;
@@ -42,6 +47,11 @@ export default class WSServer {
     private voteCooldownInterval? : NodeJS.Timer;
     // Completely disable turns
     private turnsAllowed : boolean;
+    // Hide the screen
+    private screenHidden : boolean;
+    // base64 image to show when the screen is hidden
+    private screenHiddenImg : string;
+    private screenHiddenThumb : string;
     // Indefinite turn
     private indefiniteTurn : User | null;
     private ModPerms : number;  
@@ -58,6 +68,10 @@ export default class WSServer {
         this.voteTime = 0;
         this.voteCooldown = 0;
         this.turnsAllowed = true;
+        this.screenHidden = false;
+        this.screenHiddenImg = readFileSync(__dirname + "/../assets/screenhidden.jpeg").toString("base64");
+        this.screenHiddenThumb = readFileSync(__dirname + "/../assets/screenhiddenthumb.jpeg").toString("base64");
+
         this.indefiniteTurn = null;
         this.ModPerms = Utilities.MakeModPerms(this.Config.collabvm.moderatorPermissions);
         this.server = http.createServer();
@@ -203,7 +217,7 @@ export default class WSServer {
         if (msgArr.length < 1) return;
         switch (msgArr[0]) {
             case "list":
-                client.sendMsg(guacutils.encode("list", this.Config.collabvm.node, this.Config.collabvm.displayname, await this.getThumbnail()));
+                client.sendMsg(guacutils.encode("list", this.Config.collabvm.node, this.Config.collabvm.displayname, this.screenHidden ? this.screenHiddenThumb : await this.getThumbnail()));
                 break;
             case "connect":
                 if (!client.username || msgArr.length !== 2 || msgArr[1] !== this.Config.collabvm.node) {
@@ -214,10 +228,15 @@ export default class WSServer {
                 client.sendMsg(guacutils.encode("connect", "1", "1", this.Config.vm.snapshots ? "1" : "0", "0"));
                 if (this.ChatHistory.size !== 0) client.sendMsg(this.getChatHistoryMsg());
                 if (this.Config.collabvm.motd) client.sendMsg(guacutils.encode("chat", "", this.Config.collabvm.motd));
-                client.sendMsg(guacutils.encode("size", "0", this.VM.framebuffer.width.toString(), this.VM.framebuffer.height.toString()));
-                var jpg = this.VM.framebuffer.toBuffer("image/jpeg");
-                var jpg64 = jpg.toString("base64");
-                client.sendMsg(guacutils.encode("png", "0", "0", "0", "0", jpg64));
+                if (this.screenHidden) {
+                    client.sendMsg(guacutils.encode("size", "0", "1024", "768"));
+                    client.sendMsg(guacutils.encode("png", "0", "0", "0", "0", this.screenHiddenImg));
+                } else {
+                    client.sendMsg(guacutils.encode("size", "0", this.VM.framebuffer.width.toString(), this.VM.framebuffer.height.toString()));
+                    var jpg = this.VM.framebuffer.toBuffer("image/jpeg");
+                    var jpg64 = jpg.toString("base64");
+                    client.sendMsg(guacutils.encode("png", "0", "0", "0", "0", jpg64));
+                }
                 client.sendMsg(guacutils.encode("sync", Date.now().toString()));
                 if (this.voteInProgress) this.sendVoteUpdate(client);
                 this.sendTurnUpdate(client);
@@ -247,11 +266,16 @@ export default class WSServer {
                 if (this.Config.collabvm.motd) client.sendMsg(guacutils.encode("chat", "", this.Config.collabvm.motd));
                 
                 if(client.viewMode == 1) {
-                    client.sendMsg(guacutils.encode("size", "0", this.VM.framebuffer.width.toString(), this.VM.framebuffer.height.toString()));
-                    var jpg = this.VM.framebuffer.toBuffer("image/jpeg");
-                    var jpg64 = jpg.toString("base64");
-                    client.sendMsg(guacutils.encode("png", "0", "0", "0", "0", jpg64));
-                    client.sendMsg(guacutils.encode("sync", Date.now().toString()));
+                    if (this.screenHidden) {
+                        client.sendMsg(guacutils.encode("size", "0", "1024", "768"));
+                        client.sendMsg(guacutils.encode("png", "0", "0", "0", "0", this.screenHiddenImg));
+                    } else {
+                        client.sendMsg(guacutils.encode("size", "0", this.VM.framebuffer.width.toString(), this.VM.framebuffer.height.toString()));
+                        var jpg = this.VM.framebuffer.toBuffer("image/jpeg");
+                        var jpg64 = jpg.toString("base64");
+                        client.sendMsg(guacutils.encode("png", "0", "0", "0", "0", jpg64));
+                    }
+                        client.sendMsg(guacutils.encode("sync", Date.now().toString()));
                 }
                 
                 if (this.voteInProgress) this.sendVoteUpdate(client);
@@ -383,6 +407,13 @@ export default class WSServer {
                         } else {
                             client.sendMsg(guacutils.encode("admin", "0", "0"));
                             return;
+                        }
+                        if (this.screenHidden) {
+                            client.sendMsg(guacutils.encode("size", "0", this.VM.framebuffer.width.toString(), this.VM.framebuffer.height.toString()));
+                            var jpg = this.VM.framebuffer.toBuffer("image/jpeg");
+                            var jpg64 = jpg.toString("base64");
+                            client.sendMsg(guacutils.encode("png", "0", "0", "0", "0", jpg64));
+                            client.sendMsg(guacutils.encode("sync", Date.now().toString()));
                         }
                         //@ts-ignore
                         this.clients.forEach((c) => c.sendMsg(guacutils.encode("adduser", "1", client.username, client.rank)));
@@ -530,6 +561,31 @@ export default class WSServer {
                         this.TurnQueue = Queue.from([client, ...this.TurnQueue.toArray().filter(c=>c!==client)]);
                         this.sendTurnUpdate();
                         break;
+                    case "24":
+                        // Hide screen
+                        if (client.rank !== Rank.Admin) return;
+                        if (msgArr.length !== 3) return;
+                        switch (msgArr[2]) {
+                            case "0":
+                                    this.screenHidden = true;
+                                    this.clients.filter(c => c.rank == Rank.Unregistered).forEach(client => {
+                                        client.sendMsg(guacutils.encode("size", "0", "1024", "768"));
+                                        client.sendMsg(guacutils.encode("png", "0", "0", "0", "0", this.screenHiddenImg));
+                                        client.sendMsg(guacutils.encode("sync", Date.now().toString()));
+                                    });
+                                break;
+                            case "1":
+                                    this.screenHidden = false;
+                                    this.clients.forEach(client => {
+                                        client.sendMsg(guacutils.encode("size", "0", this.VM.framebuffer.width.toString(), this.VM.framebuffer.height.toString()));
+                                        var jpg = this.VM.framebuffer.toBuffer("image/jpeg");
+                                        var jpg64 = jpg.toString("base64");
+                                        client.sendMsg(guacutils.encode("png", "0", "0", "0", "0", jpg64));
+                                        client.sendMsg(guacutils.encode("sync", Date.now().toString()));
+                                    });
+                                break;
+                        }
+                        break;
                 }
                 break;
 
@@ -669,6 +725,7 @@ export default class WSServer {
         var jpg = rect.toBuffer("image/jpeg", {quality: 0.5, progressive: true, chromaSubsampling: true});
         var jpg64 = jpg.toString("base64");
         this.clients.filter(c => c.connectedToNode || c.viewMode == 1).forEach(c => {
+            if (this.screenHidden && c.rank == Rank.Unregistered) return;
             c.sendMsg(guacutils.encode("png", "0", "0", x.toString(), y.toString(), jpg64));
             c.sendMsg(guacutils.encode("sync", Date.now().toString()));
         });
