@@ -7,9 +7,9 @@ import RateLimiter from './RateLimiter.js';
 import { execaCommand } from 'execa';
 export class User {
     socket : WebSocket;
-    nopSendInterval : NodeJS.Timer;
-    msgRecieveInterval : NodeJS.Timer;
-    nopRecieveTimeout? : NodeJS.Timer;
+    nopSendInterval : NodeJS.Timeout;
+    msgRecieveInterval : NodeJS.Timeout;
+    nopRecieveTimeout? : NodeJS.Timeout;
     username? : string;
     connectedToNode : boolean;
     viewMode : number;

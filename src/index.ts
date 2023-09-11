@@ -25,6 +25,15 @@ try {
 
 
 async function start() {
+    // Print a warning if qmpSockDir is set
+    // and the host OS is Windows, as this
+    // configuration will very likely not work.
+    if(process.platform === "win32" && Config.vm.qmpSockDir) {
+        log("WARN", "You appear to have the option 'qmpSockDir' enabled in the config.")
+        log("WARN", "This is not supported on Windows, and you will likely run into issues.");
+        log("WARN", "To remove this warning, use the qmpHost and qmpPort options instead.");
+    }
+
     // Fire up the VM
     var VM = new QEMUVM(Config);
     await VM.Start();

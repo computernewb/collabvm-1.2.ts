@@ -5,7 +5,7 @@ export default class RateLimiter extends EventEmitter {
     private limit : number;
     private interval : number;
     private requestCount : number;
-    private limiter? : NodeJS.Timer;
+    private limiter? : NodeJS.Timeout;
     private limiterSet : boolean;
     constructor(limit : number, interval : number) {
         super();

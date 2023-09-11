@@ -10,6 +10,8 @@ proxyAllowedIps = ["127.0.0.1"]
 origin = false
 # Origins to accept connections from.
 originAllowedDomains = ["computernewb.com"]
+# Maximum amount of active connections allowed from the same IP.
+maxConnections = 3
 
 [vm]
 qemuArgs = "qemu-system-x86_64"
@@ -32,6 +34,8 @@ moderatorEnabled = true
 usernameblacklist = []
 maxChatLength = 100
 maxChatHistoryLength = 10
+# Limit the amount of users allowed in the turn queue at the same time from the same IP
+turnlimit = {enabled = true, maximum = 1}
 # Temporarily mute a user if they send more than x messages in n seconds
 automute = {enabled = true, seconds = 5, messages = 5}
 # How long a temporary mute lasts, in seconds

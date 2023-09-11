@@ -1,5 +1,5 @@
 export class IPData {
-    tempMuteExpireTimeout? : NodeJS.Timer;
+    tempMuteExpireTimeout? : NodeJS.Timeout;
     muted: Boolean;
     vote: boolean | null;
     address: string;

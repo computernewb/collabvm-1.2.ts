@@ -11,9 +11,9 @@ import Queue from 'mnemonist/queue.js';
 import { createHash } from 'crypto';
 import { isIP } from 'net';
 import QEMUVM from './QEMUVM.js';
-import { Canvas, createCanvas, CanvasRenderingContext2D } from 'canvas';
+import { Canvas, createCanvas } from 'canvas';
 import { IPData } from './IPData.js';
-import { read, readFileSync } from 'fs';
+import { readFileSync } from 'fs';
 import log from './log.js';
 import VM from './VM.js';
 import { fileURLToPath } from 'url';
@@ -32,19 +32,17 @@ export default class WSServer {
     // Time remaining on the current turn
     private TurnTime : number;
     // Interval to keep track of the current turn time
-    private TurnInterval? : NodeJS.Timer;
-    // Is the turn interval running?
-    private TurnIntervalRunning : boolean;
+    private TurnInterval? : NodeJS.Timeout;
     // If a reset vote is in progress
     private voteInProgress : boolean;
     // Interval to keep track of vote resets
-    private voteInterval? : NodeJS.Timer;
+    private voteInterval? : NodeJS.Timeout;
     // How much time is left on the vote
     private voteTime : number;
     // How much time until another reset vote can be cast
     private voteCooldown : number;
     // Interval to keep track
-    private voteCooldownInterval? : NodeJS.Timer;
+    private voteCooldownInterval? : NodeJS.Timeout;
     // Completely disable turns
     private turnsAllowed : boolean;
     // Hide the screen
@@ -61,7 +59,6 @@ export default class WSServer {
         this.ChatHistory = new CircularBuffer<{user:string,msg:string}>(Array, this.Config.collabvm.maxChatHistoryLength);
         this.TurnQueue = new Queue<User>();
         this.TurnTime = 0;
-        this.TurnIntervalRunning = false;
         this.clients = [];
         this.ips = [];
         this.voteInProgress = false;
@@ -140,7 +137,7 @@ export default class WSServer {
                 // Get the first IP from the X-Forwarded-For variable
                 _ip = req.headers["x-forwarded-for"]?.toString().replace(/\ /g, "").split(",")[0];
             } catch {
-                // If we can't get the ip, kill the connection
+                // If we can't get the IP, kill the connection
                 killConnection();
                 return;
             }
@@ -149,7 +146,7 @@ export default class WSServer {
                 killConnection();
                 return;
             }
-            // Make sure the ip is valid. If not, kill the connection.
+            // Make sure the IP is valid. If not, kill the connection.
             if (!isIP(_ip)) {
                 killConnection();
                 return;
@@ -157,11 +154,8 @@ export default class WSServer {
             //@ts-ignore
             req.proxiedIP = _ip;
         }
-        this.socket.handleUpgrade(req, socket, head, (ws) => this.socket.emit('connection', ws, req));
-    }
 
-    private onConnection(ws : WebSocket, req : http.IncomingMessage) {
-        var ip: string;
+        let ip: string;
         if (this.Config.http.proxying) {
             //@ts-ignore
             if (!req.proxiedIP) return;
@@ -172,23 +166,45 @@ export default class WSServer {
             ip = req.socket.remoteAddress;
         }
 
-        var _ipdata = this.ips.filter(data => data.address == ip);
+        //@ts-ignore
+        req.IP = ip;
+
+        // Get the amount of active connections coming from the requesting IP.
+        let connections = this.clients.filter(client => client.IP.address == ip);
+        // If it exceeds the limit set in the config, reject the connection with a 429.
+        if(connections.length + 1 > this.Config.http.maxConnections) {
+            socket.write("HTTP/1.1 429 Too Many Requests\n\n429 Too Many Requests");
+            socket.destroy();
+        }
+
+        this.socket.handleUpgrade(req, socket, head, (ws: WebSocket) => this.socket.emit('connection', ws, req));
+    }
+
+    private onConnection(ws : WebSocket, req: http.IncomingMessage) {
+        //@ts-ignore
+        var _ipdata = this.ips.filter(data => data.address == req.IP);
         var ipdata;
         if(_ipdata.length > 0) {
             ipdata = _ipdata[0];
         }else{
-            ipdata = new IPData(ip);
+            //@ts-ignore
+            ipdata = new IPData(req.IP);
             this.ips.push(ipdata);
         }
 
         var user = new User(ws, ipdata, this.Config);
         this.clients.push(user);
+        ws.on('error', (e) => {
+            //@ts-ignore
+            log("ERROR", `${e} (caused by connection ${req.IP})`);
+            ws.close();
+        });
         ws.on('close', () => this.connectionClosed(user));
         ws.on('message', (e) => {
             var msg;
             try {msg = e.toString()}
             catch {
-                // Fuck the user off if they send a non-string message
+                // Close the user's connection if they send a non-string message
                 user.closeConnection();
                 return;
             }
@@ -199,7 +215,10 @@ export default class WSServer {
     };
 
     private connectionClosed(user : User) {
-        if(user.IP.vote != null) user.IP.vote = null;
+        if(user.IP.vote != null) {
+            user.IP.vote = null;
+            this.sendVoteUpdate();
+        };
         if (this.indefiniteTurn === user) this.indefiniteTurn = null;
         this.clients.splice(this.clients.indexOf(user), 1);
         log("INFO", `Disconnect From ${user.IP.address}${user.username ? ` with username ${user.username}` : ""}`);
@@ -322,13 +341,17 @@ export default class WSServer {
                 }
                 if (takingTurn) {
                     var currentQueue = this.TurnQueue.toArray();
-                    // If the user is already in the queue, fuck them off
+                    // If the user is already in the turn queue, ignore the turn request.
                     if (currentQueue.indexOf(client) !== -1) return;
-                    // If they're muted, also fuck them off.
+                    // If they're muted, also ignore the turn request.
                     // Send them the turn queue to prevent client glitches
                     if (client.IP.muted) return;
-                    // Only allow one active turn per IP address
-                    if(currentQueue.find(user => user.IP.address == client.IP.address)) return;
+                    if(this.Config.collabvm.turnlimit.enabled) {
+                        // Get the amount of users in the turn queue with the same IP as the user requesting a turn.
+                        let turns = currentQueue.filter(user => user.IP.address == client.IP.address);
+                        // If it exceeds the limit set in the config, ignore the turn request.
+                        if(turns.length + 1 > this.Config.collabvm.turnlimit.maximum) return;
+                    }
                     this.TurnQueue.enqueue(client);
                     if (this.TurnQueue.size === 1) this.nextTurn();
                 } else {
@@ -684,7 +707,6 @@ export default class WSServer {
     private nextTurn() {
         clearInterval(this.TurnInterval);
         if (this.TurnQueue.size === 0) {
-            this.TurnIntervalRunning = false;
         } else {
             this.TurnTime = this.Config.collabvm.turnTime;
             this.TurnInterval = setInterval(() => this.turnInterval(), 1000);
@@ -694,7 +716,6 @@ export default class WSServer {
 
     clearTurns() {
         clearInterval(this.TurnInterval);
-        this.TurnIntervalRunning = false;
         this.TurnQueue.clear();
         this.sendTurnUpdate();
     }

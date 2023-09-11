@@ -6,6 +6,7 @@ export default interface IConfig {
         proxyAllowedIps : string[];
         origin : boolean;
         originAllowedDomains : string[];
+        maxConnections: number;
     };
     vm : {
         qemuArgs : string;
@@ -24,6 +25,10 @@ export default interface IConfig {
         usernameblacklist : string[];
         maxChatLength : number;
         maxChatHistoryLength : number;
+        turnlimit : {
+            enabled: boolean,
+            maximum: number;
+        };
         automute : {
             enabled: boolean;
             seconds: number;

@@ -1,8 +1,7 @@
-import { EventEmitter } from "events";
 import IConfig from "./IConfig.js";
 import * as rfb from 'rfb2';
 import * as fs from 'fs';
-import { execa, ExecaChildProcess, execaCommand } from "execa";
+import { ExecaChildProcess, execaCommand } from "execa";
 import QMPClient from "./QMPClient.js";
 import BatchRects from "./RectBatcher.js";
 import { createCanvas, Canvas, CanvasRenderingContext2D, createImageData } from "canvas";
@@ -25,13 +24,13 @@ export default class QEMUVM extends VM {
     processRestartErrorLevel : number;
     expectedExit : boolean;
     vncOpen : boolean;
-    vncUpdateInterval? : NodeJS.Timer;
+    vncUpdateInterval? : NodeJS.Timeout;
     rects : {height:number,width:number,x:number,y:number,data:Buffer}[];
     rectMutex : Mutex;
 
-    vncReconnectTimeout? : NodeJS.Timer;
-    qmpReconnectTimeout? : NodeJS.Timer;
-    qemuRestartTimeout? : NodeJS.Timer;
+    vncReconnectTimeout? : NodeJS.Timeout;
+    qmpReconnectTimeout? : NodeJS.Timeout;
+    qemuRestartTimeout? : NodeJS.Timeout;
 
     constructor(Config : IConfig) {
         super();
