@@ -4,7 +4,9 @@ import {WebSocket} from 'ws';
 import {IPData} from './IPData.js';
 import IConfig from './IConfig.js';
 import RateLimiter from './RateLimiter.js';
-import { execaCommand } from 'execa';
+import { execa, execaCommand, ExecaSyncError } from 'execa';
+import log from './log.js';
+
 export class User {
     socket : WebSocket;
     nopSendInterval : NodeJS.Timeout;
@@ -100,13 +102,35 @@ export class User {
         this.sendMsg(guacutils.encode("chat", "", "You are no longer muted."));
     }
 
+    private banCmdArgs(arg: string) : string {
+        return arg.replace(/\$IP/g, this.IP.address).replace(/\$NAME/g, this.username || "");
+    }
+
     async ban() {
         // Prevent the user from taking turns or chatting, in case the ban command takes a while
         this.IP.muted = true;
-        //@ts-ignore
-        var cmd = this.Config.collabvm.bancmd.replace(/\$IP/g, this.IP.address).replace(/\$NAME/g, this.username);
-        await execaCommand(cmd);
-        this.kick();
+
+        try {
+            if (Array.isArray(this.Config.collabvm.bancmd)) {
+                let args: string[] = this.Config.collabvm.bancmd.map((a: string) => this.banCmdArgs(a));
+                if (args.length || args[0].length) {
+                    await execa(args.shift()!, args, {stdout: process.stdout, stderr: process.stderr});
+                    this.kick();
+                } else {
+                    log("ERROR", `Failed to ban ${this.IP.address} (${this.username}): Empty command`);
+                }
+            } else if (typeof this.Config.collabvm.bancmd == "string") {
+                let cmd: string = this.banCmdArgs(this.Config.collabvm.bancmd);
+                if (cmd.length) {
+                    await execaCommand(cmd, {stdout: process.stdout, stderr: process.stderr});
+                    this.kick();
+                } else {
+                    log("ERROR", `Failed to ban ${this.IP.address} (${this.username}): Empty command`);
+                }
+            }
+        } catch (e) {
+            log("ERROR", `Failed to ban ${this.IP.address} (${this.username}): ${(e as ExecaSyncError).shortMessage}`);
+        }
     }
     
     async kick() {

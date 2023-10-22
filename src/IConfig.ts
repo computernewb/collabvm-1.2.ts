@@ -20,7 +20,7 @@ export default interface IConfig {
         node : string;
         displayname : string;
         motd : string;
-        bancmd : string;
+        bancmd : string | string[];
         moderatorEnabled : boolean;
         usernameblacklist : string[];
         maxChatLength : number;
