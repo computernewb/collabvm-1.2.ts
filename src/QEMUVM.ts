@@ -151,8 +151,8 @@ export default class QEMUVM extends VM {
         this.emit('vncconnect');
         log("INFO", "VNC Connected");
         this.vncErrorLevel = 0;
-        //@ts-ignore
-        this.onVNCSize({height: this.vnc.height, width: this.vnc.width});
+        
+        this.onVNCSize({height: this.vnc!.height, width: this.vnc!.width});
         this.vncUpdateInterval = setInterval(() => this.SendRects(), 33);
     }
     private onVNCRect(rect : any) {

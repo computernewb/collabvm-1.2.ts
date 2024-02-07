@@ -79,7 +79,6 @@ export default class WSServer {
             res.write("This server only accepts WebSocket connections.");
             res.end();
         });
-        this.socket.on('connection', (ws : WebSocket, req : http.IncomingMessage) => this.onConnection(ws, req));
         var initSize = vm.getSize();
         this.newsize(initSize);
         this.VM = vm;
@@ -125,49 +124,40 @@ export default class WSServer {
             }
         }
 
-        if (this.Config.http.proxying) {
+        let ip: string;
+        if (this.Config.http.proxying) {   
             // If the requesting IP isn't allowed to proxy, kill it
-            //@ts-ignore
-            if (this.Config.http.proxyAllowedIps.indexOf(req.socket.remoteAddress) === -1) {
+            if (this.Config.http.proxyAllowedIps.indexOf(req.socket.remoteAddress!) === -1) {
                 killConnection();
                 return;
             }
-            var _ip;
+            // Make sure x-forwarded-for is set
+            if (req.headers["x-forwarded-for"] === undefined) {
+                killConnection();
+                return;
+            }
             try {
                 // Get the first IP from the X-Forwarded-For variable
-                _ip = req.headers["x-forwarded-for"]?.toString().replace(/\ /g, "").split(",")[0];
+                ip = req.headers["x-forwarded-for"]?.toString().replace(/\ /g, "").split(",")[0];
             } catch {
                 // If we can't get the IP, kill the connection
                 killConnection();
                 return;
             }
             // If for some reason the IP isn't defined, kill it
-            if (!_ip) {
+            if (!ip) {
                 killConnection();
                 return;
             }
             // Make sure the IP is valid. If not, kill the connection.
-            if (!isIP(_ip)) {
+            if (!isIP(ip)) {
                 killConnection();
                 return;
             }
-            //@ts-ignore
-            req.proxiedIP = _ip;
-        }
-
-        let ip: string;
-        if (this.Config.http.proxying) {
-            //@ts-ignore
-            if (!req.proxiedIP) return;
-            //@ts-ignore
-            ip = req.proxiedIP;
         } else {
             if (!req.socket.remoteAddress) return;
             ip = req.socket.remoteAddress;
         }
-
-        //@ts-ignore
-        req.IP = ip;
 
         // Get the amount of active connections coming from the requesting IP.
         let connections = this.clients.filter(client => client.IP.address == ip);
@@ -177,26 +167,29 @@ export default class WSServer {
             socket.destroy();
         }
 
-        this.socket.handleUpgrade(req, socket, head, (ws: WebSocket) => this.socket.emit('connection', ws, req));
+        this.socket.handleUpgrade(req, socket, head, (ws: WebSocket) => {
+            this.socket.emit('connection', ws, req);
+            this.onConnection(ws, req, ip);
+        });
     }
 
-    private onConnection(ws : WebSocket, req: http.IncomingMessage) {
-        //@ts-ignore
-        var _ipdata = this.ips.filter(data => data.address == req.IP);
+    private onConnection(ws : WebSocket, req: http.IncomingMessage, ip : string) {
+        
+        var _ipdata = this.ips.filter(data => data.address == ip);
         var ipdata;
         if(_ipdata.length > 0) {
             ipdata = _ipdata[0];
         }else{
-            //@ts-ignore
-            ipdata = new IPData(req.IP);
+            
+            ipdata = new IPData(ip);
             this.ips.push(ipdata);
         }
 
         var user = new User(ws, ipdata, this.Config);
         this.clients.push(user);
         ws.on('error', (e) => {
-            //@ts-ignore
-            log("ERROR", `${e} (caused by connection ${req.IP})`);
+            
+            log("ERROR", `${e} (caused by connection ${ip})`);
             ws.close();
         });
         ws.on('close', () => this.connectionClosed(user));
@@ -228,8 +221,8 @@ export default class WSServer {
             this.TurnQueue = Queue.from(this.TurnQueue.toArray().filter(u => u !== user));
             if (hadturn) this.nextTurn();
         }
-        //@ts-ignore
-        this.clients.forEach((c) => c.sendMsg(guacutils.encode("remuser", "1", user.username)));
+        
+        this.clients.forEach((c) => c.sendMsg(guacutils.encode("remuser", "1", user.username!)));
     }
     private async onMessage(client : User, message : string) {
         var msgArr = guacutils.decode(message);
@@ -313,8 +306,8 @@ export default class WSServer {
                 // One of the things I hated most about the old server is it completely discarded your message if it was too long
                 if (msg.length > this.Config.collabvm.maxChatLength) msg = msg.substring(0, this.Config.collabvm.maxChatLength);
                 if (msg.trim().length < 1) return;
-                //@ts-ignore
-                this.clients.forEach(c => c.sendMsg(guacutils.encode("chat", client.username, msg)));
+                
+                this.clients.forEach(c => c.sendMsg(guacutils.encode("chat", client.username!, msg)));
                 this.ChatHistory.push({user: client.username, msg: msg});
                 client.onMsgSent();
                 break;
@@ -438,8 +431,8 @@ export default class WSServer {
                             client.sendMsg(guacutils.encode("png", "0", "0", "0", "0", jpg64));
                             client.sendMsg(guacutils.encode("sync", Date.now().toString()));
                         }
-                        //@ts-ignore
-                        this.clients.forEach((c) => c.sendMsg(guacutils.encode("adduser", "1", client.username, client.rank)));
+                        
+                        this.clients.forEach((c) => c.sendMsg(guacutils.encode("adduser", "1", client.username!, client.rank.toString())));
                         break;
                     case "5":
                         // QEMU Monitor
@@ -550,16 +543,16 @@ export default class WSServer {
                         if (msgArr.length !== 3) return;
                         switch (client.rank) {
                             case Rank.Admin:
-                                //@ts-ignore
-                                this.clients.forEach(c => c.sendMsg(guacutils.encode("chat", client.username, msgArr[2])));
-                                //@ts-ignore
-                                this.ChatHistory.push({user: client.username, msg: msgArr[2]});
+                                
+                                this.clients.forEach(c => c.sendMsg(guacutils.encode("chat", client.username!, msgArr[2])));
+                                
+                                this.ChatHistory.push({user: client.username!, msg: msgArr[2]});
                                 break;
                             case Rank.Moderator:
-                                //@ts-ignore
-                                this.clients.filter(c => c.rank !== Rank.Admin).forEach(c => c.sendMsg(guacutils.encode("chat", client.username, msgArr[2])));
-                                //@ts-ignore
-                                this.clients.filter(c => c.rank === Rank.Admin).forEach(c => c.sendMsg(guacutils.encode("chat", client.username, Utilities.HTMLSanitize(msgArr[2]))));
+                                
+                                this.clients.filter(c => c.rank !== Rank.Admin).forEach(c => c.sendMsg(guacutils.encode("chat", client.username!, msgArr[2])));
+                                
+                                this.clients.filter(c => c.rank === Rank.Admin).forEach(c => c.sendMsg(guacutils.encode("chat", client.username!, Utilities.HTMLSanitize(msgArr[2]))));
                                 break;
                         }
                         break;
@@ -617,8 +610,8 @@ export default class WSServer {
 
     getUsernameList() : string[] {
         var arr : string[] = [];
-        //@ts-ignore
-        this.clients.filter(c => c.username).forEach((c) => arr.push(c.username));
+        
+        this.clients.filter(c => c.username).forEach((c) => arr.push(c.username!));
         return arr;
     }
 
@@ -633,8 +626,8 @@ export default class WSServer {
         } else {
             newName = newName.trim();
             if (hadName && newName === oldname) {
-                //@ts-ignore
-                client.sendMsg(guacutils.encode("rename", "0", "0", client.username, client.rank));
+                
+                client.sendMsg(guacutils.encode("rename", "0", "0", client.username!, client.rank.toString()));
                 return;
             }
             if (this.getUsernameList().indexOf(newName) !== -1) {
@@ -652,25 +645,25 @@ export default class WSServer {
                 status = "3";
             } else client.username = newName;
         }
-        //@ts-ignore
-        client.sendMsg(guacutils.encode("rename", "0", status, client.username, client.rank));
+        
+        client.sendMsg(guacutils.encode("rename", "0", status, client.username!, client.rank.toString()));
         if (hadName) {
             log("INFO", `Rename ${client.IP.address} from ${oldname} to ${client.username}`);
             this.clients.forEach((c) =>
-            //@ts-ignore
-            c.sendMsg(guacutils.encode("rename", "1", oldname, client.username, client.rank)));
+            
+            c.sendMsg(guacutils.encode("rename", "1", oldname, client.username!, client.rank.toString())));
         } else {
             log("INFO", `Rename ${client.IP.address} to ${client.username}`);
             this.clients.forEach((c) =>
-            //@ts-ignore
-            c.sendMsg(guacutils.encode("adduser", "1", client.username, client.rank)));
+            
+            c.sendMsg(guacutils.encode("adduser", "1", client.username!, client.rank.toString())));
         }
     }
 
     getAdduserMsg() : string {
         var arr : string[] = ["adduser", this.clients.filter(c=>c.username).length.toString()];
-        //@ts-ignore
-        this.clients.filter(c=>c.username).forEach((c) => arr.push(c.username, c.rank));
+        
+        this.clients.filter(c=>c.username).forEach((c) => arr.push(c.username!, c.rank.toString()));
         return guacutils.encode(...arr);
     }
     getChatHistoryMsg() : string {
