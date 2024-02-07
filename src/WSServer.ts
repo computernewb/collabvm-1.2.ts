@@ -412,7 +412,7 @@ export default class WSServer {
                 switch (msgArr[1]) {
                     case "2":
                         // Login
-                        if (!client.LoginRateLimit.request()) return;
+                        if (!client.LoginRateLimit.request() || !client.username) return;
                         if (msgArr.length !== 3) return;
                         var sha256 = createHash("sha256");
                         sha256.update(msgArr[2]);
