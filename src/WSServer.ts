@@ -109,14 +109,22 @@ export default class WSServer {
             }
 
             // Try to parse the Origin header sent by the client, if it fails, kill the connection.
+            var _uri;
             var _host;
             try {
-                _host = new URL(req.headers.origin.toLowerCase()).hostname;
+                _uri = new URL(req.headers.origin.toLowerCase());
+                _host = _uri.host;
             } catch {
                 killConnection();
                 return;
             }
 
+            // detect fake origin headers
+            if (_uri.pathname !== "/" || _uri.search !== "") {
+                killConnection();
+                return;
+            }
+            
             // If the domain name is not in the list of allowed origins, kill the connection.
             if(!this.Config.http.originAllowedDomains.includes(_host)) {
                 killConnection();
