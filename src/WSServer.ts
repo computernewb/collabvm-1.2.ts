@@ -18,6 +18,7 @@ import log from './log.js';
 import VM from './VM.js';
 import { fileURLToPath } from 'url';
 import path from 'path';
+import AuthManager from './AuthManager.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -54,7 +55,11 @@ export default class WSServer {
     private indefiniteTurn : User | null;
     private ModPerms : number;  
     private VM : VM;
-    constructor(config : IConfig, vm : VM) {
+
+    // Authentication manager
+    private auth : AuthManager | null;
+
+    constructor(config : IConfig, vm : VM, auth : AuthManager | null) {
         this.Config = config;
         this.ChatHistory = new CircularBuffer<{user:string,msg:string}>(Array, this.Config.collabvm.maxChatHistoryLength);
         this.TurnQueue = new Queue<User>();
@@ -84,6 +89,8 @@ export default class WSServer {
         this.VM = vm;
         this.VM.on("dirtyrect", (j, x, y) => this.newrect(j, x, y));
         this.VM.on("size", (s) => this.newsize(s));
+        // authentication manager
+        this.auth = auth;
     }
 
     listen() {
@@ -216,6 +223,7 @@ export default class WSServer {
     };
 
     private connectionClosed(user : User) {
+        if (this.clients.indexOf(user) === -1) return;
         if(user.IP.vote != null) {
             user.IP.vote = null;
             this.sendVoteUpdate();
@@ -236,6 +244,36 @@ export default class WSServer {
         var msgArr = guacutils.decode(message);
         if (msgArr.length < 1) return;
         switch (msgArr[0]) {
+            case "login":
+                if (msgArr.length !== 2 || !this.Config.auth.enabled) return;
+                var res = await this.auth!.Authenticate(msgArr[1], client);
+                if (res.clientSuccess) {
+                    log("INFO", `${client.IP.address} logged in as ${res.username}`);
+                    client.sendMsg(guacutils.encode("login", "1"));
+                    var old = this.clients.find(c=>c.username === res.username);
+                    if (old) {
+                        // kick() doesnt wait until the user is actually removed from the list and itd be anal to make it do that
+                        // so we call connectionClosed manually here. When it gets called on kick(), it will return because the user isn't in the list
+                        this.connectionClosed(old);
+                        await old.kick();
+                    }
+                    // Set username
+                    this.renameUser(client, res.username);
+                    // Set rank
+                    client.rank = res.rank;
+                    if (client.rank === Rank.Admin) {
+                        client.sendMsg(guacutils.encode("admin", "0", "1"));
+                    } else if (client.rank === Rank.Moderator) {
+                        client.sendMsg(guacutils.encode("admin", "0", "3", this.ModPerms.toString()));
+                    }
+                    this.clients.forEach((c) => c.sendMsg(guacutils.encode("adduser", "1", client.username!, client.rank.toString())));
+                } else {
+                    client.sendMsg(guacutils.encode("login", "0", res.error!));
+                    if (res.error === "You are banned") {
+                        client.kick();
+                    }
+                }
+                break;
             case "list":
                 client.sendMsg(guacutils.encode("list", this.Config.collabvm.node, this.Config.collabvm.displayname, this.screenHidden ? this.screenHiddenThumb : await this.getThumbnail()));
                 break;
@@ -246,6 +284,9 @@ export default class WSServer {
                 }
                 client.connectedToNode = true;
                 client.sendMsg(guacutils.encode("connect", "1", "1", this.Config.vm.snapshots ? "1" : "0", "0"));
+                if (this.Config.auth.enabled) {
+                    client.sendMsg(guacutils.encode("auth", this.Config.auth.apiEndpoint));
+                }
                 if (this.ChatHistory.size !== 0) client.sendMsg(this.getChatHistoryMsg());
                 if (this.Config.collabvm.motd) client.sendMsg(guacutils.encode("chat", "", this.Config.collabvm.motd));
                 if (this.screenHidden) {
@@ -304,12 +345,26 @@ export default class WSServer {
             case "rename":
                 if (!client.RenameRateLimit.request()) return;
                 if (client.connectedToNode && client.IP.muted) return;
+                if (this.Config.auth.enabled && client.rank !== Rank.Unregistered) {
+                    client.sendMsg(guacutils.encode("chat", "", "Go to your account settings to change your username."));
+                    return;
+                }
+                if (this.Config.auth.enabled && msgArr[1] !== undefined) {
+                    client.sendMsg(guacutils.encode("chat", "", "You need to log in to do that."));
+                    if (client.rank !== Rank.Unregistered) return;
+                    this.renameUser(client, undefined);
+                    return;
+                }
                 this.renameUser(client, msgArr[1]);
                 break;
             case "chat":
                 if (!client.username) return;
                 if (client.IP.muted) return;
                 if (msgArr.length !== 2) return;
+                if (this.Config.auth.enabled && client.rank === Rank.Unregistered && !this.Config.auth.guestPermissions.chat) {
+                    client.sendMsg(guacutils.encode("chat", "", "You need to login to do that."));
+                    return;
+                }
                 var msg = Utilities.HTMLSanitize(msgArr[1]);
                 // One of the things I hated most about the old server is it completely discarded your message if it was too long
                 if (msg.length > this.Config.collabvm.maxChatLength) msg = msg.substring(0, this.Config.collabvm.maxChatLength);
@@ -321,6 +376,10 @@ export default class WSServer {
                 break;
             case "turn":
                 if ((!this.turnsAllowed || this.Config.collabvm.turnwhitelist) && client.rank !== Rank.Admin && client.rank !== Rank.Moderator && client.rank !== Rank.Turn) return;
+                if (this.Config.auth.enabled && client.rank === Rank.Unregistered && !this.Config.auth.guestPermissions.turn) {
+                    client.sendMsg(guacutils.encode("chat", "", "You need to login to do that."));
+                    return;
+                }
                 if (!client.TurnRateLimit.request()) return;
                 if (!client.connectedToNode) return;
                 if (msgArr.length > 2) return;
@@ -413,6 +472,10 @@ export default class WSServer {
                 switch (msgArr[1]) {
                     case "2":
                         // Login
+                        if (this.Config.auth.enabled) {
+                            client.sendMsg(guacutils.encode("chat", "", "This server does not support staff passwords. Please log in to become staff."));
+                            return;
+                        }
                         if (!client.LoginRateLimit.request() || !client.username) return;
                         if (msgArr.length !== 3) return;
                         var sha256 = createHash("sha256");
@@ -527,6 +590,9 @@ export default class WSServer {
                     case "18":
                         // Rename user
                         if (client.rank !== Rank.Admin && (client.rank !== Rank.Moderator || !this.Config.collabvm.moderatorPermissions.rename)) return;
+                        if (this.Config.auth.enabled) {
+                            client.sendMsg(guacutils.encode("chat", "", "Cannot rename users on a server that uses authentication."));
+                        }
                         if (msgArr.length !== 4) return;
                         var user = this.clients.find(c => c.username === msgArr[2]);
                         if (!user) return;

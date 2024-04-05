@@ -8,6 +8,15 @@ export default interface IConfig {
         originAllowedDomains : string[];
         maxConnections: number;
     };
+    auth : {
+        enabled : boolean;
+        apiEndpoint : string;
+        secretKey : string;
+        guestPermissions : {
+            chat : boolean;
+            turn : boolean;
+        }
+    }
     vm : {
         qemuArgs : string;
         vncPort : number;

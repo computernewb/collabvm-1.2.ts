@@ -4,6 +4,7 @@ import * as fs from "fs";
 import WSServer from './WSServer.js';
 import QEMUVM from './QEMUVM.js';
 import log from './log.js';
+import AuthManager from './AuthManager.js';
 
 log("INFO", "CollabVM Server starting up");
 
@@ -34,12 +35,15 @@ async function start() {
         log("WARN", "To remove this warning, use the qmpHost and qmpPort options instead.");
     }
 
+    // Init the auth manager if enabled
+    var auth = Config.auth.enabled ? new AuthManager(Config.auth.apiEndpoint, Config.auth.secretKey) : null;
+
     // Fire up the VM
     var VM = new QEMUVM(Config);
     await VM.Start();
 
     // Start up the websocket server
-    var WS = new WSServer(Config, VM);
+    var WS = new WSServer(Config, VM, auth);
     WS.listen();
 }
 start();
