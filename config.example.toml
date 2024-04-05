@@ -13,6 +13,15 @@ originAllowedDomains = ["computernewb.com"]
 # Maximum amount of active connections allowed from the same IP.
 maxConnections = 3
 
+[auth]
+enabled = false
+apiEndpoint = ""
+secretKey = "hunter2"
+
+[auth.guestPermissions]
+chat = true
+turn = false
+
 [vm]
 qemuArgs = "qemu-system-x86_64"
 vncPort = 5900
