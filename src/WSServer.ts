@@ -249,6 +249,10 @@ export default class WSServer {
         switch (msgArr[0]) {
             case "login":
                 if (msgArr.length !== 2 || !this.Config.auth.enabled) return;
+                if (!client.connectedToNode) {
+                    client.sendMsg(guacutils.encode("login", "0", "You must connect to the VM before logging in."));
+                    return;
+                }
                 var res = await this.auth!.Authenticate(msgArr[1], client);
                 if (res.clientSuccess) {
                     log("INFO", `${client.IP.address} logged in as ${res.username}`);
