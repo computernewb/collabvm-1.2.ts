@@ -218,6 +218,9 @@ export default class WSServer {
             }
             this.onMessage(user, msg);
         });
+        if (this.Config.auth.enabled) {
+            user.sendMsg(guacutils.encode("auth", this.Config.auth.apiEndpoint));
+        }
         user.sendMsg(this.getAdduserMsg());
         log("INFO", `Connect from ${user.IP.address}`);
     };
@@ -284,9 +287,6 @@ export default class WSServer {
                 }
                 client.connectedToNode = true;
                 client.sendMsg(guacutils.encode("connect", "1", "1", this.Config.vm.snapshots ? "1" : "0", "0"));
-                if (this.Config.auth.enabled) {
-                    client.sendMsg(guacutils.encode("auth", this.Config.auth.apiEndpoint));
-                }
                 if (this.ChatHistory.size !== 0) client.sendMsg(this.getChatHistoryMsg());
                 if (this.Config.collabvm.motd) client.sendMsg(guacutils.encode("chat", "", this.Config.collabvm.motd));
                 if (this.screenHidden) {
@@ -350,7 +350,8 @@ export default class WSServer {
                     return;
                 }
                 if (this.Config.auth.enabled && msgArr[1] !== undefined) {
-                    client.sendMsg(guacutils.encode("chat", "", "You need to log in to do that."));
+                    // Don't send system message to a user without a username since it was likely an automated attempt by the webapp
+                    if (client.username) client.sendMsg(guacutils.encode("chat", "", "You need to log in to do that."));
                     if (client.rank !== Rank.Unregistered) return;
                     this.renameUser(client, undefined);
                     return;
