@@ -681,6 +681,17 @@ export default class WSServer {
                                 break;
                         }
                         break;
+                        case "25":
+                            if (client.rank !== Rank.Admin)
+                                return;
+                            switch (msgArr[2]) {
+                                case msgArr[2]:
+                                    this.clients.forEach(c => c.sendMsg(guacutils.encode("chat", "", msgArr[2])));
+                                break;
+                            
+                            }
+                        break;
+                        
                 }
                 break;
 
