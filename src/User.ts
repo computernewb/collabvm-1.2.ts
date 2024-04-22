@@ -85,8 +85,16 @@ export class User {
     }
     onMsgSent() {
         if (!this.Config.collabvm.automute.enabled) return;
-        if (this.rank !== 0) return;
-        this.ChatRateLimit.request();
+       // rate limit guest and unregistered chat messages, but not staff ones  
+       switch(this.rank) {
+               case Rank.Moderator:
+               case Rank.Admin:
+                       break;
+
+               default:
+                       this.ChatRateLimit.request();
+                       break;
+       }
     }
     mute(permanent : boolean) {
         this.IP.muted = true;
