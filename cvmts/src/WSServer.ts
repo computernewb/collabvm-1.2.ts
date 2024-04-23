@@ -21,8 +21,12 @@ import { Size, Rect, Logger } from '@cvmts/shared';
 import jpegTurbo from "@computernewb/jpeg-turbo";
 import sharp from 'sharp';
 
-// probably better
-const __dirname = process.cwd();
+// @ts-expect-error (I know, but this is already ugly)
+// really wish I didn't have to do it like this..
+const __dirname = fileURLToPath(new __parcel__URL__('..'));
+
+
+console.log(__dirname);
 
 // ejla this exist. Useing it.
 type ChatHistory = {
