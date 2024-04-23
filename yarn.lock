@@ -67,6 +67,7 @@ __metadata:
     execa: "npm:^8.0.1"
     mnemonist: "npm:^0.39.5"
     parcel: "npm:^2.12.0"
+    piscina: "npm:^4.4.0"
     prettier: "npm:^3.2.5"
     sharp: "npm:^0.33.3"
     toml: "npm:^3.0.0"
@@ -3155,6 +3156,26 @@ __metadata:
   languageName: node
   linkType: hard
 
+"nice-napi@npm:^1.0.2":
+  version: 1.0.2
+  resolution: "nice-napi@npm:1.0.2"
+  dependencies:
+    node-addon-api: "npm:^3.0.0"
+    node-gyp: "npm:latest"
+    node-gyp-build: "npm:^4.2.2"
+  conditions: "!os=win32"
+  languageName: node
+  linkType: hard
+
+"node-addon-api@npm:^3.0.0":
+  version: 3.2.1
+  resolution: "node-addon-api@npm:3.2.1"
+  dependencies:
+    node-gyp: "npm:latest"
+  checksum: 10c0/41f21c9d12318875a2c429befd06070ce367065a3ef02952cfd4ea17ef69fa14012732f510b82b226e99c254da8d671847ea018cad785f839a5366e02dd56302
+  languageName: node
+  linkType: hard
+
 "node-addon-api@npm:^6.0.0, node-addon-api@npm:^6.1.0":
   version: 6.1.0
   resolution: "node-addon-api@npm:6.1.0"
@@ -3201,6 +3222,17 @@ __metadata:
     node-gyp-build-optional-packages-optional: optional.js
     node-gyp-build-optional-packages-test: build-test.js
   checksum: 10c0/f9fad2061c48fb0fc90831cd11d6a7670d731d22a5b00c7d3441b43b4003543299ff64ff2729afe2cefd7d14928e560d469336e5bb00f613932ec2cd56b3665b
+  languageName: node
+  linkType: hard
+
+"node-gyp-build@npm:^4.2.2":
+  version: 4.8.0
+  resolution: "node-gyp-build@npm:4.8.0"
+  bin:
+    node-gyp-build: bin.js
+    node-gyp-build-optional: optional.js
+    node-gyp-build-test: build-test.js
+  checksum: 10c0/85324be16f81f0235cbbc42e3eceaeb1b5ab94c8d8f5236755e1435b4908338c65a4e75f66ee343cbcb44ddf9b52a428755bec16dcd983295be4458d95c8e1ad
   languageName: node
   linkType: hard
 
@@ -3405,6 +3437,18 @@ __metadata:
   version: 2.3.1
   resolution: "picomatch@npm:2.3.1"
   checksum: 10c0/26c02b8d06f03206fc2ab8d16f19960f2ff9e81a658f831ecb656d8f17d9edc799e8364b1f4a7873e89d9702dff96204be0fa26fe4181f6843f040f819dac4be
+  languageName: node
+  linkType: hard
+
+"piscina@npm:^4.4.0":
+  version: 4.4.0
+  resolution: "piscina@npm:4.4.0"
+  dependencies:
+    nice-napi: "npm:^1.0.2"
+  dependenciesMeta:
+    nice-napi:
+      optional: true
+  checksum: 10c0/df6c2a2b673b0633a625f8dfc32f4519155e74ee24e31be9e69d2937e76d6cec8640278b4a50195652a943cccf8c634ed406f08598933c57e959d242b5fe5d1d
   languageName: node
   linkType: hard
 

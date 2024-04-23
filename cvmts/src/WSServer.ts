@@ -13,22 +13,20 @@ import { isIP } from 'node:net';
 import { QemuVM, QemuVmDefinition } from '@cvmts/qemu';
 import { IPData, IPDataManager } from './IPData.js';
 import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'url';
-import path from 'path';
+import path from 'node:path';
 import AuthManager from './AuthManager.js';
 import { Size, Rect, Logger } from '@cvmts/shared';
 
-import jpegTurbo from "@computernewb/jpeg-turbo";
 import sharp from 'sharp';
+import Piscina from 'piscina';
 
-// @ts-expect-error (I know, but this is already ugly)
-// really wish I didn't have to do it like this..
-const __dirname = fileURLToPath(new __parcel__URL__('..'));
+// Instead of strange hacks we can just use nodejs provided
+// import.meta properties, which have existed since LTS if not before
+const __filename = import.meta.filename;
+const __dirname = import.meta.dirname;
 
+const kCVMTSAssetsRoot = path.resolve(__dirname, '../../assets');
 
-console.log(__dirname);
-
-// ejla this exist. Useing it.
 type ChatHistory = {
     user: string,
     msg: string
@@ -46,19 +44,27 @@ function GetRawSharpOptions(size: Size): sharp.CreateRaw {
     }
 }
 
+const kJpegPool = new Piscina({
+   filename: path.join(import.meta.dirname + '/JPEGEncoderWorker.js'),
+   minThreads: 4,
+   maxThreads: 4
+});
+
 async function EncodeJpeg(canvas: Buffer, displaySize: Size, rect: Rect): Promise<Buffer> {
 	let offset = (rect.y * displaySize.width + rect.x) * 4;
 
-	//console.log('encoding rect', rect, 'with byteoffset', offset, '(size ', displaySize, ')');
+    let res = await kJpegPool.run({
+        buffer: canvas.subarray(offset),
+        width: rect.width,
+        height: rect.height,
+        stride: displaySize.width,
+        quality: kJpegQuality
+    });
 
-	return jpegTurbo.compress(canvas.subarray(offset), {
-		format: jpegTurbo.FORMAT_RGBA,
-		width: rect.width,
-		height: rect.height,
-		subsampling: jpegTurbo.SAMP_422,
-		stride: displaySize.width,
-		quality: kJpegQuality
-	});
+
+    // have to manually turn it back into a buffer because
+    // Piscina for some reason turns it into a Uint8Array
+    return Buffer.from(res);
 }
 
 export default class WSServer {
@@ -125,8 +131,8 @@ export default class WSServer {
         this.voteCooldown = 0;
         this.turnsAllowed = true;
         this.screenHidden = false;
-        this.screenHiddenImg = readFileSync(__dirname + "/../assets/screenhidden.jpeg").toString("base64");
-        this.screenHiddenThumb = readFileSync(__dirname + "/../assets/screenhiddenthumb.jpeg").toString("base64");
+        this.screenHiddenImg = readFileSync(path.join(kCVMTSAssetsRoot, "screenhidden.jpeg")).toString("base64");
+        this.screenHiddenThumb = readFileSync(path.join(kCVMTSAssetsRoot, "screenhiddenthumb.jpeg")).toString("base64");
 
         this.indefiniteTurn = null;
         this.ModPerms = Utilities.MakeModPerms(this.Config.collabvm.moderatorPermissions);
@@ -937,7 +943,7 @@ export default class WSServer {
 
             // TODO: pass custom options to Sharp.resize() probably
             let out = await sharp(display.Buffer(), {raw: GetRawSharpOptions(display.Size())})
-                .resize(400, 300)
+                .resize(400, 300, { fit: 'fill' })
                 .toFormat('jpeg')
                 .toBuffer();
 

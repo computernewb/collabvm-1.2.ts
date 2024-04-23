@@ -1,0 +1,16 @@
+
+import jpegTurbo from "@computernewb/jpeg-turbo";
+import Piscina from "piscina";
+
+export default async (opts: any) => {
+    let res = await jpegTurbo.compress(opts.buffer, {
+		format: jpegTurbo.FORMAT_RGBA,
+		width: opts.width,
+		height: opts.height,
+		subsampling: jpegTurbo.SAMP_422,
+		stride: opts.stride,
+		quality: opts.quality
+	});
+
+    return Piscina.move(res);
+}

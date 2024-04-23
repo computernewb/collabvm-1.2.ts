@@ -5,22 +5,17 @@
   "type": "module",
   "main": "dist/index.js",
   "scripts": {
-    "build": "parcel build src/index.ts --target node",
+    "build": "tsc -outDir dist -rootDir src/",
     "serve": "node dist/index.js"
   },
   "author": "Elijah R, modeco80",
   "license": "GPL-3.0",
-  "targets": {
-    "node": {
-      "context": "node",
-      "outputFormat": "esmodule"
-    }
-  },
   "dependencies": {
     "@computernewb/jpeg-turbo": "*",
     "@cvmts/qemu": "*",
     "execa": "^8.0.1",
     "mnemonist": "^0.39.5",
+    "piscina": "^4.4.0",
     "sharp": "^0.33.3",
     "toml": "^3.0.0",
     "ws": "^8.14.1"
@@ -28,7 +23,6 @@
   "devDependencies": {
     "@types/node": "^20.12.5",
     "@types/ws": "^8.5.5",
-    "parcel": "^2.12.0",
     "prettier": "^3.2.5",
     "typescript": "^5.4.4"
   }
