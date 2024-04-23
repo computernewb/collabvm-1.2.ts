@@ -1,0 +1,31 @@
+{
+	"name": "@cvmts/qemu",
+	"version": "1.0.0",
+	"description": "QEMU runtime for crusttest backend",
+	"exports": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"type": "module",
+	"scripts": {
+		"build": "parcel build src/index.ts --target node --target types"
+	},
+	"author": "",
+	"license": "MIT",
+	"targets": {
+		"types": {},
+		"node": {
+			"context": "node",
+			"isLibrary": true,
+			"outputFormat": "esmodule"
+		}
+	},
+	"dependencies": {
+		"@computernewb/nodejs-rfb": "*",
+		"@cvmts/shared": "*",
+		"execa": "^8.0.1",
+		"split": "^1.0.1"
+	},
+	"devDependencies": {
+		"@types/split": "^1.0.5",
+		"parcel": "^2.12.0"
+	}
+}

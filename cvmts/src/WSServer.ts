@@ -9,63 +9,113 @@ import * as guacutils from './guacutils.js';
 import CircularBuffer from 'mnemonist/circular-buffer.js';
 import Queue from 'mnemonist/queue.js';
 import { createHash } from 'crypto';
-import { isIP } from 'net';
-import QEMUVM from './QEMUVM.js';
-import { Canvas, createCanvas } from 'canvas';
-import { IPData } from './IPData.js';
-import { readFileSync } from 'fs';
-import log from './log.js';
-import VM from './VM.js';
+import { isIP } from 'node:net';
+import { QemuVM, QemuVmDefinition } from '@cvmts/qemu';
+import { IPData, IPDataManager } from './IPData.js';
+import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'url';
 import path from 'path';
 import AuthManager from './AuthManager.js';
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+import { Size, Rect, Logger } from '@cvmts/shared';
+
+import jpegTurbo from "@computernewb/jpeg-turbo";
+import sharp from 'sharp';
+
+// probably better
+const __dirname = process.cwd();
+
+// ejla this exist. Useing it.
+type ChatHistory = {
+    user: string,
+    msg: string
+};
+
+// A good balance. TODO: Configurable?
+const kJpegQuality = 35;
+
+// this returns appropiate Sharp options to deal with the framebuffer
+function GetRawSharpOptions(size: Size): sharp.CreateRaw {
+    return {
+        width: size.width,
+        height: size.height,
+        channels: 4
+    }
+}
+
+async function EncodeJpeg(canvas: Buffer, displaySize: Size, rect: Rect): Promise<Buffer> {
+	let offset = (rect.y * displaySize.width + rect.x) * 4;
+
+	//console.log('encoding rect', rect, 'with byteoffset', offset, '(size ', displaySize, ')');
+
+	return jpegTurbo.compress(canvas.subarray(offset), {
+		format: jpegTurbo.FORMAT_RGBA,
+		width: rect.width,
+		height: rect.height,
+		subsampling: jpegTurbo.SAMP_422,
+		stride: displaySize.width,
+		quality: kJpegQuality
+	});
+}
 
 export default class WSServer {
     private Config : IConfig;
-    private server : http.Server;
-    private socket : WebSocketServer;
+
+    private httpServer : http.Server;
+    private wsServer : WebSocketServer;
+
     private clients : User[];
-    private ips : IPData[];
-    private ChatHistory : CircularBuffer<{user:string,msg:string}>
+
+    private ChatHistory : CircularBuffer<ChatHistory>
+
     private TurnQueue : Queue<User>;
+    
     // Time remaining on the current turn
     private TurnTime : number;
+
     // Interval to keep track of the current turn time
     private TurnInterval? : NodeJS.Timeout;
+
     // If a reset vote is in progress
     private voteInProgress : boolean;
+
     // Interval to keep track of vote resets
     private voteInterval? : NodeJS.Timeout;
+
     // How much time is left on the vote
     private voteTime : number;
+
     // How much time until another reset vote can be cast
     private voteCooldown : number;
+
     // Interval to keep track
     private voteCooldownInterval? : NodeJS.Timeout;
+
     // Completely disable turns
     private turnsAllowed : boolean;
+
     // Hide the screen
     private screenHidden : boolean;
+
     // base64 image to show when the screen is hidden
     private screenHiddenImg : string;
     private screenHiddenThumb : string;
+
     // Indefinite turn
     private indefiniteTurn : User | null;
     private ModPerms : number;  
-    private VM : VM;
+    private VM : QemuVM;
 
     // Authentication manager
     private auth : AuthManager | null;
 
-    constructor(config : IConfig, vm : VM, auth : AuthManager | null) {
+    private logger = new Logger("CVMTS.Server");
+
+    constructor(config : IConfig, vm : QemuVM, auth : AuthManager | null) {
         this.Config = config;
-        this.ChatHistory = new CircularBuffer<{user:string,msg:string}>(Array, this.Config.collabvm.maxChatHistoryLength);
+        this.ChatHistory = new CircularBuffer<ChatHistory>(Array, this.Config.collabvm.maxChatHistoryLength);
         this.TurnQueue = new Queue<User>();
         this.TurnTime = 0;
         this.clients = [];
-        this.ips = [];
         this.voteInProgress = false;
         this.voteTime = 0;
         this.voteCooldown = 0;
@@ -76,25 +126,33 @@ export default class WSServer {
 
         this.indefiniteTurn = null;
         this.ModPerms = Utilities.MakeModPerms(this.Config.collabvm.moderatorPermissions);
-        this.server = http.createServer();
-        this.socket = new WebSocketServer({noServer: true});
-        this.server.on('upgrade', (req : http.IncomingMessage, socket : internal.Duplex, head : Buffer) => this.httpOnUpgrade(req, socket, head));
-        this.server.on('request', (req, res) => {
+        this.httpServer = http.createServer();
+        this.wsServer = new WebSocketServer({noServer: true});
+        this.httpServer.on('upgrade', (req : http.IncomingMessage, socket : internal.Duplex, head : Buffer) => this.httpOnUpgrade(req, socket, head));
+        this.httpServer.on('request', (req, res) => {
             res.writeHead(426);
             res.write("This server only accepts WebSocket connections.");
             res.end();
         });
-        var initSize = vm.getSize();
-        this.newsize(initSize);
+
+        let initSize = vm.GetDisplay().Size() || {
+            width: 0,
+            height: 0
+        };
+
+        this.OnDisplayResized(initSize);
+
+        vm.GetDisplay().on('resize', (size: Size) => this.OnDisplayResized(size));
+        vm.GetDisplay().on('rect', (rect: Rect) => this.OnDisplayRectangle(rect));
+
         this.VM = vm;
-        this.VM.on("dirtyrect", (j, x, y) => this.newrect(j, x, y));
-        this.VM.on("size", (s) => this.newsize(s));
+        
         // authentication manager
         this.auth = auth;
     }
 
     listen() {
-        this.server.listen(this.Config.http.port, this.Config.http.host);
+        this.httpServer.listen(this.Config.http.port, this.Config.http.host);
     }
 
     private httpOnUpgrade(req : http.IncomingMessage, socket : internal.Duplex, head : Buffer) {
@@ -182,58 +240,62 @@ export default class WSServer {
             socket.destroy();
         }
 
-        this.socket.handleUpgrade(req, socket, head, (ws: WebSocket) => {
-            this.socket.emit('connection', ws, req);
+        this.wsServer.handleUpgrade(req, socket, head, (ws: WebSocket) => {
+            this.wsServer.emit('connection', ws, req);
             this.onConnection(ws, req, ip);
         });
     }
 
     private onConnection(ws : WebSocket, req: http.IncomingMessage, ip : string) {
-        
-        var _ipdata = this.ips.filter(data => data.address == ip);
-        var ipdata;
-        if(_ipdata.length > 0) {
-            ipdata = _ipdata[0];
-        }else{
-            
-            ipdata = new IPData(ip);
-            this.ips.push(ipdata);
-        }
-
-        var user = new User(ws, ipdata, this.Config);
+        let user = new User(ws, IPDataManager.GetIPData(ip), this.Config);
         this.clients.push(user);
-        ws.on('error', (e) => {
-            
-            log("ERROR", `${e} (caused by connection ${ip})`);
+
+        ws.on('error', (e) => {    
+            this.logger.Error(`${e} (caused by connection ${ip})`);
             ws.close();
         });
+
         ws.on('close', () => this.connectionClosed(user));
-        ws.on('message', (e) => {
+
+        ws.on('message', (buf: Buffer, isBinary: boolean) => {
             var msg;
-            try {msg = e.toString()}
-            catch {
-                // Close the user's connection if they send a non-string message
+
+            // Close the user's connection if they send a non-string message
+            if(isBinary) {
                 user.closeConnection();
                 return;
             }
-            this.onMessage(user, msg);
+
+            try {
+                this.onMessage(user, buf.toString());
+            } catch {
+            }
         });
+
         if (this.Config.auth.enabled) {
             user.sendMsg(guacutils.encode("auth", this.Config.auth.apiEndpoint));
         }
         user.sendMsg(this.getAdduserMsg());
-        log("INFO", `Connect from ${user.IP.address}`);
+        this.logger.Info(`Connect from ${user.IP.address}`);
     };
 
     private connectionClosed(user : User) {
-        if (this.clients.indexOf(user) === -1) return;
+        let clientIndex = this.clients.indexOf(user)
+        if (clientIndex === -1) return;
+
         if(user.IP.vote != null) {
             user.IP.vote = null;
             this.sendVoteUpdate();
-        };
+        }
+
+        // Unreference the IP data.
+        user.IP.Unref();
+
         if (this.indefiniteTurn === user) this.indefiniteTurn = null;
-        this.clients.splice(this.clients.indexOf(user), 1);
-        log("INFO", `Disconnect From ${user.IP.address}${user.username ? ` with username ${user.username}` : ""}`);
+
+        this.clients.splice(clientIndex, 1);
+
+        this.logger.Info(`Disconnect From ${user.IP.address}${user.username ? ` with username ${user.username}` : ""}`);
         if (!user.username) return;
         if (this.TurnQueue.toArray().indexOf(user) !== -1) {
             var hadturn = (this.TurnQueue.peek() === user);
@@ -243,6 +305,8 @@ export default class WSServer {
         
         this.clients.forEach((c) => c.sendMsg(guacutils.encode("remuser", "1", user.username!)));
     }
+
+
     private async onMessage(client : User, message : string) {
         var msgArr = guacutils.decode(message);
         if (msgArr.length < 1) return;
@@ -255,7 +319,7 @@ export default class WSServer {
                 }
                 var res = await this.auth!.Authenticate(msgArr[1], client);
                 if (res.clientSuccess) {
-                    log("INFO", `${client.IP.address} logged in as ${res.username}`);
+                    this.logger.Info(`${client.IP.address} logged in as ${res.username}`);
                     client.sendMsg(guacutils.encode("login", "1"));
                     var old = this.clients.find(c=>c.username === res.username);
                     if (old) {
@@ -297,10 +361,7 @@ export default class WSServer {
                     client.sendMsg(guacutils.encode("size", "0", "1024", "768"));
                     client.sendMsg(guacutils.encode("png", "0", "0", "0", "0", this.screenHiddenImg));
                 } else {
-                    client.sendMsg(guacutils.encode("size", "0", this.VM.framebuffer.width.toString(), this.VM.framebuffer.height.toString()));
-                    var jpg = this.VM.framebuffer.toBuffer("image/jpeg");
-                    var jpg64 = jpg.toString("base64");
-                    client.sendMsg(guacutils.encode("png", "0", "0", "0", "0", jpg64));
+                    await this.SendFullScreenWithSize(client);
                 }
                 client.sendMsg(guacutils.encode("sync", Date.now().toString()));
                 if (this.voteInProgress) this.sendVoteUpdate(client);
@@ -335,10 +396,7 @@ export default class WSServer {
                         client.sendMsg(guacutils.encode("size", "0", "1024", "768"));
                         client.sendMsg(guacutils.encode("png", "0", "0", "0", "0", this.screenHiddenImg));
                     } else {
-                        client.sendMsg(guacutils.encode("size", "0", this.VM.framebuffer.width.toString(), this.VM.framebuffer.height.toString()));
-                        var jpg = this.VM.framebuffer.toBuffer("image/jpeg");
-                        var jpg64 = jpg.toString("base64");
-                        client.sendMsg(guacutils.encode("png", "0", "0", "0", "0", jpg64));
+                        await this.SendFullScreenWithSize(client);
                     }
                         client.sendMsg(guacutils.encode("sync", Date.now().toString()));
                 }
@@ -428,20 +486,18 @@ export default class WSServer {
                 break;
             case "mouse":
                 if (this.TurnQueue.peek() !== client && client.rank !== Rank.Admin) return;
-                if (!this.VM.acceptingInput()) return;
                 var x = parseInt(msgArr[1]);
                 var y = parseInt(msgArr[2]);
                 var mask = parseInt(msgArr[3]);
                 if (x === undefined || y === undefined || mask === undefined) return;
-                this.VM.pointerEvent(x, y, mask);
+                this.VM.GetDisplay()!.MouseEvent(x, y, mask);
                 break;
             case "key":
                 if (this.TurnQueue.peek() !== client && client.rank !== Rank.Admin) return;
-                if (!this.VM.acceptingInput()) return;
                 var keysym = parseInt(msgArr[1]);
                 var down = parseInt(msgArr[2]);
                 if (keysym === undefined || (down !== 0 && down !== 1)) return;
-                this.VM.keyEvent(keysym, down === 1 ? true : false);
+                this.VM.GetDisplay()!.KeyboardEvent(keysym, down === 1 ? true : false);
                 break;
             case "vote":
                 if (!this.Config.vm.snapshots) return;
@@ -501,10 +557,8 @@ export default class WSServer {
                             return;
                         }
                         if (this.screenHidden) {
-                            client.sendMsg(guacutils.encode("size", "0", this.VM.framebuffer.width.toString(), this.VM.framebuffer.height.toString()));
-                            var jpg = this.VM.framebuffer.toBuffer("image/jpeg");
-                            var jpg64 = jpg.toString("base64");
-                            client.sendMsg(guacutils.encode("png", "0", "0", "0", "0", jpg64));
+                            await this.SendFullScreenWithSize(client);
+
                             client.sendMsg(guacutils.encode("sync", Date.now().toString()));
                         }
                         
@@ -513,24 +567,26 @@ export default class WSServer {
                     case "5":
                         // QEMU Monitor
                         if (client.rank !== Rank.Admin) return;
+/* Surely there could be rudimentary processing to convert some qemu monitor syntax to [XYZ hypervisor] if possible
                         if (!(this.VM instanceof QEMUVM)) {
                             client.sendMsg(guacutils.encode("admin", "2", "This is not a QEMU VM and therefore QEMU monitor commands cannot be run."));
                             return;
                         }
+*/
                         if (msgArr.length !== 4 || msgArr[2] !== this.Config.collabvm.node) return;
-                        var output = await this.VM.qmpClient.runMonitorCmd(msgArr[3]);
+                        var output = await this.VM.MonitorCommand(msgArr[3]);
                         client.sendMsg(guacutils.encode("admin", "2", String(output)));
                         break;
                     case "8":
                         // Restore
                         if (client.rank !== Rank.Admin && (client.rank !== Rank.Moderator || !this.Config.collabvm.moderatorPermissions.restore)) return;
-                        this.VM.Restore();
+                        this.VM.Reset();
                         break;
                     case "10":
                         // Reboot
                         if (client.rank !== Rank.Admin && (client.rank !== Rank.Moderator || !this.Config.collabvm.moderatorPermissions.reboot)) return;
                         if (msgArr.length !== 3 || msgArr[2] !== this.Config.collabvm.node) return;
-                        this.VM.Reboot();
+                        this.VM.MonitorCommand("system_reset");
                         break;
                     case "12":
                         // Ban
@@ -671,11 +727,19 @@ export default class WSServer {
                                 break;
                             case "1":
                                     this.screenHidden = false;
-                                    this.clients.forEach(client => {
-                                        client.sendMsg(guacutils.encode("size", "0", this.VM.framebuffer.width.toString(), this.VM.framebuffer.height.toString()));
-                                        var jpg = this.VM.framebuffer.toBuffer("image/jpeg");
-                                        var jpg64 = jpg.toString("base64");
-                                        client.sendMsg(guacutils.encode("png", "0", "0", "0", "0", jpg64));
+                                    let displaySize = this.VM.GetDisplay().Size();
+                    
+                                    let encoded = await this.MakeRectData({
+                                        x: 0,
+                                        y: 0,
+                                        width: displaySize.width,
+                                        height: displaySize.height
+                                    });
+                    
+
+                                    this.clients.forEach(async client => {
+                                        client.sendMsg(guacutils.encode("size", "0", displaySize.width.toString(), displaySize.height.toString()));
+                                        client.sendMsg(guacutils.encode("png", "0", "0", "0", "0", encoded));
                                         client.sendMsg(guacutils.encode("sync", Date.now().toString()));
                                     });
                                 break;
@@ -733,12 +797,12 @@ export default class WSServer {
         
         client.sendMsg(guacutils.encode("rename", "0", status, client.username!, client.rank.toString()));
         if (hadName) {
-            log("INFO", `Rename ${client.IP.address} from ${oldname} to ${client.username}`);
+            this.logger.Info(`Rename ${client.IP.address} from ${oldname} to ${client.username}`);
             this.clients.forEach((c) =>
             
             c.sendMsg(guacutils.encode("rename", "1", oldname, client.username!, client.rank.toString())));
         } else {
-            log("INFO", `Rename ${client.IP.address} to ${client.username}`);
+            this.logger.Info(`Rename ${client.IP.address} to ${client.username}`);
             this.clients.forEach((c) =>
             
             c.sendMsg(guacutils.encode("adduser", "1", client.username!, client.rank.toString())));
@@ -820,31 +884,61 @@ export default class WSServer {
         }
     }
 
-    private async newrect(rect : Canvas, x : number, y : number) {
-        var jpg = rect.toBuffer("image/jpeg", {quality: 0.5, progressive: true, chromaSubsampling: true});
-        var jpg64 = jpg.toString("base64");
+    private async OnDisplayRectangle(rect: Rect) {
+        let encodedb64 = await this.MakeRectData(rect);
+       
         this.clients.filter(c => c.connectedToNode || c.viewMode == 1).forEach(c => {
             if (this.screenHidden && c.rank == Rank.Unregistered) return;
-            c.sendMsg(guacutils.encode("png", "0", "0", x.toString(), y.toString(), jpg64));
+            c.sendMsg(guacutils.encode("png", "0", "0", rect.x.toString(), rect.y.toString(), encodedb64));
             c.sendMsg(guacutils.encode("sync", Date.now().toString()));
         });
     }
 
-    private newsize(size : {height:number,width:number}) {
+    private OnDisplayResized(size : Size) {
         this.clients.filter(c => c.connectedToNode || c.viewMode == 1).forEach(c => {
             if (this.screenHidden && c.rank == Rank.Unregistered) return;
             c.sendMsg(guacutils.encode("size", "0", size.width.toString(), size.height.toString()))
         });
     }
 
+    private async SendFullScreenWithSize(client: User) {
+        let display = this.VM.GetDisplay();
+        let displaySize = display.Size();
+
+        let encoded = await this.MakeRectData({ 
+            x: 0,
+            y: 0,
+            width: displaySize.width,
+            height: displaySize.height
+        });
+
+        client.sendMsg(guacutils.encode("size", "0", displaySize.width.toString(), displaySize.height.toString()));
+        client.sendMsg(guacutils.encode("png", "0", "0", "0", "0", encoded));
+    }
+
+    private async MakeRectData(rect: Rect) {
+        let display = this.VM.GetDisplay();
+        let displaySize = display.Size();
+
+        let encoded = await EncodeJpeg(display.Buffer(), displaySize, rect);
+
+        return encoded.toString('base64');
+    }
+
     getThumbnail() : Promise<string> {
         return new Promise(async (res, rej) => {
-            var cnv = createCanvas(400, 300);
-            var ctx = cnv.getContext("2d");
-            ctx.drawImage(this.VM.framebuffer, 0, 0, 400, 300);
-            var jpg = cnv.toBuffer("image/jpeg");
-            res(jpg.toString("base64"));
-        })
+            let display = this.VM.GetDisplay();
+            if(display == null)
+                return;
+
+            // TODO: pass custom options to Sharp.resize() probably
+            let out = await sharp(display.Buffer(), {raw: GetRawSharpOptions(display.Size())})
+                .resize(400, 300)
+                .toFormat('jpeg')
+                .toBuffer();
+
+            res(out.toString('base64'));
+        });
     }
 
     startVote() {
@@ -868,7 +962,7 @@ export default class WSServer {
         this.clients.forEach((c) => c.sendMsg(guacutils.encode("vote", "2")));
         if (result === true || (result === undefined && count.yes >= count.no)) {
             this.clients.forEach(c => c.sendMsg(guacutils.encode("chat", "", "The vote to reset the VM has won.")));
-            this.VM.Restore();
+            this.VM.Reset();
         } else {
             this.clients.forEach(c => c.sendMsg(guacutils.encode("chat", "", "The vote to reset the VM has lost.")));
         }
@@ -896,7 +990,7 @@ export default class WSServer {
     getVoteCounts() : {yes:number,no:number} {
         var yes = 0;
         var no = 0;
-        this.ips.forEach((c) => {
+        IPDataManager.ForEachIPData((c) => {
             if (c.vote === true) yes++;
             if (c.vote === false) no++;
         });

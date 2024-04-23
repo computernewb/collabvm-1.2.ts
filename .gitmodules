@@ -1,0 +1,6 @@
+[submodule "nodejs-rfb"]
+	path = nodejs-rfb
+	url = https://github.com/computernewb/nodejs-rfb
+[submodule "jpeg-turbo"]
+	path = jpeg-turbo
+	url = https://github.com/computernewb/jpeg-turbo
