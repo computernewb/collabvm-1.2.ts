@@ -16,7 +16,6 @@
     "async-mutex": "^0.4.0",
     "canvas": "^2.11.2",
     "execa": "^8.0.1",
-    "fs": "^0.0.1-security",
     "jimp": "^0.22.10",
     "mnemonist": "^0.39.5",
     "rfb2": "github:elijahr2411/node-rfb2",
