@@ -19,13 +19,19 @@ function GetRawSharpOptions(size: Size): sharp.CreateRaw {
 }
 
 export default async (opts: any) => {
-	let out = await sharp(opts.buffer, { raw: GetRawSharpOptions(opts.size) })
-		.resize(kThumbnailSize.width, kThumbnailSize.height, { fit: 'fill' })
-		.jpeg({
-			quality: opts.quality || 75
-		})
-		.toFormat('jpeg')
-		.toBuffer();
+	try {
+		console.log(opts)
+		let out = await sharp(opts.buffer, { raw: GetRawSharpOptions(opts.size) })
+			.resize(kThumbnailSize.width, kThumbnailSize.height, { fit: 'fill' })
+			.jpeg({
+				quality: opts.quality || 75
+			})
+			.toFormat('jpeg')
+			.toBuffer();
 
-	return Piscina.move(out);
+		return out;
+	} catch {
+		return;
+	}
+
 };
