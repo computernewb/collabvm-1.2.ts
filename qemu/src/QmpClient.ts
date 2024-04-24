@@ -76,7 +76,7 @@ export default class QmpClient extends Socket {
 			// just rethrow lol
 			//throw err;
 
-			console.log("you have pants: rules,", err);
+			console.log('you have pants: rules,', err);
 		});
 
 		this.once('data', (data) => {

@@ -1,4 +1,4 @@
-import {WebSocketServer, WebSocket} from 'ws';
+import { WebSocketServer, WebSocket } from 'ws';
 import * as http from 'http';
 import IConfig from './IConfig.js';
 import internal from 'stream';
@@ -28,8 +28,13 @@ const __dirname = import.meta.dirname;
 const kCVMTSAssetsRoot = path.resolve(__dirname, '../../assets');
 
 type ChatHistory = {
-    user: string,
-    msg: string
+	user: string;
+	msg: string;
+};
+
+type VoteTally = {
+	yes: number;
+	no: number;
 };
 
 // A good balance. TODO: Configurable?
@@ -37,978 +42,964 @@ const kJpegQuality = 35;
 
 // this returns appropiate Sharp options to deal with the framebuffer
 function GetRawSharpOptions(size: Size): sharp.CreateRaw {
-    return {
-        width: size.width,
-        height: size.height,
-        channels: 4
-    }
+	return {
+		width: size.width,
+		height: size.height,
+		channels: 4
+	};
 }
 
 // Thread pool for doing JPEG encoding for rects.
 const TheJpegEncoderPool = new Piscina({
-   filename: path.join(import.meta.dirname + '/JPEGEncoderWorker.js'),
-   minThreads: 4,
-   maxThreads: 4
+	filename: path.join(import.meta.dirname + '/JPEGEncoderWorker.js'),
+	minThreads: 4,
+	maxThreads: 4
 });
 
 async function EncodeJpeg(canvas: Buffer, displaySize: Size, rect: Rect): Promise<Buffer> {
 	let offset = (rect.y * displaySize.width + rect.x) * 4;
 
-    let res = await TheJpegEncoderPool.run({
-        buffer: canvas.subarray(offset),
-        width: rect.width,
-        height: rect.height,
-        stride: displaySize.width,
-        quality: kJpegQuality
-    });
+	let res = await TheJpegEncoderPool.run({
+		buffer: canvas.subarray(offset),
+		width: rect.width,
+		height: rect.height,
+		stride: displaySize.width,
+		quality: kJpegQuality
+	});
 
 	// TODO: There's probably (definitely) a better way to fix this
-    if(res == undefined)
-	    return Buffer.from([]);
+	if (res == undefined) return Buffer.from([]);
 
-
-    // have to manually turn it back into a buffer because
-    // Piscina for some reason turns it into a Uint8Array
-    return Buffer.from(res);
+	// have to manually turn it back into a buffer because
+	// Piscina for some reason turns it into a Uint8Array
+	return Buffer.from(res);
 }
 
 export default class WSServer {
-    private Config : IConfig;
+	private Config: IConfig;
 
-    private httpServer : http.Server;
-    private wsServer : WebSocketServer;
+	private httpServer: http.Server;
+	private wsServer: WebSocketServer;
 
-    private clients : User[];
+	private clients: User[];
 
-    private ChatHistory : CircularBuffer<ChatHistory>
+	private ChatHistory: CircularBuffer<ChatHistory>;
 
-    private TurnQueue : Queue<User>;
-    
-    // Time remaining on the current turn
-    private TurnTime : number;
+	private TurnQueue: Queue<User>;
 
-    // Interval to keep track of the current turn time
-    private TurnInterval? : NodeJS.Timeout;
+	// Time remaining on the current turn
+	private TurnTime: number;
 
-    // If a reset vote is in progress
-    private voteInProgress : boolean;
+	// Interval to keep track of the current turn time
+	private TurnInterval?: NodeJS.Timeout;
 
-    // Interval to keep track of vote resets
-    private voteInterval? : NodeJS.Timeout;
+	// If a reset vote is in progress
+	private voteInProgress: boolean;
 
-    // How much time is left on the vote
-    private voteTime : number;
+	// Interval to keep track of vote resets
+	private voteInterval?: NodeJS.Timeout;
 
-    // How much time until another reset vote can be cast
-    private voteCooldown : number;
+	// How much time is left on the vote
+	private voteTime: number;
 
-    // Interval to keep track
-    private voteCooldownInterval? : NodeJS.Timeout;
+	// How much time until another reset vote can be cast
+	private voteCooldown: number;
 
-    // Completely disable turns
-    private turnsAllowed : boolean;
+	// Interval to keep track
+	private voteCooldownInterval?: NodeJS.Timeout;
 
-    // Hide the screen
-    private screenHidden : boolean;
+	// Completely disable turns
+	private turnsAllowed: boolean;
 
-    // base64 image to show when the screen is hidden
-    private screenHiddenImg : string;
-    private screenHiddenThumb : string;
+	// Hide the screen
+	private screenHidden: boolean;
 
-    // Indefinite turn
-    private indefiniteTurn : User | null;
-    private ModPerms : number;  
-    private VM : QemuVM;
+	// base64 image to show when the screen is hidden
+	private screenHiddenImg: string;
+	private screenHiddenThumb: string;
 
-    // Authentication manager
-    private auth : AuthManager | null;
+	// Indefinite turn
+	private indefiniteTurn: User | null;
+	private ModPerms: number;
+	private VM: QemuVM;
 
-    private logger = new Logger("CVMTS.Server");
+	// Authentication manager
+	private auth: AuthManager | null;
 
-    constructor(config : IConfig, vm : QemuVM, auth : AuthManager | null) {
-        this.Config = config;
-        this.ChatHistory = new CircularBuffer<ChatHistory>(Array, this.Config.collabvm.maxChatHistoryLength);
-        this.TurnQueue = new Queue<User>();
-        this.TurnTime = 0;
-        this.clients = [];
-        this.voteInProgress = false;
-        this.voteTime = 0;
-        this.voteCooldown = 0;
-        this.turnsAllowed = true;
-        this.screenHidden = false;
-        this.screenHiddenImg = readFileSync(path.join(kCVMTSAssetsRoot, "screenhidden.jpeg")).toString("base64");
-        this.screenHiddenThumb = readFileSync(path.join(kCVMTSAssetsRoot, "screenhiddenthumb.jpeg")).toString("base64");
+	private logger = new Logger('CVMTS.Server');
 
-        this.indefiniteTurn = null;
-        this.ModPerms = Utilities.MakeModPerms(this.Config.collabvm.moderatorPermissions);
-        this.httpServer = http.createServer();
-        this.wsServer = new WebSocketServer({noServer: true});
-        this.httpServer.on('upgrade', (req : http.IncomingMessage, socket : internal.Duplex, head : Buffer) => this.httpOnUpgrade(req, socket, head));
-        this.httpServer.on('request', (req, res) => {
-            res.writeHead(426);
-            res.write("This server only accepts WebSocket connections.");
-            res.end();
-        });
+	constructor(config: IConfig, vm: QemuVM, auth: AuthManager | null) {
+		this.Config = config;
+		this.ChatHistory = new CircularBuffer<ChatHistory>(Array, this.Config.collabvm.maxChatHistoryLength);
+		this.TurnQueue = new Queue<User>();
+		this.TurnTime = 0;
+		this.clients = [];
+		this.voteInProgress = false;
+		this.voteTime = 0;
+		this.voteCooldown = 0;
+		this.turnsAllowed = true;
+		this.screenHidden = false;
+		this.screenHiddenImg = readFileSync(path.join(kCVMTSAssetsRoot, 'screenhidden.jpeg')).toString('base64');
+		this.screenHiddenThumb = readFileSync(path.join(kCVMTSAssetsRoot, 'screenhiddenthumb.jpeg')).toString('base64');
 
-        let initSize = vm.GetDisplay().Size() || {
-            width: 0,
-            height: 0
-        };
+		this.indefiniteTurn = null;
+		this.ModPerms = Utilities.MakeModPerms(this.Config.collabvm.moderatorPermissions);
+		this.httpServer = http.createServer();
+		this.wsServer = new WebSocketServer({ noServer: true });
+		this.httpServer.on('upgrade', (req: http.IncomingMessage, socket: internal.Duplex, head: Buffer) => this.httpOnUpgrade(req, socket, head));
+		this.httpServer.on('request', (req, res) => {
+			res.writeHead(426);
+			res.write('This server only accepts WebSocket connections.');
+			res.end();
+		});
 
-        this.OnDisplayResized(initSize);
+		let initSize = vm.GetDisplay().Size() || {
+			width: 0,
+			height: 0
+		};
 
-        vm.GetDisplay().on('resize', (size: Size) => this.OnDisplayResized(size));
-        vm.GetDisplay().on('rect', (rect: Rect) => this.OnDisplayRectangle(rect));
+		this.OnDisplayResized(initSize);
 
-        this.VM = vm;
-        
-        // authentication manager
-        this.auth = auth;
-    }
+		vm.GetDisplay().on('resize', (size: Size) => this.OnDisplayResized(size));
+		vm.GetDisplay().on('rect', (rect: Rect) => this.OnDisplayRectangle(rect));
 
-    listen() {
-        this.httpServer.listen(this.Config.http.port, this.Config.http.host);
-    }
+		this.VM = vm;
 
-    private httpOnUpgrade(req : http.IncomingMessage, socket : internal.Duplex, head : Buffer) {
-        var killConnection = () => {
-            socket.write("HTTP/1.1 400 Bad Request\n\n400 Bad Request");
-            socket.destroy();
-        }
+		// authentication manager
+		this.auth = auth;
+	}
 
-        if (req.headers['sec-websocket-protocol'] !== "guacamole") {
-            killConnection();
-            return;
-        }
+	listen() {
+		this.httpServer.listen(this.Config.http.port, this.Config.http.host);
+	}
 
-        if (this.Config.http.origin) {
-            // If the client is not sending an Origin header, kill the connection.
-            if(!req.headers.origin) {
-                killConnection();
-                return;
-            }
+	private httpOnUpgrade(req: http.IncomingMessage, socket: internal.Duplex, head: Buffer) {
+		var killConnection = () => {
+			socket.write('HTTP/1.1 400 Bad Request\n\n400 Bad Request');
+			socket.destroy();
+		};
 
-            // Try to parse the Origin header sent by the client, if it fails, kill the connection.
-            var _uri;
-            var _host;
-            try {
-                _uri = new URL(req.headers.origin.toLowerCase());
-                _host = _uri.host;
-            } catch {
-                killConnection();
-                return;
-            }
+		if (req.headers['sec-websocket-protocol'] !== 'guacamole') {
+			killConnection();
+			return;
+		}
 
-            // detect fake origin headers
-            if (_uri.pathname !== "/" || _uri.search !== "") {
-                killConnection();
-                return;
-            }
-            
-            // If the domain name is not in the list of allowed origins, kill the connection.
-            if(!this.Config.http.originAllowedDomains.includes(_host)) {
-                killConnection();
-                return;
-            }
-        }
+		if (this.Config.http.origin) {
+			// If the client is not sending an Origin header, kill the connection.
+			if (!req.headers.origin) {
+				killConnection();
+				return;
+			}
 
-        let ip: string;
-        if (this.Config.http.proxying) {   
-            // If the requesting IP isn't allowed to proxy, kill it
-            if (this.Config.http.proxyAllowedIps.indexOf(req.socket.remoteAddress!) === -1) {
-                killConnection();
-                return;
-            }
-            // Make sure x-forwarded-for is set
-            if (req.headers["x-forwarded-for"] === undefined) {
-                killConnection();
-                return;
-            }
-            try {
-                // Get the first IP from the X-Forwarded-For variable
-                ip = req.headers["x-forwarded-for"]?.toString().replace(/\ /g, "").split(",")[0];
-            } catch {
-                // If we can't get the IP, kill the connection
-                killConnection();
-                return;
-            }
-            // If for some reason the IP isn't defined, kill it
-            if (!ip) {
-                killConnection();
-                return;
-            }
-            // Make sure the IP is valid. If not, kill the connection.
-            if (!isIP(ip)) {
-                killConnection();
-                return;
-            }
-        } else {
-            if (!req.socket.remoteAddress) return;
-            ip = req.socket.remoteAddress;
-        }
+			// Try to parse the Origin header sent by the client, if it fails, kill the connection.
+			var _uri;
+			var _host;
+			try {
+				_uri = new URL(req.headers.origin.toLowerCase());
+				_host = _uri.host;
+			} catch {
+				killConnection();
+				return;
+			}
 
-        // Get the amount of active connections coming from the requesting IP.
-        let connections = this.clients.filter(client => client.IP.address == ip);
-        // If it exceeds the limit set in the config, reject the connection with a 429.
-        if(connections.length + 1 > this.Config.http.maxConnections) {
-            socket.write("HTTP/1.1 429 Too Many Requests\n\n429 Too Many Requests");
-            socket.destroy();
-        }
+			// detect fake origin headers
+			if (_uri.pathname !== '/' || _uri.search !== '') {
+				killConnection();
+				return;
+			}
 
-        this.wsServer.handleUpgrade(req, socket, head, (ws: WebSocket) => {
-            this.wsServer.emit('connection', ws, req);
-            this.onConnection(ws, req, ip);
-        });
-    }
+			// If the domain name is not in the list of allowed origins, kill the connection.
+			if (!this.Config.http.originAllowedDomains.includes(_host)) {
+				killConnection();
+				return;
+			}
+		}
 
-    private onConnection(ws : WebSocket, req: http.IncomingMessage, ip : string) {
-        let user = new User(ws, IPDataManager.GetIPData(ip), this.Config);
-        this.clients.push(user);
+		let ip: string;
+		if (this.Config.http.proxying) {
+			// If the requesting IP isn't allowed to proxy, kill it
+			if (this.Config.http.proxyAllowedIps.indexOf(req.socket.remoteAddress!) === -1) {
+				killConnection();
+				return;
+			}
+			// Make sure x-forwarded-for is set
+			if (req.headers['x-forwarded-for'] === undefined) {
+				killConnection();
+				return;
+			}
+			try {
+				// Get the first IP from the X-Forwarded-For variable
+				ip = req.headers['x-forwarded-for']?.toString().replace(/\ /g, '').split(',')[0];
+			} catch {
+				// If we can't get the IP, kill the connection
+				killConnection();
+				return;
+			}
+			// If for some reason the IP isn't defined, kill it
+			if (!ip) {
+				killConnection();
+				return;
+			}
+			// Make sure the IP is valid. If not, kill the connection.
+			if (!isIP(ip)) {
+				killConnection();
+				return;
+			}
+		} else {
+			if (!req.socket.remoteAddress) return;
+			ip = req.socket.remoteAddress;
+		}
 
-        ws.on('error', (e) => {    
-            this.logger.Error(`${e} (caused by connection ${ip})`);
-            ws.close();
-        });
+		// Get the amount of active connections coming from the requesting IP.
+		let connections = this.clients.filter((client) => client.IP.address == ip);
+		// If it exceeds the limit set in the config, reject the connection with a 429.
+		if (connections.length + 1 > this.Config.http.maxConnections) {
+			socket.write('HTTP/1.1 429 Too Many Requests\n\n429 Too Many Requests');
+			socket.destroy();
+		}
 
-        ws.on('close', () => this.connectionClosed(user));
+		this.wsServer.handleUpgrade(req, socket, head, (ws: WebSocket) => {
+			this.wsServer.emit('connection', ws, req);
+			this.onConnection(ws, req, ip);
+		});
+	}
 
-        ws.on('message', (buf: Buffer, isBinary: boolean) => {
-            var msg;
+	private onConnection(ws: WebSocket, req: http.IncomingMessage, ip: string) {
+		let user = new User(ws, IPDataManager.GetIPData(ip), this.Config);
+		this.clients.push(user);
 
-            // Close the user's connection if they send a non-string message
-            if(isBinary) {
-                user.closeConnection();
-                return;
-            }
+		ws.on('error', (e) => {
+			this.logger.Error(`${e} (caused by connection ${ip})`);
+			ws.close();
+		});
 
-            try {
-                this.onMessage(user, buf.toString());
-            } catch {
-            }
-        });
+		ws.on('close', () => this.connectionClosed(user));
 
-        if (this.Config.auth.enabled) {
-            user.sendMsg(guacutils.encode("auth", this.Config.auth.apiEndpoint));
-        }
-        user.sendMsg(this.getAdduserMsg());
-        this.logger.Info(`Connect from ${user.IP.address}`);
-    };
+		ws.on('message', (buf: Buffer, isBinary: boolean) => {
+			var msg;
 
-    private connectionClosed(user : User) {
-        let clientIndex = this.clients.indexOf(user)
-        if (clientIndex === -1) return;
+			// Close the user's connection if they send a non-string message
+			if (isBinary) {
+				user.closeConnection();
+				return;
+			}
 
-        if(user.IP.vote != null) {
-            user.IP.vote = null;
-            this.sendVoteUpdate();
-        }
+			try {
+				this.onMessage(user, buf.toString());
+			} catch {}
+		});
 
-        // Unreference the IP data.
-        user.IP.Unref();
+		if (this.Config.auth.enabled) {
+			user.sendMsg(guacutils.encode('auth', this.Config.auth.apiEndpoint));
+		}
+		user.sendMsg(this.getAdduserMsg());
+		this.logger.Info(`Connect from ${user.IP.address}`);
+	}
 
-        if (this.indefiniteTurn === user) this.indefiniteTurn = null;
+	private connectionClosed(user: User) {
+		let clientIndex = this.clients.indexOf(user);
+		if (clientIndex === -1) return;
 
-        this.clients.splice(clientIndex, 1);
+		if (user.IP.vote != null) {
+			user.IP.vote = null;
+			this.sendVoteUpdate();
+		}
 
-        this.logger.Info(`Disconnect From ${user.IP.address}${user.username ? ` with username ${user.username}` : ""}`);
-        if (!user.username) return;
-        if (this.TurnQueue.toArray().indexOf(user) !== -1) {
-            var hadturn = (this.TurnQueue.peek() === user);
-            this.TurnQueue = Queue.from(this.TurnQueue.toArray().filter(u => u !== user));
-            if (hadturn) this.nextTurn();
-        }
-        
-        this.clients.forEach((c) => c.sendMsg(guacutils.encode("remuser", "1", user.username!)));
-    }
+		// Unreference the IP data.
+		user.IP.Unref();
 
+		if (this.indefiniteTurn === user) this.indefiniteTurn = null;
 
-    private async onMessage(client : User, message : string) {
-        var msgArr = guacutils.decode(message);
-        if (msgArr.length < 1) return;
-        switch (msgArr[0]) {
-            case "login":
-                if (msgArr.length !== 2 || !this.Config.auth.enabled) return;
-                if (!client.connectedToNode) {
-                    client.sendMsg(guacutils.encode("login", "0", "You must connect to the VM before logging in."));
-                    return;
-                }
-                var res = await this.auth!.Authenticate(msgArr[1], client);
-                if (res.clientSuccess) {
-                    this.logger.Info(`${client.IP.address} logged in as ${res.username}`);
-                    client.sendMsg(guacutils.encode("login", "1"));
-                    var old = this.clients.find(c=>c.username === res.username);
-                    if (old) {
-                        // kick() doesnt wait until the user is actually removed from the list and itd be anal to make it do that
-                        // so we call connectionClosed manually here. When it gets called on kick(), it will return because the user isn't in the list
-                        this.connectionClosed(old);
-                        await old.kick();
-                    }
-                    // Set username
-                    this.renameUser(client, res.username);
-                    // Set rank
-                    client.rank = res.rank;
-                    if (client.rank === Rank.Admin) {
-                        client.sendMsg(guacutils.encode("admin", "0", "1"));
-                    } else if (client.rank === Rank.Moderator) {
-                        client.sendMsg(guacutils.encode("admin", "0", "3", this.ModPerms.toString()));
-                    }
-                    this.clients.forEach((c) => c.sendMsg(guacutils.encode("adduser", "1", client.username!, client.rank.toString())));
-                } else {
-                    client.sendMsg(guacutils.encode("login", "0", res.error!));
-                    if (res.error === "You are banned") {
-                        client.kick();
-                    }
-                }
-                break;
-            case "list":
-                client.sendMsg(guacutils.encode("list", this.Config.collabvm.node, this.Config.collabvm.displayname, this.screenHidden ? this.screenHiddenThumb : await this.getThumbnail()));
-                break;
-            case "connect":
-                if (!client.username || msgArr.length !== 2 || msgArr[1] !== this.Config.collabvm.node) {
-                    client.sendMsg(guacutils.encode("connect", "0"));
-                    return;
-                }
-                client.connectedToNode = true;
-                client.sendMsg(guacutils.encode("connect", "1", "1", this.Config.vm.snapshots ? "1" : "0", "0"));
-                if (this.ChatHistory.size !== 0) client.sendMsg(this.getChatHistoryMsg());
-                if (this.Config.collabvm.motd) client.sendMsg(guacutils.encode("chat", "", this.Config.collabvm.motd));
-                if (this.screenHidden) {
-                    client.sendMsg(guacutils.encode("size", "0", "1024", "768"));
-                    client.sendMsg(guacutils.encode("png", "0", "0", "0", "0", this.screenHiddenImg));
-                } else {
-                    await this.SendFullScreenWithSize(client);
-                }
-                client.sendMsg(guacutils.encode("sync", Date.now().toString()));
-                if (this.voteInProgress) this.sendVoteUpdate(client);
-                this.sendTurnUpdate(client);
-                break;
-            case "view":
-                if(client.connectedToNode) return;
-                if(client.username || msgArr.length !== 3 || msgArr[1] !== this.Config.collabvm.node) {
-                    // The use of connect here is intentional.
-                    client.sendMsg(guacutils.encode("connect", "0"));
-                    return;
-                }
+		this.clients.splice(clientIndex, 1);
 
-                switch(msgArr[2]) {
-                    case "0":
-                        client.viewMode = 0;
-                        break;
-                    case "1":
-                        client.viewMode = 1;
-                        break;
-                    default:
-                        client.sendMsg(guacutils.encode("connect", "0"));
-                        return;
-                }
-                
-                client.sendMsg(guacutils.encode("connect", "1", "1", this.Config.vm.snapshots ? "1" : "0", "0"));
-                if (this.ChatHistory.size !== 0) client.sendMsg(this.getChatHistoryMsg());
-                if (this.Config.collabvm.motd) client.sendMsg(guacutils.encode("chat", "", this.Config.collabvm.motd));
-                
-                if(client.viewMode == 1) {
-                    if (this.screenHidden) {
-                        client.sendMsg(guacutils.encode("size", "0", "1024", "768"));
-                        client.sendMsg(guacutils.encode("png", "0", "0", "0", "0", this.screenHiddenImg));
-                    } else {
-                        await this.SendFullScreenWithSize(client);
-                    }
-                        client.sendMsg(guacutils.encode("sync", Date.now().toString()));
-                }
-                
-                if (this.voteInProgress) this.sendVoteUpdate(client);
-                this.sendTurnUpdate(client);
-                break;
-            case "rename":
-                if (!client.RenameRateLimit.request()) return;
-                if (client.connectedToNode && client.IP.muted) return;
-                if (this.Config.auth.enabled && client.rank !== Rank.Unregistered) {
-                    client.sendMsg(guacutils.encode("chat", "", "Go to your account settings to change your username."));
-                    return;
-                }
-                if (this.Config.auth.enabled && msgArr[1] !== undefined) {
-                    // Don't send system message to a user without a username since it was likely an automated attempt by the webapp
-                    if (client.username) client.sendMsg(guacutils.encode("chat", "", "You need to log in to do that."));
-                    if (client.rank !== Rank.Unregistered) return;
-                    this.renameUser(client, undefined);
-                    return;
-                }
-                this.renameUser(client, msgArr[1]);
-                break;
-            case "chat":
-                if (!client.username) return;
-                if (client.IP.muted) return;
-                if (msgArr.length !== 2) return;
-                if (this.Config.auth.enabled && client.rank === Rank.Unregistered && !this.Config.auth.guestPermissions.chat) {
-                    client.sendMsg(guacutils.encode("chat", "", "You need to login to do that."));
-                    return;
-                }
-                var msg = Utilities.HTMLSanitize(msgArr[1]);
-                // One of the things I hated most about the old server is it completely discarded your message if it was too long
-                if (msg.length > this.Config.collabvm.maxChatLength) msg = msg.substring(0, this.Config.collabvm.maxChatLength);
-                if (msg.trim().length < 1) return;
-                
-                this.clients.forEach(c => c.sendMsg(guacutils.encode("chat", client.username!, msg)));
-                this.ChatHistory.push({user: client.username, msg: msg});
-                client.onMsgSent();
-                break;
-            case "turn":
-                if ((!this.turnsAllowed || this.Config.collabvm.turnwhitelist) && client.rank !== Rank.Admin && client.rank !== Rank.Moderator && client.rank !== Rank.Turn) return;
-                if (this.Config.auth.enabled && client.rank === Rank.Unregistered && !this.Config.auth.guestPermissions.turn) {
-                    client.sendMsg(guacutils.encode("chat", "", "You need to login to do that."));
-                    return;
-                }
-                if (!client.TurnRateLimit.request()) return;
-                if (!client.connectedToNode) return;
-                if (msgArr.length > 2) return;
-                var takingTurn : boolean;
-                if (msgArr.length === 1) takingTurn = true;
-                else switch (msgArr[1]) {
-                    case "0":
-                        if (this.indefiniteTurn === client) {
-                            this.indefiniteTurn = null;
-                        }
-                        takingTurn = false;
-                        break;
-                    case "1":
-                        takingTurn = true;
-                        break;
-                    default:
-                        return;
-                        break;
-                }
-                if (takingTurn) {
-                    var currentQueue = this.TurnQueue.toArray();
-                    // If the user is already in the turn queue, ignore the turn request.
-                    if (currentQueue.indexOf(client) !== -1) return;
-                    // If they're muted, also ignore the turn request.
-                    // Send them the turn queue to prevent client glitches
-                    if (client.IP.muted) return;
-                    if(this.Config.collabvm.turnlimit.enabled) {
-                        // Get the amount of users in the turn queue with the same IP as the user requesting a turn.
-                        let turns = currentQueue.filter(user => user.IP.address == client.IP.address);
-                        // If it exceeds the limit set in the config, ignore the turn request.
-                        if(turns.length + 1 > this.Config.collabvm.turnlimit.maximum) return;
-                    }
-                    this.TurnQueue.enqueue(client);
-                    if (this.TurnQueue.size === 1) this.nextTurn();
-                } else {
-                    var hadturn = (this.TurnQueue.peek() === client);
-                    this.TurnQueue = Queue.from(this.TurnQueue.toArray().filter(u => u !== client));
-                    if (hadturn) this.nextTurn();
-                }
-                this.sendTurnUpdate();
-                break;
-            case "mouse":
-                if (this.TurnQueue.peek() !== client && client.rank !== Rank.Admin) return;
-                var x = parseInt(msgArr[1]);
-                var y = parseInt(msgArr[2]);
-                var mask = parseInt(msgArr[3]);
-                if (x === undefined || y === undefined || mask === undefined) return;
-                this.VM.GetDisplay()!.MouseEvent(x, y, mask);
-                break;
-            case "key":
-                if (this.TurnQueue.peek() !== client && client.rank !== Rank.Admin) return;
-                var keysym = parseInt(msgArr[1]);
-                var down = parseInt(msgArr[2]);
-                if (keysym === undefined || (down !== 0 && down !== 1)) return;
-                this.VM.GetDisplay()!.KeyboardEvent(keysym, down === 1 ? true : false);
-                break;
-            case "vote":
-                if (!this.Config.vm.snapshots) return;
-                if ((!this.turnsAllowed || this.Config.collabvm.turnwhitelist) && client.rank !== Rank.Admin && client.rank !== Rank.Moderator && client.rank !== Rank.Turn) return;
-                if (!client.connectedToNode) return;
-                if (msgArr.length !== 2) return;
-                if (!client.VoteRateLimit.request()) return;
-                switch (msgArr[1]) {
-                    case "1":
-                        if (!this.voteInProgress) {
-                            if (this.voteCooldown !== 0) {
-                                client.sendMsg(guacutils.encode("vote", "3", this.voteCooldown.toString()));
-                                return;
-                            }
-                            this.startVote();
-                            this.clients.forEach(c => c.sendMsg(guacutils.encode("chat", "", `${client.username} has started a vote to reset the VM.`)));
-                        }
-                        else if (client.IP.vote !== true)
-                            this.clients.forEach(c => c.sendMsg(guacutils.encode("chat", "", `${client.username} has voted yes.`)));
-                        client.IP.vote = true;
-                        break;
-                    case "0":
-                        if (!this.voteInProgress) return;
-                        if (client.IP.vote !== false)
-                            this.clients.forEach(c => c.sendMsg(guacutils.encode("chat", "", `${client.username} has voted no.`)));
-                        client.IP.vote = false;
-                        break;
-                }
-                this.sendVoteUpdate();
-                break;
-            case "admin":
-                if (msgArr.length < 2) return;
-                switch (msgArr[1]) {
-                    case "2":
-                        // Login
-                        if (this.Config.auth.enabled) {
-                            client.sendMsg(guacutils.encode("chat", "", "This server does not support staff passwords. Please log in to become staff."));
-                            return;
-                        }
-                        if (!client.LoginRateLimit.request() || !client.username) return;
-                        if (msgArr.length !== 3) return;
-                        var sha256 = createHash("sha256");
-                        sha256.update(msgArr[2]);
-                        var pwdHash = sha256.digest('hex');
-                        sha256.destroy();
-                        if (pwdHash === this.Config.collabvm.adminpass) {
-                            client.rank = Rank.Admin;
-                            client.sendMsg(guacutils.encode("admin", "0", "1"));
-                        } else if (this.Config.collabvm.moderatorEnabled && pwdHash === this.Config.collabvm.modpass) {
-                            client.rank = Rank.Moderator;
-                            client.sendMsg(guacutils.encode("admin", "0", "3", this.ModPerms.toString()));
-                        } else if (this.Config.collabvm.turnwhitelist && pwdHash === this.Config.collabvm.turnpass) {
-                            client.rank = Rank.Turn;
-                            client.sendMsg(guacutils.encode("chat", "", "You may now take turns."));
-                        } else {
-                            client.sendMsg(guacutils.encode("admin", "0", "0"));
-                            return;
-                        }
-                        if (this.screenHidden) {
-                            await this.SendFullScreenWithSize(client);
+		this.logger.Info(`Disconnect From ${user.IP.address}${user.username ? ` with username ${user.username}` : ''}`);
+		if (!user.username) return;
+		if (this.TurnQueue.toArray().indexOf(user) !== -1) {
+			var hadturn = this.TurnQueue.peek() === user;
+			this.TurnQueue = Queue.from(this.TurnQueue.toArray().filter((u) => u !== user));
+			if (hadturn) this.nextTurn();
+		}
 
-                            client.sendMsg(guacutils.encode("sync", Date.now().toString()));
-                        }
-                        
-                        this.clients.forEach((c) => c.sendMsg(guacutils.encode("adduser", "1", client.username!, client.rank.toString())));
-                        break;
-                    case "5":
-                        // QEMU Monitor
-                        if (client.rank !== Rank.Admin) return;
-/* Surely there could be rudimentary processing to convert some qemu monitor syntax to [XYZ hypervisor] if possible
+		this.clients.forEach((c) => c.sendMsg(guacutils.encode('remuser', '1', user.username!)));
+	}
+
+	private async onMessage(client: User, message: string) {
+		var msgArr = guacutils.decode(message);
+		if (msgArr.length < 1) return;
+		switch (msgArr[0]) {
+			case 'login':
+				if (msgArr.length !== 2 || !this.Config.auth.enabled) return;
+				if (!client.connectedToNode) {
+					client.sendMsg(guacutils.encode('login', '0', 'You must connect to the VM before logging in.'));
+					return;
+				}
+				var res = await this.auth!.Authenticate(msgArr[1], client);
+				if (res.clientSuccess) {
+					this.logger.Info(`${client.IP.address} logged in as ${res.username}`);
+					client.sendMsg(guacutils.encode('login', '1'));
+					var old = this.clients.find((c) => c.username === res.username);
+					if (old) {
+						// kick() doesnt wait until the user is actually removed from the list and itd be anal to make it do that
+						// so we call connectionClosed manually here. When it gets called on kick(), it will return because the user isn't in the list
+						this.connectionClosed(old);
+						await old.kick();
+					}
+					// Set username
+					this.renameUser(client, res.username);
+					// Set rank
+					client.rank = res.rank;
+					if (client.rank === Rank.Admin) {
+						client.sendMsg(guacutils.encode('admin', '0', '1'));
+					} else if (client.rank === Rank.Moderator) {
+						client.sendMsg(guacutils.encode('admin', '0', '3', this.ModPerms.toString()));
+					}
+					this.clients.forEach((c) => c.sendMsg(guacutils.encode('adduser', '1', client.username!, client.rank.toString())));
+				} else {
+					client.sendMsg(guacutils.encode('login', '0', res.error!));
+					if (res.error === 'You are banned') {
+						client.kick();
+					}
+				}
+				break;
+			case 'list':
+				client.sendMsg(guacutils.encode('list', this.Config.collabvm.node, this.Config.collabvm.displayname, this.screenHidden ? this.screenHiddenThumb : await this.getThumbnail()));
+				break;
+			case 'connect':
+				if (!client.username || msgArr.length !== 2 || msgArr[1] !== this.Config.collabvm.node) {
+					client.sendMsg(guacutils.encode('connect', '0'));
+					return;
+				}
+				client.connectedToNode = true;
+				client.sendMsg(guacutils.encode('connect', '1', '1', this.Config.vm.snapshots ? '1' : '0', '0'));
+				if (this.ChatHistory.size !== 0) client.sendMsg(this.getChatHistoryMsg());
+				if (this.Config.collabvm.motd) client.sendMsg(guacutils.encode('chat', '', this.Config.collabvm.motd));
+				if (this.screenHidden) {
+					client.sendMsg(guacutils.encode('size', '0', '1024', '768'));
+					client.sendMsg(guacutils.encode('png', '0', '0', '0', '0', this.screenHiddenImg));
+				} else {
+					await this.SendFullScreenWithSize(client);
+				}
+				client.sendMsg(guacutils.encode('sync', Date.now().toString()));
+				if (this.voteInProgress) this.sendVoteUpdate(client);
+				this.sendTurnUpdate(client);
+				break;
+			case 'view':
+				if (client.connectedToNode) return;
+				if (client.username || msgArr.length !== 3 || msgArr[1] !== this.Config.collabvm.node) {
+					// The use of connect here is intentional.
+					client.sendMsg(guacutils.encode('connect', '0'));
+					return;
+				}
+
+				switch (msgArr[2]) {
+					case '0':
+						client.viewMode = 0;
+						break;
+					case '1':
+						client.viewMode = 1;
+						break;
+					default:
+						client.sendMsg(guacutils.encode('connect', '0'));
+						return;
+				}
+
+				client.sendMsg(guacutils.encode('connect', '1', '1', this.Config.vm.snapshots ? '1' : '0', '0'));
+				if (this.ChatHistory.size !== 0) client.sendMsg(this.getChatHistoryMsg());
+				if (this.Config.collabvm.motd) client.sendMsg(guacutils.encode('chat', '', this.Config.collabvm.motd));
+
+				if (client.viewMode == 1) {
+					if (this.screenHidden) {
+						client.sendMsg(guacutils.encode('size', '0', '1024', '768'));
+						client.sendMsg(guacutils.encode('png', '0', '0', '0', '0', this.screenHiddenImg));
+					} else {
+						await this.SendFullScreenWithSize(client);
+					}
+					client.sendMsg(guacutils.encode('sync', Date.now().toString()));
+				}
+
+				if (this.voteInProgress) this.sendVoteUpdate(client);
+				this.sendTurnUpdate(client);
+				break;
+			case 'rename':
+				if (!client.RenameRateLimit.request()) return;
+				if (client.connectedToNode && client.IP.muted) return;
+				if (this.Config.auth.enabled && client.rank !== Rank.Unregistered) {
+					client.sendMsg(guacutils.encode('chat', '', 'Go to your account settings to change your username.'));
+					return;
+				}
+				if (this.Config.auth.enabled && msgArr[1] !== undefined) {
+					// Don't send system message to a user without a username since it was likely an automated attempt by the webapp
+					if (client.username) client.sendMsg(guacutils.encode('chat', '', 'You need to log in to do that.'));
+					if (client.rank !== Rank.Unregistered) return;
+					this.renameUser(client, undefined);
+					return;
+				}
+				this.renameUser(client, msgArr[1]);
+				break;
+			case 'chat':
+				if (!client.username) return;
+				if (client.IP.muted) return;
+				if (msgArr.length !== 2) return;
+				if (this.Config.auth.enabled && client.rank === Rank.Unregistered && !this.Config.auth.guestPermissions.chat) {
+					client.sendMsg(guacutils.encode('chat', '', 'You need to login to do that.'));
+					return;
+				}
+				var msg = Utilities.HTMLSanitize(msgArr[1]);
+				// One of the things I hated most about the old server is it completely discarded your message if it was too long
+				if (msg.length > this.Config.collabvm.maxChatLength) msg = msg.substring(0, this.Config.collabvm.maxChatLength);
+				if (msg.trim().length < 1) return;
+
+				this.clients.forEach((c) => c.sendMsg(guacutils.encode('chat', client.username!, msg)));
+				this.ChatHistory.push({ user: client.username, msg: msg });
+				client.onMsgSent();
+				break;
+			case 'turn':
+				if ((!this.turnsAllowed || this.Config.collabvm.turnwhitelist) && client.rank !== Rank.Admin && client.rank !== Rank.Moderator && client.rank !== Rank.Turn) return;
+				if (this.Config.auth.enabled && client.rank === Rank.Unregistered && !this.Config.auth.guestPermissions.turn) {
+					client.sendMsg(guacutils.encode('chat', '', 'You need to login to do that.'));
+					return;
+				}
+				if (!client.TurnRateLimit.request()) return;
+				if (!client.connectedToNode) return;
+				if (msgArr.length > 2) return;
+				var takingTurn: boolean;
+				if (msgArr.length === 1) takingTurn = true;
+				else
+					switch (msgArr[1]) {
+						case '0':
+							if (this.indefiniteTurn === client) {
+								this.indefiniteTurn = null;
+							}
+							takingTurn = false;
+							break;
+						case '1':
+							takingTurn = true;
+							break;
+						default:
+							return;
+							break;
+					}
+				if (takingTurn) {
+					var currentQueue = this.TurnQueue.toArray();
+					// If the user is already in the turn queue, ignore the turn request.
+					if (currentQueue.indexOf(client) !== -1) return;
+					// If they're muted, also ignore the turn request.
+					// Send them the turn queue to prevent client glitches
+					if (client.IP.muted) return;
+					if (this.Config.collabvm.turnlimit.enabled) {
+						// Get the amount of users in the turn queue with the same IP as the user requesting a turn.
+						let turns = currentQueue.filter((user) => user.IP.address == client.IP.address);
+						// If it exceeds the limit set in the config, ignore the turn request.
+						if (turns.length + 1 > this.Config.collabvm.turnlimit.maximum) return;
+					}
+					this.TurnQueue.enqueue(client);
+					if (this.TurnQueue.size === 1) this.nextTurn();
+				} else {
+					var hadturn = this.TurnQueue.peek() === client;
+					this.TurnQueue = Queue.from(this.TurnQueue.toArray().filter((u) => u !== client));
+					if (hadturn) this.nextTurn();
+				}
+				this.sendTurnUpdate();
+				break;
+			case 'mouse':
+				if (this.TurnQueue.peek() !== client && client.rank !== Rank.Admin) return;
+				var x = parseInt(msgArr[1]);
+				var y = parseInt(msgArr[2]);
+				var mask = parseInt(msgArr[3]);
+				if (x === undefined || y === undefined || mask === undefined) return;
+				this.VM.GetDisplay()!.MouseEvent(x, y, mask);
+				break;
+			case 'key':
+				if (this.TurnQueue.peek() !== client && client.rank !== Rank.Admin) return;
+				var keysym = parseInt(msgArr[1]);
+				var down = parseInt(msgArr[2]);
+				if (keysym === undefined || (down !== 0 && down !== 1)) return;
+				this.VM.GetDisplay()!.KeyboardEvent(keysym, down === 1 ? true : false);
+				break;
+			case 'vote':
+				if (!this.Config.vm.snapshots) return;
+				if ((!this.turnsAllowed || this.Config.collabvm.turnwhitelist) && client.rank !== Rank.Admin && client.rank !== Rank.Moderator && client.rank !== Rank.Turn) return;
+				if (!client.connectedToNode) return;
+				if (msgArr.length !== 2) return;
+				if (!client.VoteRateLimit.request()) return;
+				switch (msgArr[1]) {
+					case '1':
+						if (!this.voteInProgress) {
+							if (this.voteCooldown !== 0) {
+								client.sendMsg(guacutils.encode('vote', '3', this.voteCooldown.toString()));
+								return;
+							}
+							this.startVote();
+							this.clients.forEach((c) => c.sendMsg(guacutils.encode('chat', '', `${client.username} has started a vote to reset the VM.`)));
+						} else if (client.IP.vote !== true) this.clients.forEach((c) => c.sendMsg(guacutils.encode('chat', '', `${client.username} has voted yes.`)));
+						client.IP.vote = true;
+						break;
+					case '0':
+						if (!this.voteInProgress) return;
+						if (client.IP.vote !== false) this.clients.forEach((c) => c.sendMsg(guacutils.encode('chat', '', `${client.username} has voted no.`)));
+						client.IP.vote = false;
+						break;
+				}
+				this.sendVoteUpdate();
+				break;
+			case 'admin':
+				if (msgArr.length < 2) return;
+				switch (msgArr[1]) {
+					case '2':
+						// Login
+						if (this.Config.auth.enabled) {
+							client.sendMsg(guacutils.encode('chat', '', 'This server does not support staff passwords. Please log in to become staff.'));
+							return;
+						}
+						if (!client.LoginRateLimit.request() || !client.username) return;
+						if (msgArr.length !== 3) return;
+						var sha256 = createHash('sha256');
+						sha256.update(msgArr[2]);
+						var pwdHash = sha256.digest('hex');
+						sha256.destroy();
+						if (pwdHash === this.Config.collabvm.adminpass) {
+							client.rank = Rank.Admin;
+							client.sendMsg(guacutils.encode('admin', '0', '1'));
+						} else if (this.Config.collabvm.moderatorEnabled && pwdHash === this.Config.collabvm.modpass) {
+							client.rank = Rank.Moderator;
+							client.sendMsg(guacutils.encode('admin', '0', '3', this.ModPerms.toString()));
+						} else if (this.Config.collabvm.turnwhitelist && pwdHash === this.Config.collabvm.turnpass) {
+							client.rank = Rank.Turn;
+							client.sendMsg(guacutils.encode('chat', '', 'You may now take turns.'));
+						} else {
+							client.sendMsg(guacutils.encode('admin', '0', '0'));
+							return;
+						}
+						if (this.screenHidden) {
+							await this.SendFullScreenWithSize(client);
+
+							client.sendMsg(guacutils.encode('sync', Date.now().toString()));
+						}
+
+						this.clients.forEach((c) => c.sendMsg(guacutils.encode('adduser', '1', client.username!, client.rank.toString())));
+						break;
+					case '5':
+						// QEMU Monitor
+						if (client.rank !== Rank.Admin) return;
+						/* Surely there could be rudimentary processing to convert some qemu monitor syntax to [XYZ hypervisor] if possible
                         if (!(this.VM instanceof QEMUVM)) {
                             client.sendMsg(guacutils.encode("admin", "2", "This is not a QEMU VM and therefore QEMU monitor commands cannot be run."));
                             return;
                         }
 */
-                        if (msgArr.length !== 4 || msgArr[2] !== this.Config.collabvm.node) return;
-                        var output = await this.VM.MonitorCommand(msgArr[3]);
-                        client.sendMsg(guacutils.encode("admin", "2", String(output)));
-                        break;
-                    case "8":
-                        // Restore
-                        if (client.rank !== Rank.Admin && (client.rank !== Rank.Moderator || !this.Config.collabvm.moderatorPermissions.restore)) return;
-                        this.VM.Reset();
-                        break;
-                    case "10":
-                        // Reboot
-                        if (client.rank !== Rank.Admin && (client.rank !== Rank.Moderator || !this.Config.collabvm.moderatorPermissions.reboot)) return;
-                        if (msgArr.length !== 3 || msgArr[2] !== this.Config.collabvm.node) return;
-                        this.VM.MonitorCommand("system_reset");
-                        break;
-                    case "12":
-                        // Ban
-                        if (client.rank !== Rank.Admin && (client.rank !== Rank.Moderator || !this.Config.collabvm.moderatorPermissions.ban)) return;
-                        var user = this.clients.find(c => c.username === msgArr[2]);
-                        if (!user) return;
-                        user.ban();
-                    case "13":
-                        // Force Vote
-                        if (msgArr.length !== 3) return;
-                        if (client.rank !== Rank.Admin && (client.rank !== Rank.Moderator || !this.Config.collabvm.moderatorPermissions.forcevote)) return;
-                        if (!this.voteInProgress) return;
-                        switch (msgArr[2]) {
-                            case "1":
-                                this.endVote(true);
-                                break;
-                            case "0":
-                                this.endVote(false);
-                                break;
-                        }
-                        break;
-                    case "14":
-                        // Mute
-                        if (client.rank !== Rank.Admin && (client.rank !== Rank.Moderator || !this.Config.collabvm.moderatorPermissions.mute)) return;
-                        if (msgArr.length !== 4) return;
-                        var user = this.clients.find(c => c.username === msgArr[2]);
-                        if (!user) return;
-                        var permamute;
-                        switch (msgArr[3]) {
-                            case "0":
-                                permamute = false;
-                                break;
-                            case "1":
-                                permamute = true;
-                                break;
-                            default:
-                                return;
-                        }
-                        user.mute(permamute);
-                        break;
-                    case "15":
-                        // Kick
-                        if (client.rank !== Rank.Admin && (client.rank !== Rank.Moderator || !this.Config.collabvm.moderatorPermissions.kick)) return;
-                        var user = this.clients.find(c => c.username === msgArr[2]);
-                        if (!user) return;
-                        user.kick();
-                        break;
-                    case "16":
-                        // End turn
-                        if (client.rank !== Rank.Admin && (client.rank !== Rank.Moderator || !this.Config.collabvm.moderatorPermissions.bypassturn)) return;
-                        if (msgArr.length !== 3) return;
-                        var user = this.clients.find(c => c.username === msgArr[2]);
-                        if (!user) return;
-                        this.endTurn(user);
-                        break;
-                    case "17":
-                        // Clear turn queue
-                        if (client.rank !== Rank.Admin && (client.rank !== Rank.Moderator || !this.Config.collabvm.moderatorPermissions.bypassturn)) return;
-                        if (msgArr.length !== 3 || msgArr[2] !== this.Config.collabvm.node) return;
-                        this.clearTurns();
-                        break;
-                    case "18":
-                        // Rename user
-                        if (client.rank !== Rank.Admin && (client.rank !== Rank.Moderator || !this.Config.collabvm.moderatorPermissions.rename)) return;
-                        if (this.Config.auth.enabled) {
-                            client.sendMsg(guacutils.encode("chat", "", "Cannot rename users on a server that uses authentication."));
-                        }
-                        if (msgArr.length !== 4) return;
-                        var user = this.clients.find(c => c.username === msgArr[2]);
-                        if (!user) return;
-                        this.renameUser(user, msgArr[3]);
-                        break;
-                    case "19":
-                        // Get IP
-                        if (client.rank !== Rank.Admin && (client.rank !== Rank.Moderator || !this.Config.collabvm.moderatorPermissions.grabip)) return;
-                        if (msgArr.length !== 3) return;
-                        var user = this.clients.find(c => c.username === msgArr[2]);
-                        if (!user) return;
-                        client.sendMsg(guacutils.encode("admin", "19", msgArr[2], user.IP.address));
-                        break;
-                    case "20":
-                        // Steal turn
-                        if (client.rank !== Rank.Admin && (client.rank !== Rank.Moderator || !this.Config.collabvm.moderatorPermissions.bypassturn)) return;
-                        this.bypassTurn(client);
-                        break;
-                    case "21":
-                        // XSS
-                        if (client.rank !== Rank.Admin && (client.rank !== Rank.Moderator || !this.Config.collabvm.moderatorPermissions.xss)) return;
-                        if (msgArr.length !== 3) return;
-                        switch (client.rank) {
-                            case Rank.Admin:
-                                
-                                this.clients.forEach(c => c.sendMsg(guacutils.encode("chat", client.username!, msgArr[2])));
-                                
-                                this.ChatHistory.push({user: client.username!, msg: msgArr[2]});
-                                break;
-                            case Rank.Moderator:
-                                
-                                this.clients.filter(c => c.rank !== Rank.Admin).forEach(c => c.sendMsg(guacutils.encode("chat", client.username!, msgArr[2])));
-                                
-                                this.clients.filter(c => c.rank === Rank.Admin).forEach(c => c.sendMsg(guacutils.encode("chat", client.username!, Utilities.HTMLSanitize(msgArr[2]))));
-                                break;
-                        }
-                        break;
-                    case "22":
-                        // Toggle turns
-                        if (client.rank !== Rank.Admin) return;
-                        if (msgArr.length !== 3) return;
-                        switch (msgArr[2]) {
-                            case "0":
-                                this.clearTurns();
-                                this.turnsAllowed = false;
-                                break;
-                            case "1":
-                                this.turnsAllowed = true;
-                                break;
-                        }
-                        break;
-                    case "23":
-                        // Indefinite turn
-                        if (client.rank !== Rank.Admin) return;
-                        this.indefiniteTurn = client;
-                        this.TurnQueue = Queue.from([client, ...this.TurnQueue.toArray().filter(c=>c!==client)]);
-                        this.sendTurnUpdate();
-                        break;
-                    case "24":
-                        // Hide screen
-                        if (client.rank !== Rank.Admin) return;
-                        if (msgArr.length !== 3) return;
-                        switch (msgArr[2]) {
-                            case "0":
-                                    this.screenHidden = true;
-                                    this.clients.filter(c => c.rank == Rank.Unregistered).forEach(client => {
-                                        client.sendMsg(guacutils.encode("size", "0", "1024", "768"));
-                                        client.sendMsg(guacutils.encode("png", "0", "0", "0", "0", this.screenHiddenImg));
-                                        client.sendMsg(guacutils.encode("sync", Date.now().toString()));
-                                    });
-                                break;
-                            case "1":
-                                    this.screenHidden = false;
-                                    let displaySize = this.VM.GetDisplay().Size();
-                    
-                                    let encoded = await this.MakeRectData({
-                                        x: 0,
-                                        y: 0,
-                                        width: displaySize.width,
-                                        height: displaySize.height
-                                    });
-                    
+						if (msgArr.length !== 4 || msgArr[2] !== this.Config.collabvm.node) return;
+						var output = await this.VM.MonitorCommand(msgArr[3]);
+						client.sendMsg(guacutils.encode('admin', '2', String(output)));
+						break;
+					case '8':
+						// Restore
+						if (client.rank !== Rank.Admin && (client.rank !== Rank.Moderator || !this.Config.collabvm.moderatorPermissions.restore)) return;
+						this.VM.Reset();
+						break;
+					case '10':
+						// Reboot
+						if (client.rank !== Rank.Admin && (client.rank !== Rank.Moderator || !this.Config.collabvm.moderatorPermissions.reboot)) return;
+						if (msgArr.length !== 3 || msgArr[2] !== this.Config.collabvm.node) return;
+						this.VM.MonitorCommand('system_reset');
+						break;
+					case '12':
+						// Ban
+						if (client.rank !== Rank.Admin && (client.rank !== Rank.Moderator || !this.Config.collabvm.moderatorPermissions.ban)) return;
+						var user = this.clients.find((c) => c.username === msgArr[2]);
+						if (!user) return;
+						user.ban();
+					case '13':
+						// Force Vote
+						if (msgArr.length !== 3) return;
+						if (client.rank !== Rank.Admin && (client.rank !== Rank.Moderator || !this.Config.collabvm.moderatorPermissions.forcevote)) return;
+						if (!this.voteInProgress) return;
+						switch (msgArr[2]) {
+							case '1':
+								this.endVote(true);
+								break;
+							case '0':
+								this.endVote(false);
+								break;
+						}
+						break;
+					case '14':
+						// Mute
+						if (client.rank !== Rank.Admin && (client.rank !== Rank.Moderator || !this.Config.collabvm.moderatorPermissions.mute)) return;
+						if (msgArr.length !== 4) return;
+						var user = this.clients.find((c) => c.username === msgArr[2]);
+						if (!user) return;
+						var permamute;
+						switch (msgArr[3]) {
+							case '0':
+								permamute = false;
+								break;
+							case '1':
+								permamute = true;
+								break;
+							default:
+								return;
+						}
+						user.mute(permamute);
+						break;
+					case '15':
+						// Kick
+						if (client.rank !== Rank.Admin && (client.rank !== Rank.Moderator || !this.Config.collabvm.moderatorPermissions.kick)) return;
+						var user = this.clients.find((c) => c.username === msgArr[2]);
+						if (!user) return;
+						user.kick();
+						break;
+					case '16':
+						// End turn
+						if (client.rank !== Rank.Admin && (client.rank !== Rank.Moderator || !this.Config.collabvm.moderatorPermissions.bypassturn)) return;
+						if (msgArr.length !== 3) return;
+						var user = this.clients.find((c) => c.username === msgArr[2]);
+						if (!user) return;
+						this.endTurn(user);
+						break;
+					case '17':
+						// Clear turn queue
+						if (client.rank !== Rank.Admin && (client.rank !== Rank.Moderator || !this.Config.collabvm.moderatorPermissions.bypassturn)) return;
+						if (msgArr.length !== 3 || msgArr[2] !== this.Config.collabvm.node) return;
+						this.clearTurns();
+						break;
+					case '18':
+						// Rename user
+						if (client.rank !== Rank.Admin && (client.rank !== Rank.Moderator || !this.Config.collabvm.moderatorPermissions.rename)) return;
+						if (this.Config.auth.enabled) {
+							client.sendMsg(guacutils.encode('chat', '', 'Cannot rename users on a server that uses authentication.'));
+						}
+						if (msgArr.length !== 4) return;
+						var user = this.clients.find((c) => c.username === msgArr[2]);
+						if (!user) return;
+						this.renameUser(user, msgArr[3]);
+						break;
+					case '19':
+						// Get IP
+						if (client.rank !== Rank.Admin && (client.rank !== Rank.Moderator || !this.Config.collabvm.moderatorPermissions.grabip)) return;
+						if (msgArr.length !== 3) return;
+						var user = this.clients.find((c) => c.username === msgArr[2]);
+						if (!user) return;
+						client.sendMsg(guacutils.encode('admin', '19', msgArr[2], user.IP.address));
+						break;
+					case '20':
+						// Steal turn
+						if (client.rank !== Rank.Admin && (client.rank !== Rank.Moderator || !this.Config.collabvm.moderatorPermissions.bypassturn)) return;
+						this.bypassTurn(client);
+						break;
+					case '21':
+						// XSS
+						if (client.rank !== Rank.Admin && (client.rank !== Rank.Moderator || !this.Config.collabvm.moderatorPermissions.xss)) return;
+						if (msgArr.length !== 3) return;
+						switch (client.rank) {
+							case Rank.Admin:
+								this.clients.forEach((c) => c.sendMsg(guacutils.encode('chat', client.username!, msgArr[2])));
 
-                                    this.clients.forEach(async client => {
-                                        client.sendMsg(guacutils.encode("size", "0", displaySize.width.toString(), displaySize.height.toString()));
-                                        client.sendMsg(guacutils.encode("png", "0", "0", "0", "0", encoded));
-                                        client.sendMsg(guacutils.encode("sync", Date.now().toString()));
-                                    });
-                                break;
-                        }
-                        break;
-                        case "25":
-                            if (client.rank !== Rank.Admin || msgArr.length !== 3)
-                                return;
-                            this.clients.forEach(c => c.sendMsg(guacutils.encode("chat", "", msgArr[2])));
-                        break;
-                        
-                }
-                break;
+								this.ChatHistory.push({ user: client.username!, msg: msgArr[2] });
+								break;
+							case Rank.Moderator:
+								this.clients.filter((c) => c.rank !== Rank.Admin).forEach((c) => c.sendMsg(guacutils.encode('chat', client.username!, msgArr[2])));
 
-        }
-    }
+								this.clients.filter((c) => c.rank === Rank.Admin).forEach((c) => c.sendMsg(guacutils.encode('chat', client.username!, Utilities.HTMLSanitize(msgArr[2]))));
+								break;
+						}
+						break;
+					case '22':
+						// Toggle turns
+						if (client.rank !== Rank.Admin) return;
+						if (msgArr.length !== 3) return;
+						switch (msgArr[2]) {
+							case '0':
+								this.clearTurns();
+								this.turnsAllowed = false;
+								break;
+							case '1':
+								this.turnsAllowed = true;
+								break;
+						}
+						break;
+					case '23':
+						// Indefinite turn
+						if (client.rank !== Rank.Admin) return;
+						this.indefiniteTurn = client;
+						this.TurnQueue = Queue.from([client, ...this.TurnQueue.toArray().filter((c) => c !== client)]);
+						this.sendTurnUpdate();
+						break;
+					case '24':
+						// Hide screen
+						if (client.rank !== Rank.Admin) return;
+						if (msgArr.length !== 3) return;
+						switch (msgArr[2]) {
+							case '0':
+								this.screenHidden = true;
+								this.clients
+									.filter((c) => c.rank == Rank.Unregistered)
+									.forEach((client) => {
+										client.sendMsg(guacutils.encode('size', '0', '1024', '768'));
+										client.sendMsg(guacutils.encode('png', '0', '0', '0', '0', this.screenHiddenImg));
+										client.sendMsg(guacutils.encode('sync', Date.now().toString()));
+									});
+								break;
+							case '1':
+								this.screenHidden = false;
+								let displaySize = this.VM.GetDisplay().Size();
 
-    getUsernameList() : string[] {
-        var arr : string[] = [];
-        
-        this.clients.filter(c => c.username).forEach((c) => arr.push(c.username!));
-        return arr;
-    }
+								let encoded = await this.MakeRectData({
+									x: 0,
+									y: 0,
+									width: displaySize.width,
+									height: displaySize.height
+								});
 
-    renameUser(client : User, newName? : string) {
-        // This shouldn't need a ternary but it does for some reason
-        var hadName : boolean = client.username ? true : false;
-        var oldname : any;
-        if (hadName) oldname = client.username;
-        var status = "0";
-        if (!newName) {
-            client.assignGuestName(this.getUsernameList());
-        } else {
-            newName = newName.trim();
-            if (hadName && newName === oldname) {
-                
-                client.sendMsg(guacutils.encode("rename", "0", "0", client.username!, client.rank.toString()));
-                return;
-            }
-            if (this.getUsernameList().indexOf(newName) !== -1) {
-                client.assignGuestName(this.getUsernameList());
-                if(client.connectedToNode) {
-                    status = "1";
-                }
-            } else
-            if (!/^[a-zA-Z0-9\ \-\_\.]+$/.test(newName) || newName.length > 20 || newName.length < 3) {
-                client.assignGuestName(this.getUsernameList());
-                status = "2";
-            } else
-            if (this.Config.collabvm.usernameblacklist.indexOf(newName) !== -1) {
-                client.assignGuestName(this.getUsernameList());
-                status = "3";
-            } else client.username = newName;
-        }
-        
-        client.sendMsg(guacutils.encode("rename", "0", status, client.username!, client.rank.toString()));
-        if (hadName) {
-            this.logger.Info(`Rename ${client.IP.address} from ${oldname} to ${client.username}`);
-            this.clients.forEach((c) =>
-            
-            c.sendMsg(guacutils.encode("rename", "1", oldname, client.username!, client.rank.toString())));
-        } else {
-            this.logger.Info(`Rename ${client.IP.address} to ${client.username}`);
-            this.clients.forEach((c) =>
-            
-            c.sendMsg(guacutils.encode("adduser", "1", client.username!, client.rank.toString())));
-        }
-    }
+								this.clients.forEach(async (client) => {
+									client.sendMsg(guacutils.encode('size', '0', displaySize.width.toString(), displaySize.height.toString()));
+									client.sendMsg(guacutils.encode('png', '0', '0', '0', '0', encoded));
+									client.sendMsg(guacutils.encode('sync', Date.now().toString()));
+								});
+								break;
+						}
+						break;
+					case '25':
+						if (client.rank !== Rank.Admin || msgArr.length !== 3) return;
+						this.clients.forEach((c) => c.sendMsg(guacutils.encode('chat', '', msgArr[2])));
+						break;
+				}
+				break;
+		}
+	}
 
-    getAdduserMsg() : string {
-        var arr : string[] = ["adduser", this.clients.filter(c=>c.username).length.toString()];
-        
-        this.clients.filter(c=>c.username).forEach((c) => arr.push(c.username!, c.rank.toString()));
-        return guacutils.encode(...arr);
-    }
-    getChatHistoryMsg() : string {
-        var arr : string[] = ["chat"];
-        this.ChatHistory.forEach(c => arr.push(c.user, c.msg));
-        return guacutils.encode(...arr);
-    }
-    private sendTurnUpdate(client? : User) {
-        var turnQueueArr = this.TurnQueue.toArray();
-        var turntime;
-        if (this.indefiniteTurn === null) turntime = (this.TurnTime * 1000);
-        else turntime = 9999999999;
-        var arr = ["turn", turntime.toString(), this.TurnQueue.size.toString()];
-        // @ts-ignore
-        this.TurnQueue.forEach((c) => arr.push(c.username));
-        var currentTurningUser = this.TurnQueue.peek();
-        if (client) {
-            client.sendMsg(guacutils.encode(...arr));
-            return;
-        }
-        this.clients.filter(c => (c !== currentTurningUser && c.connectedToNode)).forEach((c) => {
-            if (turnQueueArr.indexOf(c) !== -1) {
-                var time;
-                if (this.indefiniteTurn === null) time = ((this.TurnTime * 1000) + ((turnQueueArr.indexOf(c) - 1) * this.Config.collabvm.turnTime * 1000));
-                else time = 9999999999;
-                c.sendMsg(guacutils.encode(...arr, time.toString()));
-            } else {
-                c.sendMsg(guacutils.encode(...arr));
-            }
-        });
-        if (currentTurningUser)
-            currentTurningUser.sendMsg(guacutils.encode(...arr));
-    }
-    private nextTurn() {
-        clearInterval(this.TurnInterval);
-        if (this.TurnQueue.size === 0) {
-        } else {
-            this.TurnTime = this.Config.collabvm.turnTime;
-            this.TurnInterval = setInterval(() => this.turnInterval(), 1000);
-        }
-        this.sendTurnUpdate();
-    }
+	getUsernameList(): string[] {
+		var arr: string[] = [];
 
-    clearTurns() {
-        clearInterval(this.TurnInterval);
-        this.TurnQueue.clear();
-        this.sendTurnUpdate();
-    }
+		this.clients.filter((c) => c.username).forEach((c) => arr.push(c.username!));
+		return arr;
+	}
 
-    bypassTurn(client : User) {
-        var a = this.TurnQueue.toArray().filter(c => c !== client);
-        this.TurnQueue = Queue.from([client, ...a]);
-        this.nextTurn();
-    }
+	renameUser(client: User, newName?: string) {
+		// This shouldn't need a ternary but it does for some reason
+		var hadName: boolean = client.username ? true : false;
+		var oldname: any;
+		if (hadName) oldname = client.username;
+		var status = '0';
+		if (!newName) {
+			client.assignGuestName(this.getUsernameList());
+		} else {
+			newName = newName.trim();
+			if (hadName && newName === oldname) {
+				client.sendMsg(guacutils.encode('rename', '0', '0', client.username!, client.rank.toString()));
+				return;
+			}
+			if (this.getUsernameList().indexOf(newName) !== -1) {
+				client.assignGuestName(this.getUsernameList());
+				if (client.connectedToNode) {
+					status = '1';
+				}
+			} else if (!/^[a-zA-Z0-9\ \-\_\.]+$/.test(newName) || newName.length > 20 || newName.length < 3) {
+				client.assignGuestName(this.getUsernameList());
+				status = '2';
+			} else if (this.Config.collabvm.usernameblacklist.indexOf(newName) !== -1) {
+				client.assignGuestName(this.getUsernameList());
+				status = '3';
+			} else client.username = newName;
+		}
 
-    endTurn(client : User) {
-        var hasTurn = (this.TurnQueue.peek() === client);
-        this.TurnQueue = Queue.from(this.TurnQueue.toArray().filter(c => c !== client));
-        if (hasTurn) this.nextTurn();
-        else this.sendTurnUpdate();
-    }
+		client.sendMsg(guacutils.encode('rename', '0', status, client.username!, client.rank.toString()));
+		if (hadName) {
+			this.logger.Info(`Rename ${client.IP.address} from ${oldname} to ${client.username}`);
+			this.clients.forEach((c) => c.sendMsg(guacutils.encode('rename', '1', oldname, client.username!, client.rank.toString())));
+		} else {
+			this.logger.Info(`Rename ${client.IP.address} to ${client.username}`);
+			this.clients.forEach((c) => c.sendMsg(guacutils.encode('adduser', '1', client.username!, client.rank.toString())));
+		}
+	}
 
-    private turnInterval() {
-        if (this.indefiniteTurn !== null) return;
-        this.TurnTime--;
-        if (this.TurnTime < 1) {
-            this.TurnQueue.dequeue();
-            this.nextTurn();
-        }
-    }
+	getAdduserMsg(): string {
+		var arr: string[] = ['adduser', this.clients.filter((c) => c.username).length.toString()];
 
-    private async OnDisplayRectangle(rect: Rect) {
-        let encodedb64 = await this.MakeRectData(rect);
-       
-        this.clients.filter(c => c.connectedToNode || c.viewMode == 1).forEach(c => {
-            if (this.screenHidden && c.rank == Rank.Unregistered) return;
-            c.sendMsg(guacutils.encode("png", "0", "0", rect.x.toString(), rect.y.toString(), encodedb64));
-            c.sendMsg(guacutils.encode("sync", Date.now().toString()));
-        });
-    }
+		this.clients.filter((c) => c.username).forEach((c) => arr.push(c.username!, c.rank.toString()));
+		return guacutils.encode(...arr);
+	}
 
-    private OnDisplayResized(size : Size) {
-        this.clients.filter(c => c.connectedToNode || c.viewMode == 1).forEach(c => {
-            if (this.screenHidden && c.rank == Rank.Unregistered) return;
-            c.sendMsg(guacutils.encode("size", "0", size.width.toString(), size.height.toString()))
-        });
-    }
+	getChatHistoryMsg(): string {
+		var arr: string[] = ['chat'];
+		this.ChatHistory.forEach((c) => arr.push(c.user, c.msg));
+		return guacutils.encode(...arr);
+	}
 
-    private async SendFullScreenWithSize(client: User) {
-        let display = this.VM.GetDisplay();
-        let displaySize = display.Size();
+	private sendTurnUpdate(client?: User) {
+		var turnQueueArr = this.TurnQueue.toArray();
+		var turntime;
+		if (this.indefiniteTurn === null) turntime = this.TurnTime * 1000;
+		else turntime = 9999999999;
+		var arr = ['turn', turntime.toString(), this.TurnQueue.size.toString()];
+		// @ts-ignore
+		this.TurnQueue.forEach((c) => arr.push(c.username));
+		var currentTurningUser = this.TurnQueue.peek();
+		if (client) {
+			client.sendMsg(guacutils.encode(...arr));
+			return;
+		}
+		this.clients
+			.filter((c) => c !== currentTurningUser && c.connectedToNode)
+			.forEach((c) => {
+				if (turnQueueArr.indexOf(c) !== -1) {
+					var time;
+					if (this.indefiniteTurn === null) time = this.TurnTime * 1000 + (turnQueueArr.indexOf(c) - 1) * this.Config.collabvm.turnTime * 1000;
+					else time = 9999999999;
+					c.sendMsg(guacutils.encode(...arr, time.toString()));
+				} else {
+					c.sendMsg(guacutils.encode(...arr));
+				}
+			});
+		if (currentTurningUser) currentTurningUser.sendMsg(guacutils.encode(...arr));
+	}
+	private nextTurn() {
+		clearInterval(this.TurnInterval);
+		if (this.TurnQueue.size === 0) {
+		} else {
+			this.TurnTime = this.Config.collabvm.turnTime;
+			this.TurnInterval = setInterval(() => this.turnInterval(), 1000);
+		}
+		this.sendTurnUpdate();
+	}
 
-        let encoded = await this.MakeRectData({ 
-            x: 0,
-            y: 0,
-            width: displaySize.width,
-            height: displaySize.height
-        });
+	clearTurns() {
+		clearInterval(this.TurnInterval);
+		this.TurnQueue.clear();
+		this.sendTurnUpdate();
+	}
 
-        client.sendMsg(guacutils.encode("size", "0", displaySize.width.toString(), displaySize.height.toString()));
-        client.sendMsg(guacutils.encode("png", "0", "0", "0", "0", encoded));
-    }
+	bypassTurn(client: User) {
+		var a = this.TurnQueue.toArray().filter((c) => c !== client);
+		this.TurnQueue = Queue.from([client, ...a]);
+		this.nextTurn();
+	}
 
-    private async MakeRectData(rect: Rect) {
-        let display = this.VM.GetDisplay();
-        let displaySize = display.Size();
+	endTurn(client: User) {
+		var hasTurn = this.TurnQueue.peek() === client;
+		this.TurnQueue = Queue.from(this.TurnQueue.toArray().filter((c) => c !== client));
+		if (hasTurn) this.nextTurn();
+		else this.sendTurnUpdate();
+	}
 
-        let encoded = await EncodeJpeg(display.Buffer(), displaySize, rect);
+	private turnInterval() {
+		if (this.indefiniteTurn !== null) return;
+		this.TurnTime--;
+		if (this.TurnTime < 1) {
+			this.TurnQueue.dequeue();
+			this.nextTurn();
+		}
+	}
 
-        return encoded.toString('base64');
-    }
+	private async OnDisplayRectangle(rect: Rect) {
+		let encodedb64 = await this.MakeRectData(rect);
 
-    getThumbnail() : Promise<string> {
-        return new Promise(async (res, rej) => {
-            let display = this.VM.GetDisplay();
-            if(display == null)
-                return;
+		this.clients
+			.filter((c) => c.connectedToNode || c.viewMode == 1)
+			.forEach((c) => {
+				if (this.screenHidden && c.rank == Rank.Unregistered) return;
+				c.sendMsg(guacutils.encode('png', '0', '0', rect.x.toString(), rect.y.toString(), encodedb64));
+				c.sendMsg(guacutils.encode('sync', Date.now().toString()));
+			});
+	}
 
-            // TODO: pass custom options to Sharp.resize() probably
-            let out = await sharp(display.Buffer(), {raw: GetRawSharpOptions(display.Size())})
-                .resize(400, 300, { fit: 'fill' })
-                .toFormat('jpeg')
-                .toBuffer();
+	private OnDisplayResized(size: Size) {
+		this.clients
+			.filter((c) => c.connectedToNode || c.viewMode == 1)
+			.forEach((c) => {
+				if (this.screenHidden && c.rank == Rank.Unregistered) return;
+				c.sendMsg(guacutils.encode('size', '0', size.width.toString(), size.height.toString()));
+			});
+	}
 
-            res(out.toString('base64'));
-        });
-    }
+	private async SendFullScreenWithSize(client: User) {
+		let display = this.VM.GetDisplay();
+		let displaySize = display.Size();
 
-    startVote() {
-        if (this.voteInProgress) return;
-        this.voteInProgress = true;
-        this.clients.forEach(c => c.sendMsg(guacutils.encode("vote", "0")));
-        this.voteTime = this.Config.collabvm.voteTime;
-        this.voteInterval = setInterval(() => {
-            this.voteTime--;
-            if (this.voteTime < 1) {
-                this.endVote();
-            }
-        }, 1000);
-    }
+		let encoded = await this.MakeRectData({
+			x: 0,
+			y: 0,
+			width: displaySize.width,
+			height: displaySize.height
+		});
 
-    endVote(result? : boolean) {
-        if (!this.voteInProgress) return;
-        this.voteInProgress = false;
-        clearInterval(this.voteInterval);
-        var count = this.getVoteCounts();
-        this.clients.forEach((c) => c.sendMsg(guacutils.encode("vote", "2")));
-        if (result === true || (result === undefined && count.yes >= count.no)) {
-            this.clients.forEach(c => c.sendMsg(guacutils.encode("chat", "", "The vote to reset the VM has won.")));
-            this.VM.Reset();
-        } else {
-            this.clients.forEach(c => c.sendMsg(guacutils.encode("chat", "", "The vote to reset the VM has lost.")));
-        }
-        this.clients.forEach(c => {
-            c.IP.vote = null;
-        });
-        this.voteCooldown = this.Config.collabvm.voteCooldown;
-        this.voteCooldownInterval = setInterval(() => {
-            this.voteCooldown--;
-            if (this.voteCooldown < 1)
-                clearInterval(this.voteCooldownInterval);
-        }, 1000);
-    }
+		client.sendMsg(guacutils.encode('size', '0', displaySize.width.toString(), displaySize.height.toString()));
+		client.sendMsg(guacutils.encode('png', '0', '0', '0', '0', encoded));
+	}
 
-    sendVoteUpdate(client? : User) {
-        if (!this.voteInProgress) return;
-        var count = this.getVoteCounts();
-        var msg = guacutils.encode("vote", "1", (this.voteTime * 1000).toString(), count.yes.toString(), count.no.toString());
-        if (client)
-            client.sendMsg(msg);
-        else
-            this.clients.forEach((c) => c.sendMsg(msg));
-    }
+	private async MakeRectData(rect: Rect) {
+		let display = this.VM.GetDisplay();
+		let displaySize = display.Size();
 
-    getVoteCounts() : {yes:number,no:number} {
-        var yes = 0;
-        var no = 0;
-        IPDataManager.ForEachIPData((c) => {
-            if (c.vote === true) yes++;
-            if (c.vote === false) no++;
-        });
-        return {yes:yes,no:no};
-    }
+		let encoded = await EncodeJpeg(display.Buffer(), displaySize, rect);
+
+		return encoded.toString('base64');
+	}
+
+	getThumbnail(): Promise<string> {
+		return new Promise(async (res, rej) => {
+			let display = this.VM.GetDisplay();
+			if (display == null) return;
+
+			// TODO: pass custom options to Sharp.resize() probably
+			let out = await sharp(display.Buffer(), { raw: GetRawSharpOptions(display.Size()) })
+				.resize(400, 300, { fit: 'fill' })
+				.toFormat('jpeg')
+				.toBuffer();
+
+			res(out.toString('base64'));
+		});
+	}
+
+	startVote() {
+		if (this.voteInProgress) return;
+		this.voteInProgress = true;
+		this.clients.forEach((c) => c.sendMsg(guacutils.encode('vote', '0')));
+		this.voteTime = this.Config.collabvm.voteTime;
+		this.voteInterval = setInterval(() => {
+			this.voteTime--;
+			if (this.voteTime < 1) {
+				this.endVote();
+			}
+		}, 1000);
+	}
+
+	endVote(result?: boolean) {
+		if (!this.voteInProgress) return;
+		this.voteInProgress = false;
+		clearInterval(this.voteInterval);
+		var count = this.getVoteCounts();
+		this.clients.forEach((c) => c.sendMsg(guacutils.encode('vote', '2')));
+		if (result === true || (result === undefined && count.yes >= count.no)) {
+			this.clients.forEach((c) => c.sendMsg(guacutils.encode('chat', '', 'The vote to reset the VM has won.')));
+			this.VM.Reset();
+		} else {
+			this.clients.forEach((c) => c.sendMsg(guacutils.encode('chat', '', 'The vote to reset the VM has lost.')));
+		}
+		this.clients.forEach((c) => {
+			c.IP.vote = null;
+		});
+		this.voteCooldown = this.Config.collabvm.voteCooldown;
+		this.voteCooldownInterval = setInterval(() => {
+			this.voteCooldown--;
+			if (this.voteCooldown < 1) clearInterval(this.voteCooldownInterval);
+		}, 1000);
+	}
+
+	sendVoteUpdate(client?: User) {
+		if (!this.voteInProgress) return;
+		var count = this.getVoteCounts();
+		var msg = guacutils.encode('vote', '1', (this.voteTime * 1000).toString(), count.yes.toString(), count.no.toString());
+		if (client) client.sendMsg(msg);
+		else this.clients.forEach((c) => c.sendMsg(msg));
+	}
+
+	getVoteCounts(): VoteTally {
+		let yes = 0;
+		let no = 0;
+		IPDataManager.ForEachIPData((c) => {
+			if (c.vote === true) yes++;
+			if (c.vote === false) no++;
+		});
+		return { yes: yes, no: no };
+	}
 }

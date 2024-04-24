@@ -1,12 +1,11 @@
 import { Logger } from '@cvmts/shared';
 import { Rank, User } from './User.js';
 
-
 export default class AuthManager {
 	apiEndpoint: string;
 	secretKey: string;
 
-	private logger = new Logger("CVMTS.AuthMan");
+	private logger = new Logger('CVMTS.AuthMan');
 
 	constructor(apiEndpoint: string, secretKey: string) {
 		this.apiEndpoint = apiEndpoint;
@@ -14,7 +13,7 @@ export default class AuthManager {
 	}
 
 	async Authenticate(token: string, user: User): Promise<JoinResponse> {
-		var response = await fetch(this.apiEndpoint + '/api/v1/join', {
+		let response = await fetch(this.apiEndpoint + '/api/v1/join', {
 			method: 'POST',
 			headers: {
 				'Content-Type': 'application/json'
@@ -26,7 +25,7 @@ export default class AuthManager {
 			})
 		});
 
-		var json = (await response.json()) as JoinResponse;
+		let json = (await response.json()) as JoinResponse;
 
 		if (!json.success) {
 			this.logger.Error(`Failed to query auth server: ${json.error}`);

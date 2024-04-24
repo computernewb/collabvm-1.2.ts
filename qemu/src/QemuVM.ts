@@ -30,8 +30,6 @@ const kMaxFailCount = 5;
 // TODO: This should be added to QemuVmDefinition and the below export removed
 let gVMShouldSnapshot = true;
 
-
-
 export function setSnapshot(val: boolean) {
 	gVMShouldSnapshot = val;
 }
@@ -68,10 +66,9 @@ export class QemuVM extends EventEmitter {
 
 		// build additional command line statements to enable qmp/vnc over unix sockets
 		// FIXME: Still use TCP if on Windows.
-		if(!this.addedAdditionalArguments) {
+		if (!this.addedAdditionalArguments) {
 			cmd += ' -no-shutdown';
-			if(gVMShouldSnapshot)
-				cmd += ' -snapshot';
+			if (gVMShouldSnapshot) cmd += ' -snapshot';
 			cmd += ` -qmp unix:${this.GetQmpPath()},server,wait -vnc unix:${this.GetVncPath()}`;
 			this.definition.command = cmd;
 			this.addedAdditionalArguments = true;
@@ -183,7 +180,7 @@ export class QemuVM extends EventEmitter {
 			if (self.qmpConnected) {
 				await self.DisconnectQmp();
 			}
-			
+
 			self.DisconnectDisplay();
 
 			if (self.state != VMState.Stopping) {
@@ -275,16 +272,13 @@ export class QemuVM extends EventEmitter {
 
 	private async DisconnectQmp() {
 		if (this.qmpConnected) return;
-		if(this.qmpInstance == null)
-			return;
+		if (this.qmpInstance == null) return;
 
 		this.qmpConnected = false;
 		this.qmpInstance.end();
 		this.qmpInstance = null;
 		try {
 			await unlink(this.GetQmpPath());
-		} catch(err) {
-			
-		}
+		} catch (err) {}
 	}
 }

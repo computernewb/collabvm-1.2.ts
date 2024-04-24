@@ -1,4 +1,4 @@
-import { Size, Rect } from "@cvmts/shared";
+import { Size, Rect } from '@cvmts/shared';
 
 export function BatchRects(size: Size, rects: Array<Rect>): Rect {
 	var mergedX = size.width;

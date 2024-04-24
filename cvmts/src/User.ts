@@ -26,7 +26,7 @@ export class User {
 	TurnRateLimit: RateLimiter;
 	VoteRateLimit: RateLimiter;
 
-    private logger = new Logger("CVMTS.User");
+	private logger = new Logger('CVMTS.User');
 
 	constructor(ws: WebSocket, ip: IPData, config: IConfig, username?: string, node?: string) {
 		this.IP = ip;
@@ -59,6 +59,7 @@ export class User {
 		this.VoteRateLimit = new RateLimiter(3, 3);
 		this.VoteRateLimit.on('limit', () => this.closeConnection());
 	}
+	
 	assignGuestName(existingUsers: string[]): string {
 		var username;
 		do {
@@ -67,25 +68,30 @@ export class User {
 		this.username = username;
 		return username;
 	}
+
 	sendNop() {
 		this.socket.send('3.nop;');
 	}
+
 	sendMsg(msg: string | Buffer) {
 		if (this.socket.readyState !== this.socket.OPEN) return;
 		clearInterval(this.nopSendInterval);
 		this.nopSendInterval = setInterval(() => this.sendNop(), 5000);
 		this.socket.send(msg);
 	}
+
 	private onNoMsg() {
 		this.sendNop();
 		this.nopRecieveTimeout = setTimeout(() => {
 			this.closeConnection();
 		}, 3000);
 	}
+
 	closeConnection() {
 		this.socket.send(guacutils.encode('disconnect'));
 		this.socket.close();
 	}
+
 	onMsgSent() {
 		if (!this.Config.collabvm.automute.enabled) return;
 		// rate limit guest and unregistered chat messages, but not staff ones
@@ -99,6 +105,7 @@ export class User {
 				break;
 		}
 	}
+
 	mute(permanent: boolean) {
 		this.IP.muted = true;
 		this.sendMsg(guacutils.encode('chat', '', `You have been muted${permanent ? '' : ` for ${this.Config.collabvm.tempMuteTime} seconds`}.`));

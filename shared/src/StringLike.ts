@@ -1,4 +1,3 @@
-
 // TODO: `Object` has a toString(), but we should probably gate that off
 /// Interface for things that can be turned into strings
 export interface ToStringable {
