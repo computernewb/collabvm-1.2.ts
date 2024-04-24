@@ -116,6 +116,10 @@ export class QemuDisplay extends EventEmitter {
 		this.displayVnc.disconnect();
 	}
 
+	Connected() {
+		return this.displayVnc.connected;
+	}
+
 	Buffer(): Buffer {
 		return this.displayVnc.fb;
 	}

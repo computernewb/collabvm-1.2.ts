@@ -17,8 +17,7 @@ import path from 'node:path';
 import AuthManager from './AuthManager.js';
 import { Size, Rect, Logger } from '@cvmts/shared';
 
-import sharp from 'sharp';
-import Piscina from 'piscina';
+import { JPEGEncoder } from './JPEGEncoder.js';
 
 // Instead of strange hacks we can just use nodejs provided
 // import.meta properties, which have existed since LTS if not before
@@ -37,43 +36,8 @@ type VoteTally = {
 	no: number;
 };
 
-// A good balance. TODO: Configurable?
-const kJpegQuality = 35;
 
-// this returns appropiate Sharp options to deal with the framebuffer
-function GetRawSharpOptions(size: Size): sharp.CreateRaw {
-	return {
-		width: size.width,
-		height: size.height,
-		channels: 4
-	};
-}
 
-// Thread pool for doing JPEG encoding for rects.
-const TheJpegEncoderPool = new Piscina({
-	filename: path.join(import.meta.dirname + '/JPEGEncoderWorker.js'),
-	minThreads: 4,
-	maxThreads: 4
-});
-
-async function EncodeJpeg(canvas: Buffer, displaySize: Size, rect: Rect): Promise<Buffer> {
-	let offset = (rect.y * displaySize.width + rect.x) * 4;
-
-	let res = await TheJpegEncoderPool.run({
-		buffer: canvas.subarray(offset),
-		width: rect.width,
-		height: rect.height,
-		stride: displaySize.width,
-		quality: kJpegQuality
-	});
-
-	// TODO: There's probably (definitely) a better way to fix this
-	if (res == undefined) return Buffer.from([]);
-
-	// have to manually turn it back into a buffer because
-	// Piscina for some reason turns it into a Uint8Array
-	return Buffer.from(res);
-}
 
 export default class WSServer {
 	private Config: IConfig;
@@ -930,24 +894,17 @@ export default class WSServer {
 		let display = this.VM.GetDisplay();
 		let displaySize = display.Size();
 
-		let encoded = await EncodeJpeg(display.Buffer(), displaySize, rect);
+		let encoded = await JPEGEncoder.EncodeJpeg(display.Buffer(), displaySize, rect);
 
 		return encoded.toString('base64');
 	}
 
-	getThumbnail(): Promise<string> {
-		return new Promise(async (res, rej) => {
-			let display = this.VM.GetDisplay();
-			if (display == null) return;
+	async getThumbnail(): Promise<string> {
+		let display = this.VM.GetDisplay();
+		if (!display.Connected()) throw new Error('VM display is not connected');
 
-			// TODO: pass custom options to Sharp.resize() probably
-			let out = await sharp(display.Buffer(), { raw: GetRawSharpOptions(display.Size()) })
-				.resize(400, 300, { fit: 'fill' })
-				.toFormat('jpeg')
-				.toBuffer();
-
-			res(out.toString('base64'));
-		});
+		let buf = await JPEGEncoder.EncodeThumbnail(display.Buffer(), display.Size());
+		return buf.toString('base64');
 	}
 
 	startVote() {

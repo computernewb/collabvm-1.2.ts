@@ -9,7 +9,7 @@ export default async (opts: any) => {
 			height: opts.height,
 			subsampling: jpegTurbo.SAMP_422,
 			stride: opts.stride,
-			quality: opts.quality
+			quality: opts.quality || 75
 		});
 
 		return Piscina.move(res);
