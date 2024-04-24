@@ -66,7 +66,6 @@ __metadata:
     "@types/ws": "npm:^8.5.5"
     execa: "npm:^8.0.1"
     mnemonist: "npm:^0.39.5"
-    parcel: "npm:^2.12.0"
     piscina: "npm:^4.4.0"
     prettier: "npm:^3.2.5"
     sharp: "npm:^0.33.3"

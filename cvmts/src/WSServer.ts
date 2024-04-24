@@ -44,7 +44,8 @@ function GetRawSharpOptions(size: Size): sharp.CreateRaw {
     }
 }
 
-const kJpegPool = new Piscina({
+// Thread pool for doing JPEG encoding for rects.
+const TheJpegEncoderPool = new Piscina({
    filename: path.join(import.meta.dirname + '/JPEGEncoderWorker.js'),
    minThreads: 4,
    maxThreads: 4
@@ -53,13 +54,17 @@ const kJpegPool = new Piscina({
 async function EncodeJpeg(canvas: Buffer, displaySize: Size, rect: Rect): Promise<Buffer> {
 	let offset = (rect.y * displaySize.width + rect.x) * 4;
 
-    let res = await kJpegPool.run({
+    let res = await TheJpegEncoderPool.run({
         buffer: canvas.subarray(offset),
         width: rect.width,
         height: rect.height,
         stride: displaySize.width,
         quality: kJpegQuality
     });
+
+	// TODO: There's probably (definitely) a better way to fix this
+    if(res == undefined)
+	    return Buffer.from([]);
 
 
     // have to manually turn it back into a buffer because
