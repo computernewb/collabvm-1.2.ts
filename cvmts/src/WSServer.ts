@@ -36,9 +36,6 @@ type VoteTally = {
 	no: number;
 };
 
-
-
-
 export default class WSServer {
 	private Config: IConfig;
 
@@ -489,18 +486,35 @@ export default class WSServer {
 				switch (msgArr[1]) {
 					case '1':
 						if (!this.voteInProgress) {
+							if (this.Config.auth.enabled && client.rank === Rank.Unregistered && !this.Config.auth.guestPermissions.callForReset) {
+								client.sendMsg(guacutils.encode('chat', '', 'You need to login to do that.'));
+								return;
+							}
+
 							if (this.voteCooldown !== 0) {
 								client.sendMsg(guacutils.encode('vote', '3', this.voteCooldown.toString()));
 								return;
 							}
 							this.startVote();
 							this.clients.forEach((c) => c.sendMsg(guacutils.encode('chat', '', `${client.username} has started a vote to reset the VM.`)));
-						} else if (client.IP.vote !== true) this.clients.forEach((c) => c.sendMsg(guacutils.encode('chat', '', `${client.username} has voted yes.`)));
+						}
+						if (this.Config.auth.enabled && client.rank === Rank.Unregistered && !this.Config.auth.guestPermissions.vote) {
+							client.sendMsg(guacutils.encode('chat', '', 'You need to login to do that.'));
+							return;
+						} else if (client.IP.vote !== true) {
+							this.clients.forEach((c) => c.sendMsg(guacutils.encode('chat', '', `${client.username} has voted yes.`)));
+						}
 						client.IP.vote = true;
 						break;
 					case '0':
 						if (!this.voteInProgress) return;
-						if (client.IP.vote !== false) this.clients.forEach((c) => c.sendMsg(guacutils.encode('chat', '', `${client.username} has voted no.`)));
+						if (this.Config.auth.enabled && client.rank === Rank.Unregistered && !this.Config.auth.guestPermissions.vote) {
+							client.sendMsg(guacutils.encode('chat', '', 'You need to login to do that.'));
+							return;
+						} 
+						if (client.IP.vote !== false) {
+							this.clients.forEach((c) => c.sendMsg(guacutils.encode('chat', '', `${client.username} has voted no.`)));
+						}
 						client.IP.vote = false;
 						break;
 				}

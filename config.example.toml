@@ -21,6 +21,9 @@ secretKey = "hunter2"
 [auth.guestPermissions]
 chat = true
 turn = false
+callForReset = false
+vote = true
+
 
 [vm]
 qemuArgs = "qemu-system-x86_64"

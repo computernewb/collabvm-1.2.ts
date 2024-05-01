@@ -15,6 +15,8 @@ export default interface IConfig {
 		guestPermissions: {
 			chat: boolean;
 			turn: boolean;
+			callForReset: boolean;
+			vote: boolean;
 		};
 	};
 	vm: {
