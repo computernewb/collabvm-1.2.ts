@@ -207,21 +207,26 @@ export class QemuVM extends EventEmitter {
 		if (!this.qmpConnected) {
 			self.qmpInstance = new QmpClient();
 
-			self.qmpInstance.on('close', async () => {
+			let onQmpError = async (err: Error|undefined) => {
 				self.qmpConnected = false;
 
 				// If we aren't stopping, then we do actually need to care QMP disconnected
 				if (self.state != VMState.Stopping) {
+					//if(err !== undefined) // This doesn't show anything useful or maybe I'm just stupid idk
+					//	self.VMLog().Error(`Error: ${err!}`)
 					if (self.qmpFailCount++ < kMaxFailCount) {
-						this.VMLog().Error(`Failed to connect to QMP ${self.qmpFailCount} times`);
+						self.VMLog().Error(`Failed to connect to QMP ${self.qmpFailCount} times.`);
 						await Shared.Sleep(500);
 						await self.ConnectQmp();
 					} else {
-						this.VMLog().Error(`Failed to connect to QMP ${self.qmpFailCount} times, giving up`);
+						self.VMLog().Error(`Reached max retries, giving up.`);
 						await self.Stop();
 					}
 				}
-			});
+			};
+
+			self.qmpInstance.on('close', onQmpError);
+			self.qmpInstance.on('error', onQmpError);
 
 			self.qmpInstance.on('event', async (ev) => {
 				switch (ev.event) {

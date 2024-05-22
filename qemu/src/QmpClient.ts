@@ -22,6 +22,12 @@ export default class QmpClient extends Socket {
 	private commandEntries: QmpCommandEntry[] = [];
 	private lastID = 0;
 
+	constructor() {
+		super();
+
+		this.assignHandlers();
+	}
+
 	private ExecuteSync(command: string, args: any | null, callback: QmpCallback | null) {
 		let cmd: QmpCommandEntry = {
 			callback: callback,
@@ -65,71 +71,60 @@ export default class QmpClient extends Socket {
 	}
 
 	// this can probably be made async
-	private ConnectImpl() {
+	private assignHandlers() {
 		let self = this;
 
-		this.once('connect', () => {
-			this.removeAllListeners('error');
-		});
+		this.on('connect', () => {
+			// this should be more correct?
+			this.once('data', (data) => {
+				// Handshake QMP with the server.
+				self.qmpHandshakeData = JSON.parse(data.toString('utf8')).QMP;
+				self.Handshake(() => {
+					// Now ready to parse QMP responses/events.
+					self.pipe(split(JSON.parse))
+						.on('data', (json: any) => {
+							if (json == null) return self.end();
 
-		this.once('error', (err) => {
-			// just rethrow lol
-			//throw err;
+							if (json.return || json.error) {
+								// Our handshake has a spurious return because we never assign it an ID,
+								// and it is gathered by this pipe for some reason I'm not quite sure about.
+								// So, just for safety's sake, don't process any return objects which don't have an ID attached to them.
+								if (json.id == null) return;
 
-			console.log('you have pants: rules,', err);
-		});
+								let callbackEntry = this.commandEntries.find((entry) => entry.id === json.id);
+								let error: Error | null = json.error ? new Error(json.error.desc) : null;
 
-		this.once('data', (data) => {
-			// Handshake QMP with the server.
-			self.qmpHandshakeData = JSON.parse(data.toString('utf8')).QMP;
-			self.Handshake(() => {
-				// Now ready to parse QMP responses/events.
-				self.pipe(split(JSON.parse))
-					.on('data', (json: any) => {
-						if (json == null) return self.end();
+								// we somehow didn't find a callback entry for this response.
+								// I don't know how. Techinically not an error..., but I guess you're not getting a reponse to whatever causes this to happen
+								if (callbackEntry == null) return;
 
-						if (json.return || json.error) {
-							// Our handshake has a spurious return because we never assign it an ID,
-							// and it is gathered by this pipe for some reason I'm not quite sure about.
-							// So, just for safety's sake, don't process any return objects which don't have an ID attached to them.
-							if (json.id == null) return;
+								if (callbackEntry?.callback) callbackEntry.callback(error, json.return);
 
-							let callbackEntry = this.commandEntries.find((entry) => entry.id === json.id);
-							let error: Error | null = json.error ? new Error(json.error.desc) : null;
-
-							// we somehow didn't find a callback entry for this response.
-							// I don't know how. Techinically not an error..., but I guess you're not getting a reponse to whatever causes this to happen
-							if (callbackEntry == null) return;
-
-							if (callbackEntry?.callback) callbackEntry.callback(error, json.return);
-
-							// Remove the completed callback entry.
-							this.commandEntries.slice(this.commandEntries.indexOf(callbackEntry));
-						} else if (json.event) {
-							this.emit('event', json);
-						}
-					})
-					.on('error', () => {
-						// Give up.
-						return self.end();
-					});
-				this.emit('qmp-ready');
+								// Remove the completed callback entry.
+								this.commandEntries.slice(this.commandEntries.indexOf(callbackEntry));
+							} else if (json.event) {
+								this.emit('event', json);
+							}
+						})
+						.on('error', () => {
+							// Give up.
+							return self.end();
+						});
+					this.emit('qmp-ready');
+				});
 			});
 		});
 
-		this.once('close', () => {
+		this.on('close', () => {
 			this.end();
-			this.removeAllListeners('data'); // wow. good job bud. cool memory leak
 		});
 	}
 
 	Connect(host: string, port: number) {
 		super.connect(port, host);
-		this.ConnectImpl();
 	}
 
 	ConnectUNIX(path: string) {
 		super.connect(path);
-		this.ConnectImpl();
 	}
 }
