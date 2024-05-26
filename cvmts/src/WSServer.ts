@@ -294,32 +294,38 @@ export default class WSServer {
 					client.sendMsg(guacutils.encode('login', '0', 'You must connect to the VM before logging in.'));
 					return;
 				}
-				var res = await this.auth!.Authenticate(msgArr[1], client);
-				if (res.clientSuccess) {
-					this.logger.Info(`${client.IP.address} logged in as ${res.username}`);
-					client.sendMsg(guacutils.encode('login', '1'));
-					var old = this.clients.find((c) => c.username === res.username);
-					if (old) {
-						// kick() doesnt wait until the user is actually removed from the list and itd be anal to make it do that
-						// so we call connectionClosed manually here. When it gets called on kick(), it will return because the user isn't in the list
-						this.connectionClosed(old);
-						await old.kick();
+				try {
+					let res = await this.auth!.Authenticate(msgArr[1], client);
+					if (res.clientSuccess) {
+						this.logger.Info(`${client.IP.address} logged in as ${res.username}`);
+						client.sendMsg(guacutils.encode('login', '1'));
+						let old = this.clients.find((c) => c.username === res.username);
+						if (old) {
+							// kick() doesnt wait until the user is actually removed from the list and itd be anal to make it do that
+							// so we call connectionClosed manually here. When it gets called on kick(), it will return because the user isn't in the list
+							this.connectionClosed(old);
+							await old.kick();
+						}
+						// Set username
+						this.renameUser(client, res.username);
+						// Set rank
+						client.rank = res.rank;
+						if (client.rank === Rank.Admin) {
+							client.sendMsg(guacutils.encode('admin', '0', '1'));
+						} else if (client.rank === Rank.Moderator) {
+							client.sendMsg(guacutils.encode('admin', '0', '3', this.ModPerms.toString()));
+						}
+						this.clients.forEach((c) => c.sendMsg(guacutils.encode('adduser', '1', client.username!, client.rank.toString())));
+					} else {
+						client.sendMsg(guacutils.encode('login', '0', res.error!));
+						if (res.error === 'You are banned') {
+							client.kick();
+						}
 					}
-					// Set username
-					this.renameUser(client, res.username);
-					// Set rank
-					client.rank = res.rank;
-					if (client.rank === Rank.Admin) {
-						client.sendMsg(guacutils.encode('admin', '0', '1'));
-					} else if (client.rank === Rank.Moderator) {
-						client.sendMsg(guacutils.encode('admin', '0', '3', this.ModPerms.toString()));
-					}
-					this.clients.forEach((c) => c.sendMsg(guacutils.encode('adduser', '1', client.username!, client.rank.toString())));
-				} else {
-					client.sendMsg(guacutils.encode('login', '0', res.error!));
-					if (res.error === 'You are banned') {
-						client.kick();
-					}
+				} catch(err) {
+					this.logger.Error(`Error authenticating client ${client.IP.address}: ${(err as Error).message}`);
+					// for now?
+					client.sendMsg(guacutils.encode('login', '0', 'There was an internal error while authenticating. Please let a staff member know as soon as possible'))
 				}
 				break;
 			case 'list':
@@ -915,7 +921,10 @@ export default class WSServer {
 
 	async getThumbnail(): Promise<string> {
 		let display = this.VM.GetDisplay();
-		if (!display.Connected()) throw new Error('VM display is not connected');
+
+		// oh well
+		if (!display.Connected())
+			return "";
 
 		let buf = await JPEGEncoder.EncodeThumbnail(display.Buffer(), display.Size());
 		return buf.toString('base64');
