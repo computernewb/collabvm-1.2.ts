@@ -1,12 +1,14 @@
 import * as toml from 'toml';
 import IConfig from './IConfig.js';
 import * as fs from 'fs';
-import WSServer from './WSServer.js';
+import CollabVMServer from './CollabVMServer.js';
 
 import { QemuVM, QemuVmDefinition } from '@cvmts/qemu';
 
 import * as Shared from '@cvmts/shared';
 import AuthManager from './AuthManager.js';
+import WSServer from './WebSocket/WSServer.js';
+import { User } from './User.js';
 
 let logger = new Shared.Logger('CVMTS.Init');
 
@@ -50,8 +52,11 @@ async function start() {
 	var VM = new QemuVM(def);
 	await VM.Start();
 
-	// Start up the websocket server
-	var WS = new WSServer(Config, VM, auth);
-	WS.listen();
+	// Start up the server
+	var CVM = new CollabVMServer(Config, VM, auth);
+
+	var WS = new WSServer(Config);
+	WS.on('connect', (client: User) => CVM.addUser(client));
+	WS.start();
 }
 start();

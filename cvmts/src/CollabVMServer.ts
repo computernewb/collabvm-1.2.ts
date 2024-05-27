@@ -1,7 +1,6 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import * as http from 'http';
 import IConfig from './IConfig.js';
-import internal from 'stream';
 import * as Utilities from './Utilities.js';
 import { User, Rank } from './User.js';
 import * as guacutils from './guacutils.js';
@@ -36,11 +35,8 @@ type VoteTally = {
 	no: number;
 };
 
-export default class WSServer {
+export default class CollabVMServer {
 	private Config: IConfig;
-
-	private httpServer: http.Server;
-	private wsServer: WebSocketServer;
 
 	private clients: User[];
 
@@ -105,14 +101,6 @@ export default class WSServer {
 
 		this.indefiniteTurn = null;
 		this.ModPerms = Utilities.MakeModPerms(this.Config.collabvm.moderatorPermissions);
-		this.httpServer = http.createServer();
-		this.wsServer = new WebSocketServer({ noServer: true });
-		this.httpServer.on('upgrade', (req: http.IncomingMessage, socket: internal.Duplex, head: Buffer) => this.httpOnUpgrade(req, socket, head));
-		this.httpServer.on('request', (req, res) => {
-			res.writeHead(426);
-			res.write('This server only accepts WebSocket connections.');
-			res.end();
-		});
 
 		let initSize = vm.GetDisplay().Size() || {
 			width: 0,
@@ -130,131 +118,14 @@ export default class WSServer {
 		this.auth = auth;
 	}
 
-	listen() {
-		this.httpServer.listen(this.Config.http.port, this.Config.http.host);
-	}
-
-	private httpOnUpgrade(req: http.IncomingMessage, socket: internal.Duplex, head: Buffer) {
-		var killConnection = () => {
-			socket.write('HTTP/1.1 400 Bad Request\n\n400 Bad Request');
-			socket.destroy();
-		};
-
-		if (req.headers['sec-websocket-protocol'] !== 'guacamole') {
-			killConnection();
-			return;
-		}
-
-		if (this.Config.http.origin) {
-			// If the client is not sending an Origin header, kill the connection.
-			if (!req.headers.origin) {
-				killConnection();
-				return;
-			}
-
-			// Try to parse the Origin header sent by the client, if it fails, kill the connection.
-			var _uri;
-			var _host;
-			try {
-				_uri = new URL(req.headers.origin.toLowerCase());
-				_host = _uri.host;
-			} catch {
-				killConnection();
-				return;
-			}
-
-			// detect fake origin headers
-			if (_uri.pathname !== '/' || _uri.search !== '') {
-				killConnection();
-				return;
-			}
-
-			// If the domain name is not in the list of allowed origins, kill the connection.
-			if (!this.Config.http.originAllowedDomains.includes(_host)) {
-				killConnection();
-				return;
-			}
-		}
-
-		let ip: string;
-		if (this.Config.http.proxying) {
-			// If the requesting IP isn't allowed to proxy, kill it
-			if (this.Config.http.proxyAllowedIps.indexOf(req.socket.remoteAddress!) === -1) {
-				killConnection();
-				return;
-			}
-			// Make sure x-forwarded-for is set
-			if (req.headers['x-forwarded-for'] === undefined) {
-				killConnection();
-				return;
-			}
-			try {
-				// Get the first IP from the X-Forwarded-For variable
-				ip = req.headers['x-forwarded-for']?.toString().replace(/\ /g, '').split(',')[0];
-			} catch {
-				// If we can't get the IP, kill the connection
-				killConnection();
-				return;
-			}
-			// If for some reason the IP isn't defined, kill it
-			if (!ip) {
-				killConnection();
-				return;
-			}
-			// Make sure the IP is valid. If not, kill the connection.
-			if (!isIP(ip)) {
-				killConnection();
-				return;
-			}
-		} else {
-			if (!req.socket.remoteAddress) return;
-			ip = req.socket.remoteAddress;
-		}
-
-		// Get the amount of active connections coming from the requesting IP.
-		let connections = this.clients.filter((client) => client.IP.address == ip);
-		// If it exceeds the limit set in the config, reject the connection with a 429.
-		if (connections.length + 1 > this.Config.http.maxConnections) {
-			socket.write('HTTP/1.1 429 Too Many Requests\n\n429 Too Many Requests');
-			socket.destroy();
-		}
-
-		this.wsServer.handleUpgrade(req, socket, head, (ws: WebSocket) => {
-			this.wsServer.emit('connection', ws, req);
-			this.onConnection(ws, req, ip);
-		});
-	}
-
-	private onConnection(ws: WebSocket, req: http.IncomingMessage, ip: string) {
-		let user = new User(ws, IPDataManager.GetIPData(ip), this.Config);
+	public addUser(user: User) {
 		this.clients.push(user);
-
-		ws.on('error', (e) => {
-			this.logger.Error(`${e} (caused by connection ${ip})`);
-			ws.close();
-		});
-
-		ws.on('close', () => this.connectionClosed(user));
-
-		ws.on('message', (buf: Buffer, isBinary: boolean) => {
-			var msg;
-
-			// Close the user's connection if they send a non-string message
-			if (isBinary) {
-				user.closeConnection();
-				return;
-			}
-
-			try {
-				this.onMessage(user, buf.toString());
-			} catch {}
-		});
-
+		user.socket.on('msg', (msg: string) => this.onMessage(user, msg));
+		user.socket.on('disconnect', () => this.connectionClosed(user));
 		if (this.Config.auth.enabled) {
 			user.sendMsg(guacutils.encode('auth', this.Config.auth.apiEndpoint));
 		}
 		user.sendMsg(this.getAdduserMsg());
-		this.logger.Info(`Connect from ${user.IP.address}`);
 	}
 
 	private connectionClosed(user: User) {

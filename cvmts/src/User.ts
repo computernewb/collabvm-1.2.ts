@@ -1,14 +1,14 @@
 import * as Utilities from './Utilities.js';
 import * as guacutils from './guacutils.js';
-import { WebSocket } from 'ws';
 import { IPData } from './IPData.js';
 import IConfig from './IConfig.js';
 import RateLimiter from './RateLimiter.js';
 import { execa, execaCommand, ExecaSyncError } from 'execa';
 import { Logger } from '@cvmts/shared';
+import NetworkClient from './NetworkClient.js';
 
 export class User {
-	socket: WebSocket;
+	socket: NetworkClient;
 	nopSendInterval: NodeJS.Timeout;
 	msgRecieveInterval: NodeJS.Timeout;
 	nopRecieveTimeout?: NodeJS.Timeout;
@@ -28,17 +28,18 @@ export class User {
 
 	private logger = new Logger('CVMTS.User');
 
-	constructor(ws: WebSocket, ip: IPData, config: IConfig, username?: string, node?: string) {
+	constructor(socket: NetworkClient, ip: IPData, config: IConfig, username?: string, node?: string) {
 		this.IP = ip;
 		this.connectedToNode = false;
 		this.viewMode = -1;
 		this.Config = config;
-		this.socket = ws;
+		this.socket = socket;
 		this.msgsSent = 0;
-		this.socket.on('close', () => {
+		this.socket.on('disconnect', () => {
 			clearInterval(this.nopSendInterval);
+			clearInterval(this.msgRecieveInterval);
 		});
-		this.socket.on('message', (e) => {
+		this.socket.on('msg', (e) => {
 			clearTimeout(this.nopRecieveTimeout);
 			clearInterval(this.msgRecieveInterval);
 			this.msgRecieveInterval = setInterval(() => this.onNoMsg(), 10000);
@@ -73,8 +74,8 @@ export class User {
 		this.socket.send('3.nop;');
 	}
 
-	sendMsg(msg: string | Buffer) {
-		if (this.socket.readyState !== this.socket.OPEN) return;
+	sendMsg(msg: string) {
+		if (!this.socket.isOpen()) return;
 		clearInterval(this.nopSendInterval);
 		this.nopSendInterval = setInterval(() => this.sendNop(), 5000);
 		this.socket.send(msg);
