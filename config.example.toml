@@ -10,8 +10,6 @@ proxyAllowedIps = ["127.0.0.1"]
 origin = false
 # Origins to accept connections from.
 originAllowedDomains = ["computernewb.com"]
-# Maximum amount of active connections allowed from the same IP.
-maxConnections = 3
 
 [auth]
 enabled = false
@@ -39,6 +37,8 @@ qmpSockDir = "/tmp/"
 node = "acoolvm"
 displayname = "A <b>Really</b> Cool CollabVM Instance"
 motd = "welcome!"
+# Maximum amount of active connections allowed from the same IP.
+maxConnections = 3
 # Command used to ban an IP.
 # Use $IP to specify an ip and (optionally) use $NAME to specify a username
 bancmd = "iptables -A INPUT -s $IP -j REJECT"

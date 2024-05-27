@@ -6,8 +6,12 @@ export default interface IConfig {
 		proxyAllowedIps: string[];
 		origin: boolean;
 		originAllowedDomains: string[];
-		maxConnections: number;
 	};
+	tcp: {
+		enabled: boolean;
+		host: string;
+		port: number;
+	}
 	auth: {
 		enabled: boolean;
 		apiEndpoint: string;
@@ -31,6 +35,7 @@ export default interface IConfig {
 		node: string;
 		displayname: string;
 		motd: string;
+		maxConnections: number;
 		bancmd: string | string[];
 		moderatorEnabled: boolean;
 		usernameblacklist: string[];

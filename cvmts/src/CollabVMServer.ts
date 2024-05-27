@@ -119,6 +119,12 @@ export default class CollabVMServer {
 	}
 
 	public addUser(user: User) {
+		let sameip = this.clients.filter(c => c.IP.address === user.IP.address);
+		if (sameip.length >= this.Config.collabvm.maxConnections) {
+			// Kick the oldest client
+			// I think this is a better solution than just rejecting the connection
+			sameip[0].kick();
+		}
 		this.clients.push(user);
 		user.socket.on('msg', (msg: string) => this.onMessage(user, msg));
 		user.socket.on('disconnect', () => this.connectionClosed(user));

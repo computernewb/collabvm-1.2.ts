@@ -6,13 +6,11 @@ import { Logger } from "@cvmts/shared";
 export default class WSClient extends EventEmitter implements NetworkClient {
     socket: WebSocket;
     ip: string;
-    logger: Logger;
 
     constructor(ws: WebSocket, ip: string) {
         super();
         this.socket = ws;
         this.ip = ip;
-        this.logger = new Logger("CVMTS.WSClient");
         this.socket.on('message', (buf: Buffer, isBinary: boolean) => {
 			// Close the user's connection if they send a non-string message
 			if (isBinary) {
@@ -25,7 +23,6 @@ export default class WSClient extends EventEmitter implements NetworkClient {
 
         this.socket.on('close', () => {
             this.emit('disconnect');
-
         });
     }
 

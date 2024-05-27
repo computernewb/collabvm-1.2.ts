@@ -9,6 +9,7 @@ import * as Shared from '@cvmts/shared';
 import AuthManager from './AuthManager.js';
 import WSServer from './WebSocket/WSServer.js';
 import { User } from './User.js';
+import TCPServer from './TCP/TCPServer.js';
 
 let logger = new Shared.Logger('CVMTS.Init');
 
@@ -58,5 +59,11 @@ async function start() {
 	var WS = new WSServer(Config);
 	WS.on('connect', (client: User) => CVM.addUser(client));
 	WS.start();
+
+	if (Config.tcp.enabled) {
+		var TCP = new TCPServer(Config);
+		TCP.on('connect', (client: User) => CVM.addUser(client));
+		TCP.start();
+	}
 }
 start();
