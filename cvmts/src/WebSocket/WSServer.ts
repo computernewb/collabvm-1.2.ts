@@ -147,6 +147,6 @@ export default class WSServer extends EventEmitter implements NetworkServer {
 			ws.close();
 		});
 
-		this.logger.Info(`Connect from ${user.IP.address}`);
+		this.logger.Info(`New WebSocket connection from ${user.IP.address}`);
 	}
 }

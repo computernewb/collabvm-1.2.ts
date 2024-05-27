@@ -23,6 +23,7 @@ export default class TCPServer extends EventEmitter implements NetworkServer {
     }
 
     private onConnection(socket: Socket) {
+        this.logger.Info(`New TCP connection from ${socket.remoteAddress}`);
         var client = new TCPClient(socket);
         this.clients.push(client);
         this.emit('connect', new User(client, IPDataManager.GetIPData(client.getIP()), this.Config));
