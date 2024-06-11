@@ -1,5 +1,3 @@
-import { WebSocketServer, WebSocket } from 'ws';
-import * as http from 'http';
 import IConfig from './IConfig.js';
 import * as Utilities from './Utilities.js';
 import { User, Rank } from './User.js';
@@ -8,19 +6,17 @@ import * as guacutils from './guacutils.js';
 import CircularBuffer from 'mnemonist/circular-buffer.js';
 import Queue from 'mnemonist/queue.js';
 import { createHash } from 'crypto';
-import { isIP } from 'node:net';
 import { QemuVM, QemuVmDefinition } from '@cvmts/qemu';
-import { IPData, IPDataManager } from './IPData.js';
+import { IPDataManager } from './IPData.js';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import AuthManager from './AuthManager.js';
 import { Size, Rect, Logger } from '@cvmts/shared';
-
 import { JPEGEncoder } from './JPEGEncoder.js';
+import VM from './VM.js';
 
 // Instead of strange hacks we can just use nodejs provided
 // import.meta properties, which have existed since LTS if not before
-const __filename = import.meta.filename;
 const __dirname = import.meta.dirname;
 
 const kCVMTSAssetsRoot = path.resolve(__dirname, '../../assets');
@@ -78,14 +74,14 @@ export default class CollabVMServer {
 	// Indefinite turn
 	private indefiniteTurn: User | null;
 	private ModPerms: number;
-	private VM: QemuVM;
+	private VM: VM;
 
 	// Authentication manager
 	private auth: AuthManager | null;
 
 	private logger = new Logger('CVMTS.Server');
 
-	constructor(config: IConfig, vm: QemuVM, auth: AuthManager | null) {
+	constructor(config: IConfig, vm: VM, auth: AuthManager | null) {
 		this.Config = config;
 		this.ChatHistory = new CircularBuffer<ChatHistory>(Array, this.Config.collabvm.maxChatHistoryLength);
 		this.TurnQueue = new Queue<User>();
@@ -214,7 +210,7 @@ export default class CollabVMServer {
 					return;
 				}
 				client.connectedToNode = true;
-				client.sendMsg(guacutils.encode('connect', '1', '1', this.Config.vm.snapshots ? '1' : '0', '0'));
+				client.sendMsg(guacutils.encode('connect', '1', '1', this.VM.SnapshotsSupported() ? '1' : '0', '0'));
 				if (this.ChatHistory.size !== 0) client.sendMsg(this.getChatHistoryMsg());
 				if (this.Config.collabvm.motd) client.sendMsg(guacutils.encode('chat', '', this.Config.collabvm.motd));
 				if (this.screenHidden) {
@@ -247,7 +243,7 @@ export default class CollabVMServer {
 						return;
 				}
 
-				client.sendMsg(guacutils.encode('connect', '1', '1', this.Config.vm.snapshots ? '1' : '0', '0'));
+				client.sendMsg(guacutils.encode('connect', '1', '1', this.VM.SnapshotsSupported() ? '1' : '0', '0'));
 				if (this.ChatHistory.size !== 0) client.sendMsg(this.getChatHistoryMsg());
 				if (this.Config.collabvm.motd) client.sendMsg(guacutils.encode('chat', '', this.Config.collabvm.motd));
 
@@ -361,7 +357,7 @@ export default class CollabVMServer {
 				this.VM.GetDisplay()!.KeyboardEvent(keysym, down === 1 ? true : false);
 				break;
 			case 'vote':
-				if (!this.Config.vm.snapshots) return;
+				if (!this.VM.SnapshotsSupported()) return;
 				if ((!this.turnsAllowed || this.Config.collabvm.turnwhitelist) && client.rank !== Rank.Admin && client.rank !== Rank.Moderator && client.rank !== Rank.Turn) return;
 				if (!client.connectedToNode) return;
 				if (msgArr.length !== 2) return;
@@ -461,7 +457,7 @@ export default class CollabVMServer {
 						// Reboot
 						if (client.rank !== Rank.Admin && (client.rank !== Rank.Moderator || !this.Config.collabvm.moderatorPermissions.reboot)) return;
 						if (msgArr.length !== 3 || msgArr[2] !== this.Config.collabvm.node) return;
-						this.VM.MonitorCommand('system_reset');
+						await this.VM.Reboot();
 						break;
 					case '12':
 						// Ban

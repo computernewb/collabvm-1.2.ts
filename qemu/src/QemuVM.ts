@@ -78,6 +78,14 @@ export class QemuVM extends EventEmitter {
 		await this.StartQemu(cmd);
 	}
 
+	SnapshotsSupported() : boolean {
+		return gVMShouldSnapshot;
+	}
+
+	async Reboot() : Promise<void> {
+		await this.MonitorCommand('system_reset');
+	}
+
 	async Stop() {
 		// This is called in certain lifecycle places where we can't safely assert state yet
 		//this.AssertState(VMState.Started, 'cannot use QemuVM#Stop on a non-started VM');

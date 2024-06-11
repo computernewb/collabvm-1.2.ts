@@ -10,6 +10,8 @@ import AuthManager from './AuthManager.js';
 import WSServer from './WebSocket/WSServer.js';
 import { User } from './User.js';
 import TCPServer from './TCP/TCPServer.js';
+import VM from './VM.js';
+import VNCVM from './VNCVM/VNCVM.js';
 
 let logger = new Shared.Logger('CVMTS.Init');
 
@@ -31,28 +33,53 @@ try {
 	process.exit(1);
 }
 
-async function start() {
-	// Print a warning if qmpSockDir is set
-	// and the host OS is Windows, as this
-	// configuration will very likely not work.
-	if (process.platform === 'win32' && Config.vm.qmpSockDir) {
-		logger.Warning("You appear to have the option 'qmpSockDir' enabled in the config.");
-		logger.Warning('This is not supported on Windows, and you will likely run into issues.');
-		logger.Warning('To remove this warning, use the qmpHost and qmpPort options instead.');
-	}
+let exiting = false;
+let VM : VM;
 
+async function stop() {
+	if (exiting) return;
+	exiting = true;
+	await VM.Stop();
+	process.exit(0);
+}
+
+async function start() {
 	// Init the auth manager if enabled
 	let auth = Config.auth.enabled ? new AuthManager(Config.auth.apiEndpoint, Config.auth.secretKey) : null;
+	switch (Config.vm.type) {
+		case "qemu": {
+			// Print a warning if qmpSockDir is set
+			// and the host OS is Windows, as this
+			// configuration will very likely not work.
+			if (process.platform === 'win32' && Config.qemu.qmpSockDir !== null) {
+				logger.Warning("You appear to have the option 'qmpSockDir' enabled in the config.");
+				logger.Warning('This is not supported on Windows, and you will likely run into issues.');
+				logger.Warning('To remove this warning, use the qmpHost and qmpPort options instead.');
+			}
 
-	// Fire up the VM
-	let def: QemuVmDefinition = {
-		id: Config.collabvm.node,
-		command: Config.vm.qemuArgs
-	};
+			// Fire up the VM
+			let def: QemuVmDefinition = {
+				id: Config.collabvm.node,
+				command: Config.qemu.qemuArgs
+			};
 
-	var VM = new QemuVM(def);
+			VM = new QemuVM(def);
+			break;
+		}
+		case "vncvm": {
+			VM = new VNCVM(Config.vncvm);
+			break;
+		}
+		default: {
+			logger.Error('Invalid VM type in config: {0}', Config.vm.type);
+			process.exit(1);
+			return;
+		}
+	}
+	process.on('SIGINT', async () => await stop());
+	process.on('SIGTERM', async () => await stop());
+
 	await VM.Start();
-
 	// Start up the server
 	var CVM = new CollabVMServer(Config, VM, auth);
 

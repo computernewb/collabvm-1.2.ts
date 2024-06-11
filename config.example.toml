@@ -11,6 +11,11 @@ origin = false
 # Origins to accept connections from.
 originAllowedDomains = ["computernewb.com"]
 
+[tcp]
+enabled = false
+host = "0.0.0.0"
+port = 6014
+
 [auth]
 enabled = false
 apiEndpoint = ""
@@ -24,6 +29,9 @@ vote = true
 
 
 [vm]
+type = "qemu"
+
+[qemu]
 qemuArgs = "qemu-system-x86_64"
 vncPort = 5900
 snapshots = true
@@ -32,6 +40,14 @@ snapshots = true
 #qmpPort = "5800"
 # Comment out qmpSockDir if you're using Windows.
 qmpSockDir = "/tmp/"
+
+[vncvm]
+vncHost = "127.0.0.1"
+vncPort = 5900
+# startCmd = ""
+# stopCmd = ""
+# rebootCmd = ""
+# restoreCmd = ""
 
 [collabvm]
 node = "acoolvm"

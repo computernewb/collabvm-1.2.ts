@@ -1,3 +1,5 @@
+import VNCVMDef from "./VNCVM/VNCVMDef";
+
 export default interface IConfig {
 	http: {
 		host: string;
@@ -24,6 +26,9 @@ export default interface IConfig {
 		};
 	};
 	vm: {
+		type: "qemu" | "vncvm";
+	};
+	qemu: {
 		qemuArgs: string;
 		vncPort: number;
 		snapshots: boolean;
@@ -31,6 +36,7 @@ export default interface IConfig {
 		qmpPort: number | null;
 		qmpSockDir: string | null;
 	};
+	vncvm: VNCVMDef;
 	collabvm: {
 		node: string;
 		displayname: string;
