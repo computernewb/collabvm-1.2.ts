@@ -27,7 +27,6 @@ turn = false
 callForReset = false
 vote = true
 
-
 [vm]
 type = "qemu"
 
