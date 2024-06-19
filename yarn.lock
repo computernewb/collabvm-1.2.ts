@@ -61,6 +61,7 @@ __metadata:
   resolution: "@cvmts/cvmts@workspace:cvmts"
   dependencies:
     "@computernewb/jpeg-turbo": "npm:*"
+    "@cvmts/guac-rs": "npm:*"
     "@cvmts/qemu": "npm:*"
     "@types/node": "npm:^20.12.5"
     "@types/ws": "npm:^8.5.5"
@@ -75,7 +76,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@cvmts/guac-rs@workspace:guac-rs":
+"@cvmts/guac-rs@npm:*, @cvmts/guac-rs@workspace:guac-rs":
   version: 0.0.0-use.local
   resolution: "@cvmts/guac-rs@workspace:guac-rs"
   dependencies:
