@@ -22,7 +22,7 @@ fn guac_decode_impl<'a>(cx: &mut FunctionContext<'a>) -> JsResult<'a, JsArray> {
         }
 
         Err(e) => {
-            let err = cx.string(format!("Error decoding guacamole: {}", e));
+            let err = cx.string(format!("{}", e));
             return cx.throw(err);
         }
     }
@@ -36,28 +36,6 @@ fn guac_encode_impl<'a>(cx: &mut FunctionContext<'a>) -> JsResult<'a, JsString> 
         let input = cx.argument::<JsString>(i)?.value(cx);
         elements.push(input);
     }
-
-    // old array stuff
-    /*
-    let input = cx.argument::<JsArray>(0)?;
-    let raw_elements = input.to_vec(cx)?;
-
-    // bleh
-    let vecres: Result<Vec<_>, _> = raw_elements
-        .iter()
-        .map(|item| match item.to_string(cx) {
-            Ok(s) => {
-                return Ok(s.value(cx));
-            }
-
-            Err(e) => {
-                return Err(e);
-            }
-        })
-        .collect();
-
-    let vec = vecres?;
-    */
 
     Ok(cx.string(guac::encode_instruction(&elements)))
 }
