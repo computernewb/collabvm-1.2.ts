@@ -1,5 +1,5 @@
 import * as Utilities from './Utilities.js';
-import * as guacutils from './guacutils.js';
+import * as guac from '@cvmts/guac-rs';
 import { IPData } from './IPData.js';
 import IConfig from './IConfig.js';
 import RateLimiter from './RateLimiter.js';
@@ -89,7 +89,7 @@ export class User {
 	}
 
 	closeConnection() {
-		this.socket.send(guacutils.encode('disconnect'));
+		this.socket.send(guac.guacEncode('disconnect'));
 		this.socket.close();
 	}
 
@@ -109,7 +109,7 @@ export class User {
 
 	mute(permanent: boolean) {
 		this.IP.muted = true;
-		this.sendMsg(guacutils.encode('chat', '', `You have been muted${permanent ? '' : ` for ${this.Config.collabvm.tempMuteTime} seconds`}.`));
+		this.sendMsg(guac.guacEncode('chat', '', `You have been muted${permanent ? '' : ` for ${this.Config.collabvm.tempMuteTime} seconds`}.`));
 		if (!permanent) {
 			clearTimeout(this.IP.tempMuteExpireTimeout);
 			this.IP.tempMuteExpireTimeout = setTimeout(() => this.unmute(), this.Config.collabvm.tempMuteTime * 1000);
@@ -118,7 +118,7 @@ export class User {
 	unmute() {
 		clearTimeout(this.IP.tempMuteExpireTimeout);
 		this.IP.muted = false;
-		this.sendMsg(guacutils.encode('chat', '', 'You are no longer muted.'));
+		this.sendMsg(guac.guacEncode('chat', '', 'You are no longer muted.'));
 	}
 
 	private banCmdArgs(arg: string): string {

@@ -12,6 +12,7 @@
   "license": "GPL-3.0",
   "dependencies": {
     "@computernewb/jpeg-turbo": "*",
+    "@cvmts/guac-rs": "*",
     "@cvmts/qemu": "*",
     "execa": "^8.0.1",
     "mnemonist": "^0.39.5",

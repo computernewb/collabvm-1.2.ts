@@ -75,6 +75,14 @@ __metadata:
   languageName: unknown
   linkType: soft
 
+"@cvmts/guac-rs@workspace:guac-rs":
+  version: 0.0.0-use.local
+  resolution: "@cvmts/guac-rs@workspace:guac-rs"
+  dependencies:
+    cargo-cp-artifact: "npm:^0.1"
+  languageName: unknown
+  linkType: soft
+
 "@cvmts/qemu@npm:*, @cvmts/qemu@workspace:qemu":
   version: 0.0.0-use.local
   resolution: "@cvmts/qemu@workspace:qemu"
@@ -1769,6 +1777,15 @@ __metadata:
   version: 1.0.30001612
   resolution: "caniuse-lite@npm:1.0.30001612"
   checksum: 10c0/d6b405ff06f4e913bc779f9183fa68001c9d6b8526a7dd1b99c60587dd21a01aa8def3d8462cf6214f0181f1c21b9245611ff65241cf9c967fc742e86ece5065
+  languageName: node
+  linkType: hard
+
+"cargo-cp-artifact@npm:^0.1":
+  version: 0.1.9
+  resolution: "cargo-cp-artifact@npm:0.1.9"
+  bin:
+    cargo-cp-artifact: bin/cargo-cp-artifact.js
+  checksum: 10c0/60eb1845917cfb021920fcf600a72379890b385396f9c69107face3b16b347960b66cd3d82cc169c6ac8b1212cf0706584125bc36fbc08353b033310c17ca0a6
   languageName: node
   linkType: hard
 

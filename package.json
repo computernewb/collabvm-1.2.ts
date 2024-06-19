@@ -2,6 +2,7 @@
 	"name": "cvmts-repo",
 	"workspaces": [
 		"shared",
+		"guac-rs",
 		"jpeg-turbo",
 		"nodejs-rfb",
 		"qemu",

@@ -8,3 +8,7 @@ cvmts/attic
 
 /dist
 **/dist/
+
+# Guac-rs
+guac-rs/target
+guac-rs/index.node
