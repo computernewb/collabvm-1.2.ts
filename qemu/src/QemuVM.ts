@@ -16,8 +16,9 @@ export enum VMState {
 // TODO: Add bits to this to allow usage (optionally)
 // of VNC/QMP port. This will be needed to fix up Windows support.
 export type QemuVmDefinition = {
-	id: string;
-	command: string;
+	id: string,
+	command: string,
+	snapshot: boolean
 };
 
 /// Temporary path base (for UNIX sockets/etc.)
@@ -27,12 +28,6 @@ const kVmTmpPathBase = `/tmp`;
 /// the VM is forcefully stopped.
 const kMaxFailCount = 5;
 
-// TODO: This should be added to QemuVmDefinition and the below export removed
-let gVMShouldSnapshot = true;
-
-export function setSnapshot(val: boolean) {
-	gVMShouldSnapshot = val;
-}
 
 export class QemuVM extends EventEmitter {
 	private state = VMState.Stopped;
@@ -68,7 +63,7 @@ export class QemuVM extends EventEmitter {
 		// FIXME: Still use TCP if on Windows.
 		if (!this.addedAdditionalArguments) {
 			cmd += ' -no-shutdown';
-			if (gVMShouldSnapshot) cmd += ' -snapshot';
+			if (this.definition.snapshot) cmd += ' -snapshot';
 			cmd += ` -qmp unix:${this.GetQmpPath()},server,wait -vnc unix:${this.GetVncPath()}`;
 			this.definition.command = cmd;
 			this.addedAdditionalArguments = true;
@@ -79,7 +74,7 @@ export class QemuVM extends EventEmitter {
 	}
 
 	SnapshotsSupported() : boolean {
-		return gVMShouldSnapshot;
+		return this.definition.snapshot;
 	}
 
 	async Reboot() : Promise<void> {

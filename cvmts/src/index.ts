@@ -60,7 +60,8 @@ async function start() {
 			// Fire up the VM
 			let def: QemuVmDefinition = {
 				id: Config.collabvm.node,
-				command: Config.qemu.qemuArgs
+				command: Config.qemu.qemuArgs,
+				snapshot: Config.qemu.snapshots
 			};
 
 			VM = new QemuVM(def);
