@@ -78,10 +78,7 @@ export class User {
 		if (!this.socket.isOpen()) return;
 		clearInterval(this.nopSendInterval);
 		this.nopSendInterval = setInterval(() => this.sendNop(), 5000);
-		this.socket.send(msg)
-			.catch((err: Error) => {
-				this.logger.Error(`bandaid fix: ${err.message}`);
-			});
+		this.socket.send(msg);
 	}
 
 	private onNoMsg() {

@@ -35,6 +35,9 @@ export default class WSClient extends EventEmitter implements NetworkClient {
     }
     send(msg: string): Promise<void> {
         return new Promise((res,rej) => {
+			if(!this.isOpen())
+				res();
+		
             this.socket.send(msg, (err) => {
                 if (err) {
                     rej(err);
