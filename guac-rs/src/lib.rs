@@ -9,11 +9,10 @@ fn guac_decode_impl<'a>(cx: &mut FunctionContext<'a>) -> JsResult<'a, JsArray> {
         Ok(data) => {
             let array = JsArray::new(cx, data.len());
 
-			let conv = data.iter()
-				.map(|v| {
-					cx.string(v)
-				})
-				.collect::<Vec<Handle<JsString>>>();
+            let conv = data
+                .iter()
+                .map(|v| cx.string(v))
+                .collect::<Vec<Handle<JsString>>>();
 
             for (i, str) in conv.iter().enumerate() {
                 array.set(cx, i as u32, *str)?;
@@ -30,17 +29,16 @@ fn guac_decode_impl<'a>(cx: &mut FunctionContext<'a>) -> JsResult<'a, JsArray> {
 }
 
 fn guac_encode_impl<'a>(cx: &mut FunctionContext<'a>) -> JsResult<'a, JsString> {
+    let mut elements: Vec<String> = Vec::with_capacity(cx.len());
 
-	let mut elements: Vec<String> = Vec::with_capacity(cx.len());
+    // Capture varadic arguments
+    for i in 0..cx.len() {
+        let input = cx.argument::<JsString>(i)?.value(cx);
+        elements.push(input);
+    }
 
-	// Capture varadic arguments
-	for i in 0..cx.len() {
-		let input = cx.argument::<JsString>(i)?.value(cx);
-		elements.push(input);
-	}
-
-	// old array stuff
-	/* 
+    // old array stuff
+    /*
     let input = cx.argument::<JsArray>(0)?;
     let raw_elements = input.to_vec(cx)?;
 
@@ -59,7 +57,7 @@ fn guac_encode_impl<'a>(cx: &mut FunctionContext<'a>) -> JsResult<'a, JsString> 
         .collect();
 
     let vec = vecres?;
-	*/
+    */
 
     Ok(cx.string(guac::encode_instruction(&elements)))
 }
@@ -69,7 +67,7 @@ fn guac_decode(mut cx: FunctionContext) -> JsResult<JsArray> {
 }
 
 fn guac_encode(mut cx: FunctionContext) -> JsResult<JsString> {
-	guac_encode_impl(&mut cx)
+    guac_encode_impl(&mut cx)
 }
 
 #[neon::main]
