@@ -2,7 +2,6 @@
 name = "guac-rs"
 description = "Rust guacamole decoding :)"
 version = "0.1.0"
-license = "MIT"
 edition = "2021"
 exclude = ["index.node"]
 
