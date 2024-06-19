@@ -119,15 +119,15 @@ export default class WSServer extends EventEmitter implements NetworkServer {
 			ip = req.socket.remoteAddress;
 		}
 
-        // TODO: Implement
+		let ipdata = IPDataManager.GetIPDataMaybe(ip);
 
-		// Get the amount of active connections coming from the requesting IP.
-		//let connections = this.clients.filter((client) => client.IP.address == ip);
-		// If it exceeds the limit set in the config, reject the connection with a 429.
-		//if (connections.length + 1 > this.Config.http.maxConnections) {
-		//	socket.write('HTTP/1.1 429 Too Many Requests\n\n429 Too Many Requests');
-		//	socket.destroy();
-		//}
+		if(ipdata != null) {
+			let connections = ipdata.refCount;
+			if (connections + 1 > this.Config.collabvm.maxConnections) {
+				socket.write('HTTP/1.1 429 Too Many Requests\n\n429 Too Many Requests');
+				socket.destroy();
+			}
+		}
 
 		this.wsServer.handleUpgrade(req, socket, head, (ws: WebSocket) => {
 			this.wsServer.emit('connection', ws, req);

@@ -40,6 +40,19 @@ export class IPDataManager {
 		return data;
 	}
 
+	static GetIPDataMaybe(address: string) {
+		if (IPDataManager.ipDatas.has(address)) {
+			// Note: We already check for if it exists, so we use ! here
+			// because TypeScript can't exactly tell that in this case,
+			// only in explicit null or undefined checks
+			let ref = IPDataManager.ipDatas.get(address)!;
+			ref.refCount++;
+			return ref;
+		}
+
+		return null;
+	}
+
 	static ForEachIPData(callback: (d: IPData) => void) {
 		for (let tuple of IPDataManager.ipDatas) callback(tuple[1]);
 	}
