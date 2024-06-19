@@ -35,15 +35,21 @@ export class User {
 		this.Config = config;
 		this.socket = socket;
 		this.msgsSent = 0;
+
 		this.socket.on('disconnect', () => {
+			// Unref the ip data for this connection
+			this.IP.Unref();
+
 			clearInterval(this.nopSendInterval);
 			clearInterval(this.msgRecieveInterval);
 		});
+
 		this.socket.on('msg', (e) => {
 			clearTimeout(this.nopRecieveTimeout);
 			clearInterval(this.msgRecieveInterval);
 			this.msgRecieveInterval = setInterval(() => this.onNoMsg(), 10000);
 		});
+		
 		this.nopSendInterval = setInterval(() => this.sendNop(), 5000);
 		this.msgRecieveInterval = setInterval(() => this.onNoMsg(), 10000);
 		this.sendNop();
