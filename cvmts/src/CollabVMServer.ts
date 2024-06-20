@@ -810,7 +810,7 @@ export default class CollabVMServer {
 		let display = this.VM.GetDisplay();
 		let displaySize = display.Size();
 
-		let encoded = await JPEGEncoder.EncodeJpeg(display.Buffer(), displaySize, rect);
+		let encoded = await JPEGEncoder.Encode(display.Buffer(), displaySize, rect);
 
 		return encoded.toString('base64');
 	}

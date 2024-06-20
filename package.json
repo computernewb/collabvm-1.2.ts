@@ -3,7 +3,7 @@
 	"workspaces": [
 		"shared",
 		"guac-rs",
-		"jpeg-turbo",
+		"jpegturbo-rs",
 		"nodejs-rfb",
 		"qemu",
 		"cvmts"

@@ -11,12 +11,11 @@
   "author": "Elijah R, modeco80",
   "license": "GPL-3.0",
   "dependencies": {
-    "@computernewb/jpeg-turbo": "*",
     "@cvmts/guac-rs": "*",
+    "@cvmts/jpegturbo-rs": "*",
     "@cvmts/qemu": "*",
     "execa": "^8.0.1",
     "mnemonist": "^0.39.5",
-    "piscina": "^4.4.0",
     "sharp": "^0.33.3",
     "toml": "^3.0.0",
     "ws": "^8.14.1"
