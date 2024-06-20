@@ -20,7 +20,6 @@ function GetRawSharpOptions(size: Size): sharp.CreateRaw {
 
 export default async (opts: any) => {
 	try {
-		console.log(opts)
 		let out = await sharp(opts.buffer, { raw: GetRawSharpOptions(opts.size) })
 			.resize(kThumbnailSize.width, kThumbnailSize.height, { fit: 'fill' })
 			.jpeg({

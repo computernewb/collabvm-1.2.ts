@@ -28,7 +28,6 @@ const kVmTmpPathBase = `/tmp`;
 /// the VM is forcefully stopped.
 const kMaxFailCount = 5;
 
-
 export class QemuVM extends EventEmitter {
 	private state = VMState.Stopped;
 
@@ -69,7 +68,6 @@ export class QemuVM extends EventEmitter {
 			this.addedAdditionalArguments = true;
 		}
 
-		this.VMLog().Info(`Starting QEMU with command \"${cmd}\"`);
 		await this.StartQemu(cmd);
 	}
 
@@ -84,28 +82,27 @@ export class QemuVM extends EventEmitter {
 	async Stop() {
 		// This is called in certain lifecycle places where we can't safely assert state yet
 		//this.AssertState(VMState.Started, 'cannot use QemuVM#Stop on a non-started VM');
-
-		// Start indicating we're stopping, so we don't
+		
+		// Indicate we're stopping, so we don't
 		// erroneously start trying to restart everything
-		// we're going to tear down in this function call.
+		// we're going to tear down.
 		this.SetState(VMState.Stopping);
 
 		// Kill the QEMU process and QMP/display connections if they are running.
 		await this.DisconnectQmp();
-		this.DisconnectDisplay();
+		await this.DisconnectDisplay();
 		await this.StopQemu();
+
 	}
 
 	async Reset() {
-		this.AssertState(VMState.Started, 'cannot use QemuVM#Reset on a non-started VM');
+		//this.AssertState(VMState.Started, 'cannot use QemuVM#Reset on a non-started VM');
 
 		// let code know the VM is going to reset
-		// N.B: In the crusttest world, a reset simply amounts to a
-		// mean cold reboot of the qemu process basically
 		this.emit('reset');
-		await this.Stop();
-		await Shared.Sleep(500);
-		await this.Start();
+
+		// Do magic.
+		await this.StopQemu();
 	}
 
 	async QmpCommand(command: string, args: any | null): Promise<any> {
@@ -152,6 +149,12 @@ export class QemuVM extends EventEmitter {
 	private SetState(state: VMState) {
 		this.state = state;
 		this.emit('statechange', this.state);
+
+		// reset some state when starting the vm back up
+		// to avoid potentional issues.
+		if(this.state == VMState.Starting) {
+			this.qmpFailCount = 0;
+		}
 	}
 
 	private GetQmpPath() {
@@ -167,27 +170,44 @@ export class QemuVM extends EventEmitter {
 
 		this.SetState(VMState.Starting);
 
+		this.VMLog().Info(`Starting QEMU with command \"${split}\"`);
+
 		// Start QEMU
 		this.qemuProcess = execaCommand(split);
 
 		this.qemuProcess.on('spawn', async () => {
+			self.VMLog().Info("QEMU started");
 			self.qemuRunning = true;
 			await Shared.Sleep(500);
 			await self.ConnectQmp();
 		});
 
 		this.qemuProcess.on('exit', async (code) => {
+			self.VMLog().Info("QEMU process exited");
 			self.qemuRunning = false;
+
+
+			// this should be being done anways but it's very clearly not sometimes so
+			// fuck it, let's just force it here
+			try {
+				await unlink(this.GetVncPath());
+			} catch(_) {}
+
+			try {
+				await unlink(this.GetQmpPath());
+			} catch(_) {}
 
 			// ?
 			if (self.qmpConnected) {
 				await self.DisconnectQmp();
 			}
 
-			self.DisconnectDisplay();
+			await self.DisconnectDisplay();
+
 
 			if (self.state != VMState.Stopping) {
 				if (code == 0) {
+					// Wait a bit and restart QEMU.
 					await Shared.Sleep(500);
 					await self.StartQemu(split);
 				} else {
@@ -195,6 +215,7 @@ export class QemuVM extends EventEmitter {
 					await self.Stop();
 				}
 			} else {
+				// Indicate we have stopped.
 				this.SetState(VMState.Stopped);
 			}
 		});
@@ -210,26 +231,28 @@ export class QemuVM extends EventEmitter {
 		if (!this.qmpConnected) {
 			self.qmpInstance = new QmpClient();
 
-			let onQmpError = async (err: Error|undefined) => {
-				self.qmpConnected = false;
+			let onQmpError = async () => {
+				if(self.qmpConnected) {
+					self.qmpConnected = false;
 
-				// If we aren't stopping, then we do actually need to care QMP disconnected
-				if (self.state != VMState.Stopping) {
-					//if(err !== undefined) // This doesn't show anything useful or maybe I'm just stupid idk
-					//	self.VMLog().Error(`Error: ${err!}`)
-					if (self.qmpFailCount++ < kMaxFailCount) {
-						self.VMLog().Error(`Failed to connect to QMP ${self.qmpFailCount} times.`);
-						await Shared.Sleep(500);
-						await self.ConnectQmp();
-					} else {
-						self.VMLog().Error(`Reached max retries, giving up.`);
-						await self.Stop();
+					// If we aren't stopping, then we should care QMP disconnected
+					if (self.state != VMState.Stopping) {
+						if (self.qmpFailCount++ < kMaxFailCount) {
+							self.VMLog().Error(`Failed to connect to QMP ${self.qmpFailCount} times.`);
+							await Shared.Sleep(500);
+							await self.ConnectQmp();
+						} else {
+							self.VMLog().Error(`Reached max retries, giving up.`);
+							await self.Stop();
+						}
 					}
 				}
 			};
 
 			self.qmpInstance.on('close', onQmpError);
-			self.qmpInstance.on('error', onQmpError);
+			self.qmpInstance.on('error', (e: Error) => {
+				self.VMLog().Error("QMP Error: {0}", e.message);
+			});
 
 			self.qmpInstance.on('event', async (ev) => {
 				switch (ev.event) {
@@ -269,10 +292,6 @@ export class QemuVM extends EventEmitter {
 		try {
 			this.display?.Disconnect();
 			//this.display = null; // disassociate with that display object.
-
-			await unlink(this.GetVncPath());
-			// qemu *should* do this on its own but it really doesn't like doing so sometimes
-			await unlink(this.GetQmpPath());
 		} catch (err) {
 			// oh well lol
 		}

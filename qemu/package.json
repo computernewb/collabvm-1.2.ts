@@ -1,7 +1,7 @@
 {
 	"name": "@cvmts/qemu",
 	"version": "1.0.0",
-	"description": "QEMU runtime for crusttest backend",
+	"description": "A simple and easy to use QEMU supervision runtime",
 	"exports": "./dist/index.js",
 	"types": "./dist/index.d.ts",
 	"type": "module",

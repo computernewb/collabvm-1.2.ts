@@ -6,7 +6,7 @@ import * as guac from '@cvmts/guac-rs';
 import CircularBuffer from 'mnemonist/circular-buffer.js';
 import Queue from 'mnemonist/queue.js';
 import { createHash } from 'crypto';
-import { QemuVM, QemuVmDefinition } from '@cvmts/qemu';
+import { VMState, QemuVM, QemuVmDefinition } from '@cvmts/qemu';
 import { IPDataManager } from './IPData.js';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -20,6 +20,10 @@ import VM from './VM.js';
 const __dirname = import.meta.dirname;
 
 const kCVMTSAssetsRoot = path.resolve(__dirname, '../../assets');
+
+const kRestartTimeout = 5000;
+
+
 
 type ChatHistory = {
 	user: string;
@@ -109,6 +113,19 @@ export default class CollabVMServer {
 		vm.GetDisplay().on('rect', (rect: Rect) => this.OnDisplayRectangle(rect));
 
 		this.VM = vm;
+
+		// hack but whatever (TODO: less rickity)
+		if(config.vm.type == "qemu") {
+			(vm as QemuVM).on('statechange', (newState: VMState) => {
+				if(newState == VMState.Stopped) {
+					this.logger.Info("stopped ?");
+					setTimeout(async () => {
+						this.logger.Info("restarting VM");
+						await this.VM.Start();
+					}, kRestartTimeout)
+				}
+			});
+		}
 
 		// authentication manager
 		this.auth = auth;
