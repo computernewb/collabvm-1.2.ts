@@ -94,6 +94,7 @@ export default class WSServer extends EventEmitter implements NetworkServer {
 			// Make sure x-forwarded-for is set
 			if (req.headers['x-forwarded-for'] === undefined) {
 				killConnection();
+				this.logger.Error('X-Forwarded-For header not set. This is most likely a misconfiguration of your reverse proxy.');
 				return;
 			}
 			try {
@@ -101,6 +102,7 @@ export default class WSServer extends EventEmitter implements NetworkServer {
 				ip = req.headers['x-forwarded-for']?.toString().replace(/\ /g, '').split(',')[0];
 			} catch {
 				// If we can't get the IP, kill the connection
+				this.logger.Error('Invalid X-Forwarded-For header. This is most likely a misconfiguration of your reverse proxy.');
 				killConnection();
 				return;
 			}
@@ -117,16 +119,6 @@ export default class WSServer extends EventEmitter implements NetworkServer {
 		} else {
 			if (!req.socket.remoteAddress) return;
 			ip = req.socket.remoteAddress;
-		}
-
-		let ipdata = IPDataManager.GetIPDataMaybe(ip);
-
-		if (ipdata != null) {
-			let connections = ipdata.refCount;
-			if (connections + 1 > this.Config.collabvm.maxConnections) {
-				socket.write('HTTP/1.1 429 Too Many Requests\n\n429 Too Many Requests');
-				socket.destroy();
-			}
 		}
 
 		this.wsServer.handleUpgrade(req, socket, head, (ws: WebSocket) => {
