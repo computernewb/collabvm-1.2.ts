@@ -49,7 +49,7 @@ export class User {
 			clearInterval(this.msgRecieveInterval);
 			this.msgRecieveInterval = setInterval(() => this.onNoMsg(), 10000);
 		});
-		
+
 		this.nopSendInterval = setInterval(() => this.sendNop(), 5000);
 		this.msgRecieveInterval = setInterval(() => this.onNoMsg(), 10000);
 		this.sendNop();
@@ -66,7 +66,7 @@ export class User {
 		this.VoteRateLimit = new RateLimiter(3, 3);
 		this.VoteRateLimit.on('limit', () => this.closeConnection());
 	}
-	
+
 	assignGuestName(existingUsers: string[]): string {
 		var username;
 		do {

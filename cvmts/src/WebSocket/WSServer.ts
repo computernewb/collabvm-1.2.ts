@@ -11,18 +11,18 @@ import { User } from '../User.js';
 import { Logger } from '@cvmts/shared';
 
 export default class WSServer extends EventEmitter implements NetworkServer {
-    private httpServer: http.Server;
-    private wsServer: WebSocketServer;
-    private clients: WSClient[];
-    private Config: IConfig;
-    private logger: Logger;
+	private httpServer: http.Server;
+	private wsServer: WebSocketServer;
+	private clients: WSClient[];
+	private Config: IConfig;
+	private logger: Logger;
 
-    constructor(config : IConfig) {
-        super();
-        this.Config = config;
-        this.clients = [];
-        this.logger = new Logger("CVMTS.WSServer");
-        this.httpServer = http.createServer();
+	constructor(config: IConfig) {
+		super();
+		this.Config = config;
+		this.clients = [];
+		this.logger = new Logger('CVMTS.WSServer');
+		this.httpServer = http.createServer();
 		this.wsServer = new WebSocketServer({ noServer: true });
 		this.httpServer.on('upgrade', (req: http.IncomingMessage, socket: internal.Duplex, head: Buffer) => this.httpOnUpgrade(req, socket, head));
 		this.httpServer.on('request', (req, res) => {
@@ -30,19 +30,19 @@ export default class WSServer extends EventEmitter implements NetworkServer {
 			res.write('This server only accepts WebSocket connections.');
 			res.end();
 		});
-    }
+	}
 
-    start(): void {
-        this.httpServer.listen(this.Config.http.port, this.Config.http.host, () => {
-            this.logger.Info(`WebSocket server listening on ${this.Config.http.host}:${this.Config.http.port}`);
-        });
-    }
+	start(): void {
+		this.httpServer.listen(this.Config.http.port, this.Config.http.host, () => {
+			this.logger.Info(`WebSocket server listening on ${this.Config.http.host}:${this.Config.http.port}`);
+		});
+	}
 
-    stop(): void {
-        this.httpServer.close();   
-    }
+	stop(): void {
+		this.httpServer.close();
+	}
 
-    private httpOnUpgrade(req: http.IncomingMessage, socket: internal.Duplex, head: Buffer) {
+	private httpOnUpgrade(req: http.IncomingMessage, socket: internal.Duplex, head: Buffer) {
 		var killConnection = () => {
 			socket.write('HTTP/1.1 400 Bad Request\n\n400 Bad Request');
 			socket.destroy();
@@ -121,7 +121,7 @@ export default class WSServer extends EventEmitter implements NetworkServer {
 
 		let ipdata = IPDataManager.GetIPDataMaybe(ip);
 
-		if(ipdata != null) {
+		if (ipdata != null) {
 			let connections = ipdata.refCount;
 			if (connections + 1 > this.Config.collabvm.maxConnections) {
 				socket.write('HTTP/1.1 429 Too Many Requests\n\n429 Too Many Requests');
@@ -136,11 +136,11 @@ export default class WSServer extends EventEmitter implements NetworkServer {
 	}
 
 	private onConnection(ws: WebSocket, req: http.IncomingMessage, ip: string) {
-        let client = new WSClient(ws, ip);
-        this.clients.push(client);
+		let client = new WSClient(ws, ip);
+		this.clients.push(client);
 		let user = new User(client, IPDataManager.GetIPData(ip), this.Config);
 
-        this.emit('connect', user);
+		this.emit('connect', user);
 
 		ws.on('error', (e) => {
 			this.logger.Error(`${e} (caused by connection ${ip})`);

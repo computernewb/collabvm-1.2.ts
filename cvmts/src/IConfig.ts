@@ -1,4 +1,4 @@
-import VNCVMDef from "./VNCVM/VNCVMDef";
+import VNCVMDef from './VNCVM/VNCVMDef';
 
 export default interface IConfig {
 	http: {
@@ -13,7 +13,7 @@ export default interface IConfig {
 		enabled: boolean;
 		host: string;
 		port: number;
-	}
+	};
 	auth: {
 		enabled: boolean;
 		apiEndpoint: string;
@@ -26,7 +26,7 @@ export default interface IConfig {
 		};
 	};
 	vm: {
-		type: "qemu" | "vncvm";
+		type: 'qemu' | 'vncvm';
 	};
 	qemu: {
 		qemuArgs: string;

@@ -34,7 +34,7 @@ try {
 }
 
 let exiting = false;
-let VM : VM;
+let VM: VM;
 
 async function stop() {
 	if (exiting) return;
@@ -47,7 +47,7 @@ async function start() {
 	// Init the auth manager if enabled
 	let auth = Config.auth.enabled ? new AuthManager(Config.auth.apiEndpoint, Config.auth.secretKey) : null;
 	switch (Config.vm.type) {
-		case "qemu": {
+		case 'qemu': {
 			// Print a warning if qmpSockDir is set
 			// and the host OS is Windows, as this
 			// configuration will very likely not work.
@@ -67,7 +67,7 @@ async function start() {
 			VM = new QemuVM(def);
 			break;
 		}
-		case "vncvm": {
+		case 'vncvm': {
 			VM = new VNCVM(Config.vncvm);
 			break;
 		}

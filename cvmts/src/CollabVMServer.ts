@@ -23,8 +23,6 @@ const kCVMTSAssetsRoot = path.resolve(__dirname, '../../assets');
 
 const kRestartTimeout = 5000;
 
-
-
 type ChatHistory = {
 	user: string;
 	msg: string;
@@ -115,14 +113,14 @@ export default class CollabVMServer {
 		this.VM = vm;
 
 		// hack but whatever (TODO: less rickity)
-		if(config.vm.type == "qemu") {
+		if (config.vm.type == 'qemu') {
 			(vm as QemuVM).on('statechange', (newState: VMState) => {
-				if(newState == VMState.Stopped) {
-					this.logger.Info("stopped ?");
+				if (newState == VMState.Stopped) {
+					this.logger.Info('stopped ?');
 					setTimeout(async () => {
-						this.logger.Info("restarting VM");
+						this.logger.Info('restarting VM');
 						await this.VM.Start();
-					}, kRestartTimeout)
+					}, kRestartTimeout);
 				}
 			});
 		}
@@ -642,7 +640,7 @@ export default class CollabVMServer {
 			}
 		} catch (err) {
 			// No
-			this.logger.Error(`User ${user?.IP.address} ${user?.username ? `with username ${user?.username}` : ''} sent broken Guacamole: ${(err as Error)}`);
+			this.logger.Error(`User ${user?.IP.address} ${user?.username ? `with username ${user?.username}` : ''} sent broken Guacamole: ${err as Error}`);
 			user?.kick();
 		}
 	}

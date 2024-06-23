@@ -26,13 +26,11 @@ export default class AuthManager {
 		});
 
 		// Make sure the fetch returned okay
-		if(!response.ok)
-			throw new Error(`Failed to query quth server: ${response.statusText}`)
+		if (!response.ok) throw new Error(`Failed to query quth server: ${response.statusText}`);
 
 		let json = (await response.json()) as JoinResponse;
 
-		if (!json.success)
-			throw new Error(json.error);
+		if (!json.success) throw new Error(json.error);
 
 		return json;
 	}
