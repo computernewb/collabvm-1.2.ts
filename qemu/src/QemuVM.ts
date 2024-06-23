@@ -36,7 +36,6 @@ export class QemuVM extends EventEmitter {
 	private qmpFailCount = 0;
 
 	private qemuProcess: ExecaChildProcess | null = null;
-	private qemuRunning = false;
 
 	private display: QemuDisplay;
 	private definition: QemuVmDefinition;
@@ -54,12 +53,12 @@ export class QemuVM extends EventEmitter {
 
 	async Start() {
 		// Don't start while either trying to start or starting.
-		if (this.state == VMState.Started || this.state == VMState.Starting) return;
+		//if (this.state == VMState.Started || this.state == VMState.Starting) return;
+		if(this.qemuProcess) return;
 
 		let cmd = this.definition.command;
 
-		// build additional command line statements to enable qmp/vnc over unix sockets
-		// FIXME: Still use TCP if on Windows.
+		// Build additional command line statements to enable qmp/vnc over unix sockets
 		if (!this.addedAdditionalArguments) {
 			cmd += ' -no-shutdown';
 			if (this.definition.snapshot) cmd += ' -snapshot';
@@ -101,8 +100,13 @@ export class QemuVM extends EventEmitter {
 		// let code know the VM is going to reset
 		this.emit('reset');
 
-		// Do magic.
-		await this.StopQemu();
+		if(this.qemuProcess !== null) {
+			// Do magic.
+			await this.StopQemu();
+		} else {
+			// N.B we always get here when addl. arguments are added
+			await this.StartQemu(this.definition.command);
+		}
 	}
 
 	async QmpCommand(command: string, args: any | null): Promise<any> {
@@ -150,9 +154,8 @@ export class QemuVM extends EventEmitter {
 		this.state = state;
 		this.emit('statechange', this.state);
 
-		// reset some state when starting the vm back up
-		// to avoid potentional issues.
-		if(this.state == VMState.Starting) {
+		// reset QMP fail count when the VM is (re)starting or stopped
+		if(this.state == VMState.Stopped || this.state == VMState.Starting) {
 			this.qmpFailCount = 0;
 		}
 	}
@@ -177,14 +180,12 @@ export class QemuVM extends EventEmitter {
 
 		this.qemuProcess.on('spawn', async () => {
 			self.VMLog().Info("QEMU started");
-			self.qemuRunning = true;
 			await Shared.Sleep(500);
 			await self.ConnectQmp();
 		});
 
 		this.qemuProcess.on('exit', async (code) => {
 			self.VMLog().Info("QEMU process exited");
-			self.qemuRunning = false;
 
 
 			// this should be being done anways but it's very clearly not sometimes so
@@ -222,7 +223,10 @@ export class QemuVM extends EventEmitter {
 	}
 
 	private async StopQemu() {
-		if (this.qemuRunning == true) this.qemuProcess?.kill('SIGTERM');
+		if (this.qemuProcess) {
+			this.qemuProcess?.kill('SIGTERM');
+			this.qemuProcess = null;
+		}
 	}
 
 	private async ConnectQmp() {
@@ -291,7 +295,6 @@ export class QemuVM extends EventEmitter {
 	private async DisconnectDisplay() {
 		try {
 			this.display?.Disconnect();
-			//this.display = null; // disassociate with that display object.
 		} catch (err) {
 			// oh well lol
 		}
