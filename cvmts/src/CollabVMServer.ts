@@ -14,6 +14,7 @@ import AuthManager from './AuthManager.js';
 import { Size, Rect, Logger } from '@cvmts/shared';
 import { JPEGEncoder } from './JPEGEncoder.js';
 import VM from './VM.js';
+import { ReaderModel } from '@maxmind/geoip2-node';
 
 // Instead of strange hacks we can just use nodejs provided
 // import.meta properties, which have existed since LTS if not before
@@ -81,9 +82,12 @@ export default class CollabVMServer {
 	// Authentication manager
 	private auth: AuthManager | null;
 
+	// Geoip
+	private geoipReader: ReaderModel | null;
+
 	private logger = new Logger('CVMTS.Server');
 
-	constructor(config: IConfig, vm: VM, auth: AuthManager | null) {
+	constructor(config: IConfig, vm: VM, auth: AuthManager | null, geoipReader: ReaderModel | null) {
 		this.Config = config;
 		this.ChatHistory = new CircularBuffer<ChatHistory>(Array, this.Config.collabvm.maxChatHistoryLength);
 		this.TurnQueue = new Queue<User>();
@@ -127,6 +131,8 @@ export default class CollabVMServer {
 
 		// authentication manager
 		this.auth = auth;
+
+		this.geoipReader = geoipReader;
 	}
 
 	public addUser(user: User) {
@@ -137,12 +143,20 @@ export default class CollabVMServer {
 			sameip[0].kick();
 		}
 		this.clients.push(user);
+		if (this.Config.geoip.enabled) {
+			try {
+				user.countryCode = this.geoipReader!.country(user.IP.address).country!.isoCode;
+			} catch (error) {
+				this.logger.Warning(`Failed to get country code for ${user.IP.address}: ${(error as Error).message}`);
+			}
+		}
 		user.socket.on('msg', (msg: string) => this.onMessage(user, msg));
 		user.socket.on('disconnect', () => this.connectionClosed(user));
 		if (this.Config.auth.enabled) {
 			user.sendMsg(cvm.guacEncode('auth', this.Config.auth.apiEndpoint));
 		}
 		user.sendMsg(this.getAdduserMsg());
+		if (this.Config.geoip.enabled) user.sendMsg(this.getFlagMsg());
 	}
 
 	private connectionClosed(user: User) {
@@ -196,7 +210,14 @@ export default class CollabVMServer {
 								await old.kick();
 							}
 							// Set username
-							this.renameUser(client, res.username);
+							if (client.countryCode !== null && client.noFlag) {
+								// privacy
+								for (let cl of this.clients.filter(c => c !== client)) {
+									cl.sendMsg(cvm.guacEncode('remuser', '1', client.username!));
+								}
+								this.renameUser(client, res.username, false);
+							}
+							else this.renameUser(client, res.username, true);
 							// Set rank
 							client.rank = res.rank;
 							if (client.rank === Rank.Admin) {
@@ -217,6 +238,11 @@ export default class CollabVMServer {
 						client.sendMsg(cvm.guacEncode('login', '0', 'There was an internal error while authenticating. Please let a staff member know as soon as possible'));
 					}
 					break;
+				case 'noflag': {
+					if (client.connectedToNode) // too late
+						return;
+					client.noFlag = true;
+				}
 				case 'list':
 					client.sendMsg(cvm.guacEncode('list', this.Config.collabvm.node, this.Config.collabvm.displayname, this.screenHidden ? this.screenHiddenThumb : await this.getThumbnail()));
 					break;
@@ -652,7 +678,7 @@ export default class CollabVMServer {
 		return arr;
 	}
 
-	renameUser(client: User, newName?: string) {
+	renameUser(client: User, newName?: string, announce: boolean = true) {
 		// This shouldn't need a ternary but it does for some reason
 		var hadName: boolean = client.username ? true : false;
 		var oldname: any;
@@ -683,10 +709,13 @@ export default class CollabVMServer {
 		client.sendMsg(cvm.guacEncode('rename', '0', status, client.username!, client.rank.toString()));
 		if (hadName) {
 			this.logger.Info(`Rename ${client.IP.address} from ${oldname} to ${client.username}`);
-			this.clients.forEach((c) => c.sendMsg(cvm.guacEncode('rename', '1', oldname, client.username!, client.rank.toString())));
+			if (announce) this.clients.forEach((c) => c.sendMsg(cvm.guacEncode('rename', '1', oldname, client.username!, client.rank.toString())));
 		} else {
 			this.logger.Info(`Rename ${client.IP.address} to ${client.username}`);
-			this.clients.forEach((c) => c.sendMsg(cvm.guacEncode('adduser', '1', client.username!, client.rank.toString())));
+			if (announce) this.clients.forEach((c) => {
+				c.sendMsg(cvm.guacEncode('adduser', '1', client.username!, client.rank.toString()));
+				if (client.countryCode !== null) c.sendMsg(cvm.guacEncode('flag', client.username!, client.countryCode));
+			});
 		}
 	}
 
@@ -694,6 +723,14 @@ export default class CollabVMServer {
 		var arr: string[] = ['adduser', this.clients.filter((c) => c.username).length.toString()];
 
 		this.clients.filter((c) => c.username).forEach((c) => arr.push(c.username!, c.rank.toString()));
+		return cvm.guacEncode(...arr);
+	}
+
+	getFlagMsg() : string {
+		var arr = ['flag'];
+		for (let c of this.clients.filter(cl => cl.countryCode !== null && cl.username && (!cl.noFlag || cl.rank === Rank.Unregistered))) {
+			arr.push(c.username!, c.countryCode!);
+		}
 		return cvm.guacEncode(...arr);
 	}
 

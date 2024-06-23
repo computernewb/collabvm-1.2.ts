@@ -12,3 +12,6 @@ cvmts/attic
 # Guac-rs
 cvm-rs/target
 cvm-rs/index.node
+
+# geolite shit
+**/geoip/

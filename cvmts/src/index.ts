@@ -12,6 +12,7 @@ import { User } from './User.js';
 import TCPServer from './TCP/TCPServer.js';
 import VM from './VM.js';
 import VNCVM from './VNCVM/VNCVM.js';
+import GeoIPDownloader from './GeoIPDownloader.js';
 
 let logger = new Shared.Logger('CVMTS.Init');
 
@@ -44,6 +45,11 @@ async function stop() {
 }
 
 async function start() {
+	let geoipReader = null;
+	if (Config.geoip.enabled) {
+		let downloader = new GeoIPDownloader(Config.geoip.directory, Config.geoip.accountID, Config.geoip.licenseKey);
+		geoipReader = await downloader.getGeoIPReader();
+	}
 	// Init the auth manager if enabled
 	let auth = Config.auth.enabled ? new AuthManager(Config.auth.apiEndpoint, Config.auth.secretKey) : null;
 	switch (Config.vm.type) {
@@ -82,7 +88,7 @@ async function start() {
 
 	await VM.Start();
 	// Start up the server
-	var CVM = new CollabVMServer(Config, VM, auth);
+	var CVM = new CollabVMServer(Config, VM, auth, geoipReader);
 
 	var WS = new WSServer(Config);
 	WS.on('connect', (client: User) => CVM.addUser(client));

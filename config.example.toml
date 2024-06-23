@@ -11,6 +11,15 @@ origin = false
 # Origins to accept connections from.
 originAllowedDomains = ["computernewb.com"]
 
+[geoip]
+# Enables support for showing country flags next to usernames.
+enabled = false
+# Directory to store and load GeoIP databases from.
+directory = "geoip/"
+# MaxMind license key and account ID (https://www.maxmind.com/en/accounts/current/license-key)
+accountID = ""
+licenseKey = ""
+
 [tcp]
 enabled = false
 host = "0.0.0.0"

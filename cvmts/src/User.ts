@@ -19,6 +19,9 @@ export class User {
 	msgsSent: number;
 	Config: IConfig;
 	IP: IPData;
+	// Hide flag. Only takes effect if the user is logged in.
+	noFlag: boolean = false;
+	countryCode: string | null = null;
 	// Rate limiters
 	ChatRateLimit: RateLimiter;
 	LoginRateLimit: RateLimiter;

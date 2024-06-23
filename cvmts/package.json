@@ -13,6 +13,7 @@
   "dependencies": {
     "@cvmts/cvm-rs": "*",
     "@cvmts/qemu": "*",
+    "@maxmind/geoip2-node": "^5.0.0",
     "execa": "^8.0.1",
     "mnemonist": "^0.39.5",
     "sharp": "^0.33.3",

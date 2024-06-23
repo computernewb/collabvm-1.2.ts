@@ -9,6 +9,12 @@ export default interface IConfig {
 		origin: boolean;
 		originAllowedDomains: string[];
 	};
+	geoip: {
+		enabled: boolean;
+		directory: string;
+		accountID: string;
+		licenseKey: string;
+	}
 	tcp: {
 		enabled: boolean;
 		host: string;
