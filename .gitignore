@@ -1,3 +1,17 @@
-node_modules/
-build/
+.parcel-cache/
+**/.yarn/
+**/node_modules/
 config.toml
+
+# for now
+cvmts/attic
+
+/dist
+**/dist/
+
+# Guac-rs
+cvm-rs/target
+cvm-rs/index.node
+
+# geolite shit
+**/geoip/

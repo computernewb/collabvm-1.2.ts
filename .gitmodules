@@ -1,0 +1,3 @@
+[submodule "nodejs-rfb"]
+	path = nodejs-rfb
+	url = https://github.com/computernewb/nodejs-rfb
