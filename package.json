@@ -20,6 +20,7 @@
 	"packageManager": "yarn@4.1.1",
 	"scripts": {
 		"build": "just",
-		"serve": "node cvmts/dist/index.js"
+		"serve": "node cvmts/dist/index.js",
+		"clean": "rm -rf .parcel-cache .yarn **/node_modules **/dist cvm-rs/target cvm-rs/index.node"
 	}
 }
