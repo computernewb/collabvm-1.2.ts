@@ -11,8 +11,7 @@
   "author": "Elijah R, modeco80",
   "license": "GPL-3.0",
   "dependencies": {
-    "@cvmts/guac-rs": "*",
-    "@cvmts/jpegturbo-rs": "*",
+    "@cvmts/cvm-rs": "*",
     "@cvmts/qemu": "*",
     "execa": "^8.0.1",
     "mnemonist": "^0.39.5",

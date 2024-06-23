@@ -2,8 +2,7 @@
 	"name": "cvmts-repo",
 	"workspaces": [
 		"shared",
-		"guac-rs",
-		"jpegturbo-rs",
+		"cvm-rs",
 		"nodejs-rfb",
 		"qemu",
 		"cvmts"
@@ -19,7 +18,7 @@
 	},
 	"packageManager": "yarn@4.1.1",
 	"scripts": {
-		"build": "yarn && cd nodejs-rfb && yarn && yarn build && cd ../shared && yarn build && cd ../qemu && yarn build && cd ../cvmts && yarn build",
+		"build": "just",
 		"serve": "node cvmts/dist/index.js"
 	}
 }

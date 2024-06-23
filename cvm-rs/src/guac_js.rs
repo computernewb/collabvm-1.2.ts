@@ -1,6 +1,5 @@
-mod guac;
-
 use neon::prelude::*;
+use crate::guac;
 
 fn guac_decode_impl<'a>(cx: &mut FunctionContext<'a>) -> JsResult<'a, JsArray> {
     let input = cx.argument::<JsString>(0)?.value(cx);
@@ -40,17 +39,10 @@ fn guac_encode_impl<'a>(cx: &mut FunctionContext<'a>) -> JsResult<'a, JsString> 
     Ok(cx.string(guac::encode_instruction(&elements)))
 }
 
-fn guac_decode(mut cx: FunctionContext) -> JsResult<JsArray> {
+pub fn guac_decode(mut cx: FunctionContext) -> JsResult<JsArray> {
     guac_decode_impl(&mut cx)
 }
 
-fn guac_encode(mut cx: FunctionContext) -> JsResult<JsString> {
+pub fn guac_encode(mut cx: FunctionContext) -> JsResult<JsString> {
     guac_encode_impl(&mut cx)
-}
-
-#[neon::main]
-fn main(mut cx: ModuleContext) -> NeonResult<()> {
-    cx.export_function("guacDecode", guac_decode)?;
-    cx.export_function("guacEncode", guac_encode)?;
-    Ok(())
 }

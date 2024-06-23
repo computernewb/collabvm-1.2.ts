@@ -1,7 +1,7 @@
 import IConfig from './IConfig.js';
 import * as Utilities from './Utilities.js';
 import { User, Rank } from './User.js';
-import * as guac from '@cvmts/guac-rs';
+import * as cvm from '@cvmts/cvm-rs';
 // I hate that you have to do it like this
 import CircularBuffer from 'mnemonist/circular-buffer.js';
 import Queue from 'mnemonist/queue.js';
@@ -142,7 +142,7 @@ export default class CollabVMServer {
 		user.socket.on('msg', (msg: string) => this.onMessage(user, msg));
 		user.socket.on('disconnect', () => this.connectionClosed(user));
 		if (this.Config.auth.enabled) {
-			user.sendMsg(guac.guacEncode('auth', this.Config.auth.apiEndpoint));
+			user.sendMsg(cvm.guacEncode('auth', this.Config.auth.apiEndpoint));
 		}
 		user.sendMsg(this.getAdduserMsg());
 	}
@@ -171,25 +171,25 @@ export default class CollabVMServer {
 			if (hadturn) this.nextTurn();
 		}
 
-		this.clients.forEach((c) => c.sendMsg(guac.guacEncode('remuser', '1', user.username!)));
+		this.clients.forEach((c) => c.sendMsg(cvm.guacEncode('remuser', '1', user.username!)));
 	}
 
 	private async onMessage(client: User, message: string) {
 		try {
-			var msgArr = guac.guacDecode(message);
+			var msgArr = cvm.guacDecode(message);
 			if (msgArr.length < 1) return;
 			switch (msgArr[0]) {
 				case 'login':
 					if (msgArr.length !== 2 || !this.Config.auth.enabled) return;
 					if (!client.connectedToNode) {
-						client.sendMsg(guac.guacEncode('login', '0', 'You must connect to the VM before logging in.'));
+						client.sendMsg(cvm.guacEncode('login', '0', 'You must connect to the VM before logging in.'));
 						return;
 					}
 					try {
 						let res = await this.auth!.Authenticate(msgArr[1], client);
 						if (res.clientSuccess) {
 							this.logger.Info(`${client.IP.address} logged in as ${res.username}`);
-							client.sendMsg(guac.guacEncode('login', '1'));
+							client.sendMsg(cvm.guacEncode('login', '1'));
 							let old = this.clients.find((c) => c.username === res.username);
 							if (old) {
 								// kick() doesnt wait until the user is actually removed from the list and itd be anal to make it do that
@@ -202,13 +202,13 @@ export default class CollabVMServer {
 							// Set rank
 							client.rank = res.rank;
 							if (client.rank === Rank.Admin) {
-								client.sendMsg(guac.guacEncode('admin', '0', '1'));
+								client.sendMsg(cvm.guacEncode('admin', '0', '1'));
 							} else if (client.rank === Rank.Moderator) {
-								client.sendMsg(guac.guacEncode('admin', '0', '3', this.ModPerms.toString()));
+								client.sendMsg(cvm.guacEncode('admin', '0', '3', this.ModPerms.toString()));
 							}
-							this.clients.forEach((c) => c.sendMsg(guac.guacEncode('adduser', '1', client.username!, client.rank.toString())));
+							this.clients.forEach((c) => c.sendMsg(cvm.guacEncode('adduser', '1', client.username!, client.rank.toString())));
 						} else {
-							client.sendMsg(guac.guacEncode('login', '0', res.error!));
+							client.sendMsg(cvm.guacEncode('login', '0', res.error!));
 							if (res.error === 'You are banned') {
 								client.kick();
 							}
@@ -216,28 +216,28 @@ export default class CollabVMServer {
 					} catch (err) {
 						this.logger.Error(`Error authenticating client ${client.IP.address}: ${(err as Error).message}`);
 						// for now?
-						client.sendMsg(guac.guacEncode('login', '0', 'There was an internal error while authenticating. Please let a staff member know as soon as possible'));
+						client.sendMsg(cvm.guacEncode('login', '0', 'There was an internal error while authenticating. Please let a staff member know as soon as possible'));
 					}
 					break;
 				case 'list':
-					client.sendMsg(guac.guacEncode('list', this.Config.collabvm.node, this.Config.collabvm.displayname, this.screenHidden ? this.screenHiddenThumb : await this.getThumbnail()));
+					client.sendMsg(cvm.guacEncode('list', this.Config.collabvm.node, this.Config.collabvm.displayname, this.screenHidden ? this.screenHiddenThumb : await this.getThumbnail()));
 					break;
 				case 'connect':
 					if (!client.username || msgArr.length !== 2 || msgArr[1] !== this.Config.collabvm.node) {
-						client.sendMsg(guac.guacEncode('connect', '0'));
+						client.sendMsg(cvm.guacEncode('connect', '0'));
 						return;
 					}
 					client.connectedToNode = true;
-					client.sendMsg(guac.guacEncode('connect', '1', '1', this.VM.SnapshotsSupported() ? '1' : '0', '0'));
+					client.sendMsg(cvm.guacEncode('connect', '1', '1', this.VM.SnapshotsSupported() ? '1' : '0', '0'));
 					if (this.ChatHistory.size !== 0) client.sendMsg(this.getChatHistoryMsg());
-					if (this.Config.collabvm.motd) client.sendMsg(guac.guacEncode('chat', '', this.Config.collabvm.motd));
+					if (this.Config.collabvm.motd) client.sendMsg(cvm.guacEncode('chat', '', this.Config.collabvm.motd));
 					if (this.screenHidden) {
-						client.sendMsg(guac.guacEncode('size', '0', '1024', '768'));
-						client.sendMsg(guac.guacEncode('png', '0', '0', '0', '0', this.screenHiddenImg));
+						client.sendMsg(cvm.guacEncode('size', '0', '1024', '768'));
+						client.sendMsg(cvm.guacEncode('png', '0', '0', '0', '0', this.screenHiddenImg));
 					} else {
 						await this.SendFullScreenWithSize(client);
 					}
-					client.sendMsg(guac.guacEncode('sync', Date.now().toString()));
+					client.sendMsg(cvm.guacEncode('sync', Date.now().toString()));
 					if (this.voteInProgress) this.sendVoteUpdate(client);
 					this.sendTurnUpdate(client);
 					break;
@@ -245,7 +245,7 @@ export default class CollabVMServer {
 					if (client.connectedToNode) return;
 					if (client.username || msgArr.length !== 3 || msgArr[1] !== this.Config.collabvm.node) {
 						// The use of connect here is intentional.
-						client.sendMsg(guac.guacEncode('connect', '0'));
+						client.sendMsg(cvm.guacEncode('connect', '0'));
 						return;
 					}
 
@@ -257,22 +257,22 @@ export default class CollabVMServer {
 							client.viewMode = 1;
 							break;
 						default:
-							client.sendMsg(guac.guacEncode('connect', '0'));
+							client.sendMsg(cvm.guacEncode('connect', '0'));
 							return;
 					}
 
-					client.sendMsg(guac.guacEncode('connect', '1', '1', this.VM.SnapshotsSupported() ? '1' : '0', '0'));
+					client.sendMsg(cvm.guacEncode('connect', '1', '1', this.VM.SnapshotsSupported() ? '1' : '0', '0'));
 					if (this.ChatHistory.size !== 0) client.sendMsg(this.getChatHistoryMsg());
-					if (this.Config.collabvm.motd) client.sendMsg(guac.guacEncode('chat', '', this.Config.collabvm.motd));
+					if (this.Config.collabvm.motd) client.sendMsg(cvm.guacEncode('chat', '', this.Config.collabvm.motd));
 
 					if (client.viewMode == 1) {
 						if (this.screenHidden) {
-							client.sendMsg(guac.guacEncode('size', '0', '1024', '768'));
-							client.sendMsg(guac.guacEncode('png', '0', '0', '0', '0', this.screenHiddenImg));
+							client.sendMsg(cvm.guacEncode('size', '0', '1024', '768'));
+							client.sendMsg(cvm.guacEncode('png', '0', '0', '0', '0', this.screenHiddenImg));
 						} else {
 							await this.SendFullScreenWithSize(client);
 						}
-						client.sendMsg(guac.guacEncode('sync', Date.now().toString()));
+						client.sendMsg(cvm.guacEncode('sync', Date.now().toString()));
 					}
 
 					if (this.voteInProgress) this.sendVoteUpdate(client);
@@ -282,12 +282,12 @@ export default class CollabVMServer {
 					if (!client.RenameRateLimit.request()) return;
 					if (client.connectedToNode && client.IP.muted) return;
 					if (this.Config.auth.enabled && client.rank !== Rank.Unregistered) {
-						client.sendMsg(guac.guacEncode('chat', '', 'Go to your account settings to change your username.'));
+						client.sendMsg(cvm.guacEncode('chat', '', 'Go to your account settings to change your username.'));
 						return;
 					}
 					if (this.Config.auth.enabled && msgArr[1] !== undefined) {
 						// Don't send system message to a user without a username since it was likely an automated attempt by the webapp
-						if (client.username) client.sendMsg(guac.guacEncode('chat', '', 'You need to log in to do that.'));
+						if (client.username) client.sendMsg(cvm.guacEncode('chat', '', 'You need to log in to do that.'));
 						if (client.rank !== Rank.Unregistered) return;
 						this.renameUser(client, undefined);
 						return;
@@ -299,7 +299,7 @@ export default class CollabVMServer {
 					if (client.IP.muted) return;
 					if (msgArr.length !== 2) return;
 					if (this.Config.auth.enabled && client.rank === Rank.Unregistered && !this.Config.auth.guestPermissions.chat) {
-						client.sendMsg(guac.guacEncode('chat', '', 'You need to login to do that.'));
+						client.sendMsg(cvm.guacEncode('chat', '', 'You need to login to do that.'));
 						return;
 					}
 					var msg = Utilities.HTMLSanitize(msgArr[1]);
@@ -307,14 +307,14 @@ export default class CollabVMServer {
 					if (msg.length > this.Config.collabvm.maxChatLength) msg = msg.substring(0, this.Config.collabvm.maxChatLength);
 					if (msg.trim().length < 1) return;
 
-					this.clients.forEach((c) => c.sendMsg(guac.guacEncode('chat', client.username!, msg)));
+					this.clients.forEach((c) => c.sendMsg(cvm.guacEncode('chat', client.username!, msg)));
 					this.ChatHistory.push({ user: client.username, msg: msg });
 					client.onMsgSent();
 					break;
 				case 'turn':
 					if ((!this.turnsAllowed || this.Config.collabvm.turnwhitelist) && client.rank !== Rank.Admin && client.rank !== Rank.Moderator && client.rank !== Rank.Turn) return;
 					if (this.Config.auth.enabled && client.rank === Rank.Unregistered && !this.Config.auth.guestPermissions.turn) {
-						client.sendMsg(guac.guacEncode('chat', '', 'You need to login to do that.'));
+						client.sendMsg(cvm.guacEncode('chat', '', 'You need to login to do that.'));
 						return;
 					}
 					if (!client.TurnRateLimit.request()) return;
@@ -384,33 +384,33 @@ export default class CollabVMServer {
 						case '1':
 							if (!this.voteInProgress) {
 								if (this.Config.auth.enabled && client.rank === Rank.Unregistered && !this.Config.auth.guestPermissions.callForReset) {
-									client.sendMsg(guac.guacEncode('chat', '', 'You need to login to do that.'));
+									client.sendMsg(cvm.guacEncode('chat', '', 'You need to login to do that.'));
 									return;
 								}
 
 								if (this.voteCooldown !== 0) {
-									client.sendMsg(guac.guacEncode('vote', '3', this.voteCooldown.toString()));
+									client.sendMsg(cvm.guacEncode('vote', '3', this.voteCooldown.toString()));
 									return;
 								}
 								this.startVote();
-								this.clients.forEach((c) => c.sendMsg(guac.guacEncode('chat', '', `${client.username} has started a vote to reset the VM.`)));
+								this.clients.forEach((c) => c.sendMsg(cvm.guacEncode('chat', '', `${client.username} has started a vote to reset the VM.`)));
 							}
 							if (this.Config.auth.enabled && client.rank === Rank.Unregistered && !this.Config.auth.guestPermissions.vote) {
-								client.sendMsg(guac.guacEncode('chat', '', 'You need to login to do that.'));
+								client.sendMsg(cvm.guacEncode('chat', '', 'You need to login to do that.'));
 								return;
 							} else if (client.IP.vote !== true) {
-								this.clients.forEach((c) => c.sendMsg(guac.guacEncode('chat', '', `${client.username} has voted yes.`)));
+								this.clients.forEach((c) => c.sendMsg(cvm.guacEncode('chat', '', `${client.username} has voted yes.`)));
 							}
 							client.IP.vote = true;
 							break;
 						case '0':
 							if (!this.voteInProgress) return;
 							if (this.Config.auth.enabled && client.rank === Rank.Unregistered && !this.Config.auth.guestPermissions.vote) {
-								client.sendMsg(guac.guacEncode('chat', '', 'You need to login to do that.'));
+								client.sendMsg(cvm.guacEncode('chat', '', 'You need to login to do that.'));
 								return;
 							}
 							if (client.IP.vote !== false) {
-								this.clients.forEach((c) => c.sendMsg(guac.guacEncode('chat', '', `${client.username} has voted no.`)));
+								this.clients.forEach((c) => c.sendMsg(cvm.guacEncode('chat', '', `${client.username} has voted no.`)));
 							}
 							client.IP.vote = false;
 							break;
@@ -423,7 +423,7 @@ export default class CollabVMServer {
 						case '2':
 							// Login
 							if (this.Config.auth.enabled) {
-								client.sendMsg(guac.guacEncode('chat', '', 'This server does not support staff passwords. Please log in to become staff.'));
+								client.sendMsg(cvm.guacEncode('chat', '', 'This server does not support staff passwords. Please log in to become staff.'));
 								return;
 							}
 							if (!client.LoginRateLimit.request() || !client.username) return;
@@ -434,37 +434,37 @@ export default class CollabVMServer {
 							sha256.destroy();
 							if (pwdHash === this.Config.collabvm.adminpass) {
 								client.rank = Rank.Admin;
-								client.sendMsg(guac.guacEncode('admin', '0', '1'));
+								client.sendMsg(cvm.guacEncode('admin', '0', '1'));
 							} else if (this.Config.collabvm.moderatorEnabled && pwdHash === this.Config.collabvm.modpass) {
 								client.rank = Rank.Moderator;
-								client.sendMsg(guac.guacEncode('admin', '0', '3', this.ModPerms.toString()));
+								client.sendMsg(cvm.guacEncode('admin', '0', '3', this.ModPerms.toString()));
 							} else if (this.Config.collabvm.turnwhitelist && pwdHash === this.Config.collabvm.turnpass) {
 								client.rank = Rank.Turn;
-								client.sendMsg(guac.guacEncode('chat', '', 'You may now take turns.'));
+								client.sendMsg(cvm.guacEncode('chat', '', 'You may now take turns.'));
 							} else {
-								client.sendMsg(guac.guacEncode('admin', '0', '0'));
+								client.sendMsg(cvm.guacEncode('admin', '0', '0'));
 								return;
 							}
 							if (this.screenHidden) {
 								await this.SendFullScreenWithSize(client);
 
-								client.sendMsg(guac.guacEncode('sync', Date.now().toString()));
+								client.sendMsg(cvm.guacEncode('sync', Date.now().toString()));
 							}
 
-							this.clients.forEach((c) => c.sendMsg(guac.guacEncode('adduser', '1', client.username!, client.rank.toString())));
+							this.clients.forEach((c) => c.sendMsg(cvm.guacEncode('adduser', '1', client.username!, client.rank.toString())));
 							break;
 						case '5':
 							// QEMU Monitor
 							if (client.rank !== Rank.Admin) return;
 							/* Surely there could be rudimentary processing to convert some qemu monitor syntax to [XYZ hypervisor] if possible
                         if (!(this.VM instanceof QEMUVM)) {
-                            client.sendMsg(guac.guacEncode("admin", "2", "This is not a QEMU VM and therefore QEMU monitor commands cannot be run."));
+                            client.sendMsg(cvm.guacEncode("admin", "2", "This is not a QEMU VM and therefore QEMU monitor commands cannot be run."));
                             return;
                         }
 */
 							if (msgArr.length !== 4 || msgArr[2] !== this.Config.collabvm.node) return;
 							var output = await this.VM.MonitorCommand(msgArr[3]);
-							client.sendMsg(guac.guacEncode('admin', '2', String(output)));
+							client.sendMsg(cvm.guacEncode('admin', '2', String(output)));
 							break;
 						case '8':
 							// Restore
@@ -541,7 +541,7 @@ export default class CollabVMServer {
 							// Rename user
 							if (client.rank !== Rank.Admin && (client.rank !== Rank.Moderator || !this.Config.collabvm.moderatorPermissions.rename)) return;
 							if (this.Config.auth.enabled) {
-								client.sendMsg(guac.guacEncode('chat', '', 'Cannot rename users on a server that uses authentication.'));
+								client.sendMsg(cvm.guacEncode('chat', '', 'Cannot rename users on a server that uses authentication.'));
 							}
 							if (msgArr.length !== 4) return;
 							var user = this.clients.find((c) => c.username === msgArr[2]);
@@ -554,7 +554,7 @@ export default class CollabVMServer {
 							if (msgArr.length !== 3) return;
 							var user = this.clients.find((c) => c.username === msgArr[2]);
 							if (!user) return;
-							client.sendMsg(guac.guacEncode('admin', '19', msgArr[2], user.IP.address));
+							client.sendMsg(cvm.guacEncode('admin', '19', msgArr[2], user.IP.address));
 							break;
 						case '20':
 							// Steal turn
@@ -567,14 +567,14 @@ export default class CollabVMServer {
 							if (msgArr.length !== 3) return;
 							switch (client.rank) {
 								case Rank.Admin:
-									this.clients.forEach((c) => c.sendMsg(guac.guacEncode('chat', client.username!, msgArr[2])));
+									this.clients.forEach((c) => c.sendMsg(cvm.guacEncode('chat', client.username!, msgArr[2])));
 
 									this.ChatHistory.push({ user: client.username!, msg: msgArr[2] });
 									break;
 								case Rank.Moderator:
-									this.clients.filter((c) => c.rank !== Rank.Admin).forEach((c) => c.sendMsg(guac.guacEncode('chat', client.username!, msgArr[2])));
+									this.clients.filter((c) => c.rank !== Rank.Admin).forEach((c) => c.sendMsg(cvm.guacEncode('chat', client.username!, msgArr[2])));
 
-									this.clients.filter((c) => c.rank === Rank.Admin).forEach((c) => c.sendMsg(guac.guacEncode('chat', client.username!, Utilities.HTMLSanitize(msgArr[2]))));
+									this.clients.filter((c) => c.rank === Rank.Admin).forEach((c) => c.sendMsg(cvm.guacEncode('chat', client.username!, Utilities.HTMLSanitize(msgArr[2]))));
 									break;
 							}
 							break;
@@ -609,9 +609,9 @@ export default class CollabVMServer {
 									this.clients
 										.filter((c) => c.rank == Rank.Unregistered)
 										.forEach((client) => {
-											client.sendMsg(guac.guacEncode('size', '0', '1024', '768'));
-											client.sendMsg(guac.guacEncode('png', '0', '0', '0', '0', this.screenHiddenImg));
-											client.sendMsg(guac.guacEncode('sync', Date.now().toString()));
+											client.sendMsg(cvm.guacEncode('size', '0', '1024', '768'));
+											client.sendMsg(cvm.guacEncode('png', '0', '0', '0', '0', this.screenHiddenImg));
+											client.sendMsg(cvm.guacEncode('sync', Date.now().toString()));
 										});
 									break;
 								case '1':
@@ -626,16 +626,16 @@ export default class CollabVMServer {
 									});
 
 									this.clients.forEach(async (client) => {
-										client.sendMsg(guac.guacEncode('size', '0', displaySize.width.toString(), displaySize.height.toString()));
-										client.sendMsg(guac.guacEncode('png', '0', '0', '0', '0', encoded));
-										client.sendMsg(guac.guacEncode('sync', Date.now().toString()));
+										client.sendMsg(cvm.guacEncode('size', '0', displaySize.width.toString(), displaySize.height.toString()));
+										client.sendMsg(cvm.guacEncode('png', '0', '0', '0', '0', encoded));
+										client.sendMsg(cvm.guacEncode('sync', Date.now().toString()));
 									});
 									break;
 							}
 							break;
 						case '25':
 							if (client.rank !== Rank.Admin || msgArr.length !== 3) return;
-							this.clients.forEach((c) => c.sendMsg(guac.guacEncode('chat', '', msgArr[2])));
+							this.clients.forEach((c) => c.sendMsg(cvm.guacEncode('chat', '', msgArr[2])));
 							break;
 					}
 					break;
@@ -665,7 +665,7 @@ export default class CollabVMServer {
 		} else {
 			newName = newName.trim();
 			if (hadName && newName === oldname) {
-				client.sendMsg(guac.guacEncode('rename', '0', '0', client.username!, client.rank.toString()));
+				client.sendMsg(cvm.guacEncode('rename', '0', '0', client.username!, client.rank.toString()));
 				return;
 			}
 			if (this.getUsernameList().indexOf(newName) !== -1) {
@@ -682,13 +682,13 @@ export default class CollabVMServer {
 			} else client.username = newName;
 		}
 
-		client.sendMsg(guac.guacEncode('rename', '0', status, client.username!, client.rank.toString()));
+		client.sendMsg(cvm.guacEncode('rename', '0', status, client.username!, client.rank.toString()));
 		if (hadName) {
 			this.logger.Info(`Rename ${client.IP.address} from ${oldname} to ${client.username}`);
-			this.clients.forEach((c) => c.sendMsg(guac.guacEncode('rename', '1', oldname, client.username!, client.rank.toString())));
+			this.clients.forEach((c) => c.sendMsg(cvm.guacEncode('rename', '1', oldname, client.username!, client.rank.toString())));
 		} else {
 			this.logger.Info(`Rename ${client.IP.address} to ${client.username}`);
-			this.clients.forEach((c) => c.sendMsg(guac.guacEncode('adduser', '1', client.username!, client.rank.toString())));
+			this.clients.forEach((c) => c.sendMsg(cvm.guacEncode('adduser', '1', client.username!, client.rank.toString())));
 		}
 	}
 
@@ -696,13 +696,13 @@ export default class CollabVMServer {
 		var arr: string[] = ['adduser', this.clients.filter((c) => c.username).length.toString()];
 
 		this.clients.filter((c) => c.username).forEach((c) => arr.push(c.username!, c.rank.toString()));
-		return guac.guacEncode(...arr);
+		return cvm.guacEncode(...arr);
 	}
 
 	getChatHistoryMsg(): string {
 		var arr: string[] = ['chat'];
 		this.ChatHistory.forEach((c) => arr.push(c.user, c.msg));
-		return guac.guacEncode(...arr);
+		return cvm.guacEncode(...arr);
 	}
 
 	private sendTurnUpdate(client?: User) {
@@ -715,7 +715,7 @@ export default class CollabVMServer {
 		this.TurnQueue.forEach((c) => arr.push(c.username));
 		var currentTurningUser = this.TurnQueue.peek();
 		if (client) {
-			client.sendMsg(guac.guacEncode(...arr));
+			client.sendMsg(cvm.guacEncode(...arr));
 			return;
 		}
 		this.clients
@@ -725,12 +725,12 @@ export default class CollabVMServer {
 					var time;
 					if (this.indefiniteTurn === null) time = this.TurnTime * 1000 + (turnQueueArr.indexOf(c) - 1) * this.Config.collabvm.turnTime * 1000;
 					else time = 9999999999;
-					c.sendMsg(guac.guacEncode(...arr, time.toString()));
+					c.sendMsg(cvm.guacEncode(...arr, time.toString()));
 				} else {
-					c.sendMsg(guac.guacEncode(...arr));
+					c.sendMsg(cvm.guacEncode(...arr));
 				}
 			});
-		if (currentTurningUser) currentTurningUser.sendMsg(guac.guacEncode(...arr));
+		if (currentTurningUser) currentTurningUser.sendMsg(cvm.guacEncode(...arr));
 	}
 	private nextTurn() {
 		clearInterval(this.TurnInterval);
@@ -777,8 +777,8 @@ export default class CollabVMServer {
 			.filter((c) => c.connectedToNode || c.viewMode == 1)
 			.forEach((c) => {
 				if (this.screenHidden && c.rank == Rank.Unregistered) return;
-				c.sendMsg(guac.guacEncode('png', '0', '0', rect.x.toString(), rect.y.toString(), encodedb64));
-				c.sendMsg(guac.guacEncode('sync', Date.now().toString()));
+				c.sendMsg(cvm.guacEncode('png', '0', '0', rect.x.toString(), rect.y.toString(), encodedb64));
+				c.sendMsg(cvm.guacEncode('sync', Date.now().toString()));
 			});
 	}
 
@@ -787,7 +787,7 @@ export default class CollabVMServer {
 			.filter((c) => c.connectedToNode || c.viewMode == 1)
 			.forEach((c) => {
 				if (this.screenHidden && c.rank == Rank.Unregistered) return;
-				c.sendMsg(guac.guacEncode('size', '0', size.width.toString(), size.height.toString()));
+				c.sendMsg(cvm.guacEncode('size', '0', size.width.toString(), size.height.toString()));
 			});
 	}
 
@@ -802,8 +802,8 @@ export default class CollabVMServer {
 			height: displaySize.height
 		});
 
-		client.sendMsg(guac.guacEncode('size', '0', displaySize.width.toString(), displaySize.height.toString()));
-		client.sendMsg(guac.guacEncode('png', '0', '0', '0', '0', encoded));
+		client.sendMsg(cvm.guacEncode('size', '0', displaySize.width.toString(), displaySize.height.toString()));
+		client.sendMsg(cvm.guacEncode('png', '0', '0', '0', '0', encoded));
 	}
 
 	private async MakeRectData(rect: Rect) {
@@ -828,7 +828,7 @@ export default class CollabVMServer {
 	startVote() {
 		if (this.voteInProgress) return;
 		this.voteInProgress = true;
-		this.clients.forEach((c) => c.sendMsg(guac.guacEncode('vote', '0')));
+		this.clients.forEach((c) => c.sendMsg(cvm.guacEncode('vote', '0')));
 		this.voteTime = this.Config.collabvm.voteTime;
 		this.voteInterval = setInterval(() => {
 			this.voteTime--;
@@ -843,12 +843,12 @@ export default class CollabVMServer {
 		this.voteInProgress = false;
 		clearInterval(this.voteInterval);
 		var count = this.getVoteCounts();
-		this.clients.forEach((c) => c.sendMsg(guac.guacEncode('vote', '2')));
+		this.clients.forEach((c) => c.sendMsg(cvm.guacEncode('vote', '2')));
 		if (result === true || (result === undefined && count.yes >= count.no)) {
-			this.clients.forEach((c) => c.sendMsg(guac.guacEncode('chat', '', 'The vote to reset the VM has won.')));
+			this.clients.forEach((c) => c.sendMsg(cvm.guacEncode('chat', '', 'The vote to reset the VM has won.')));
 			this.VM.Reset();
 		} else {
-			this.clients.forEach((c) => c.sendMsg(guac.guacEncode('chat', '', 'The vote to reset the VM has lost.')));
+			this.clients.forEach((c) => c.sendMsg(cvm.guacEncode('chat', '', 'The vote to reset the VM has lost.')));
 		}
 		this.clients.forEach((c) => {
 			c.IP.vote = null;
@@ -863,7 +863,7 @@ export default class CollabVMServer {
 	sendVoteUpdate(client?: User) {
 		if (!this.voteInProgress) return;
 		var count = this.getVoteCounts();
-		var msg = guac.guacEncode('vote', '1', (this.voteTime * 1000).toString(), count.yes.toString(), count.no.toString());
+		var msg = cvm.guacEncode('vote', '1', (this.voteTime * 1000).toString(), count.yes.toString(), count.no.toString());
 		if (client) client.sendMsg(msg);
 		else this.clients.forEach((c) => c.sendMsg(msg));
 	}

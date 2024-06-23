@@ -1,6 +1,6 @@
 import { Size, Rect } from '@cvmts/shared';
 import sharp from 'sharp';
-import * as jpeg from '@cvmts/jpegturbo-rs';
+import * as cvm from '@cvmts/cvm-rs';
 
 // A good balance. TODO: Configurable?
 let gJpegQuality = 35;
@@ -28,7 +28,7 @@ export class JPEGEncoder {
 
 	static async Encode(canvas: Buffer, displaySize: Size, rect: Rect): Promise<Buffer> {
 		let offset = (rect.y * displaySize.width + rect.x) * 4;
-		return jpeg.jpegEncode({
+		return cvm.jpegEncode({
 			width: rect.width,
 			height: rect.height,
 			stride: displaySize.width,
@@ -42,7 +42,7 @@ export class JPEGEncoder {
 			.raw()
 			.toBuffer({ resolveWithObject: true });
 
-		return jpeg.jpegEncode({
+		return cvm.jpegEncode({
 			width: kThumbnailSize.width,
 			height: kThumbnailSize.height,
 			stride: kThumbnailSize.width,

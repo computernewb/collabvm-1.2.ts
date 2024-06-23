@@ -49,7 +49,14 @@ export default class WSClient extends EventEmitter implements NetworkClient {
     }
 
     close(): void {
-        this.socket.close();
+		if(this.isOpen()) {
+			// While this seems counterintutive, do note that the WebSocket protocol
+			// *sends* a data frame whilist closing a connection. Therefore, if the other end
+			// has forcibly hung up (closed) their connection, the best way to handle that
+			// is to just let the inner TCP socket propegate that, which `ws` will do for us.
+			// Otherwise, we'll try to send data to a closed client then SIGPIPE.
+        	this.socket.close();
+		}
     }
 
 }

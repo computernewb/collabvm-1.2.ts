@@ -1,5 +1,5 @@
 {
-  "name": "@cvmts/jpegturbo-rs",
+  "name": "@cvmts/cvm-rs",
   "version": "0.1.0",
   "packageManager": "yarn@4.1.1",
   "type": "module",

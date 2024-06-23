@@ -10,9 +10,5 @@ cvmts/attic
 **/dist/
 
 # Guac-rs
-guac-rs/target
-guac-rs/index.node
-
-# jpegturbo-rs
-jpegturbo-rs/target
-jpegturbo-rs/index.node
+cvm-rs/target
+cvm-rs/index.node

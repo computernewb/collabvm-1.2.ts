@@ -47,12 +47,19 @@ __metadata:
   languageName: unknown
   linkType: soft
 
+"@cvmts/cvm-rs@npm:*, @cvmts/cvm-rs@workspace:cvm-rs":
+  version: 0.0.0-use.local
+  resolution: "@cvmts/cvm-rs@workspace:cvm-rs"
+  dependencies:
+    cargo-cp-artifact: "npm:^0.1"
+  languageName: unknown
+  linkType: soft
+
 "@cvmts/cvmts@workspace:cvmts":
   version: 0.0.0-use.local
   resolution: "@cvmts/cvmts@workspace:cvmts"
   dependencies:
-    "@cvmts/guac-rs": "npm:*"
-    "@cvmts/jpegturbo-rs": "npm:*"
+    "@cvmts/cvm-rs": "npm:*"
     "@cvmts/qemu": "npm:*"
     "@types/node": "npm:^20.12.5"
     "@types/ws": "npm:^8.5.5"
@@ -63,22 +70,6 @@ __metadata:
     toml: "npm:^3.0.0"
     typescript: "npm:^5.4.4"
     ws: "npm:^8.14.1"
-  languageName: unknown
-  linkType: soft
-
-"@cvmts/guac-rs@npm:*, @cvmts/guac-rs@workspace:guac-rs":
-  version: 0.0.0-use.local
-  resolution: "@cvmts/guac-rs@workspace:guac-rs"
-  dependencies:
-    cargo-cp-artifact: "npm:^0.1"
-  languageName: unknown
-  linkType: soft
-
-"@cvmts/jpegturbo-rs@npm:*, @cvmts/jpegturbo-rs@workspace:jpegturbo-rs":
-  version: 0.0.0-use.local
-  resolution: "@cvmts/jpegturbo-rs@workspace:jpegturbo-rs"
-  dependencies:
-    cargo-cp-artifact: "npm:^0.1"
   languageName: unknown
   linkType: soft
 

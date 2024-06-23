@@ -7,9 +7,9 @@ This is a drop-in replacement for the dying CollabVM 1.2.11. Currently in beta
 **TODO**: These instructions are not finished for the refactor branch.
 
 1. Copy config.example.toml to config.toml, and fill out fields
-2. Install dependencies: `npm i`
-3. Build it: `npm run build`
-4. Run it: `npm run serve`
+2. Install dependencies: `yarn`
+3. Build it: `yarn build`
+4. Run it: `yarn serve`
 
 ## FAQ
 ### When I try to access the admin panel, the server crashes!

@@ -8,8 +8,10 @@ use tokio::runtime::Runtime;
 
 use std::cell::RefCell;
 
-mod jpeg_compressor;
+use crate::jpeg_compressor::*;
 
+/// Gives a static Tokio runtime. We should replace this with
+/// rayon or something, but for now tokio works.
 fn runtime<'a, C: Context<'a>>(cx: &mut C) -> NeonResult<&'static Runtime> {
     static RUNTIME: OnceCell<Runtime> = OnceCell::new();
 
@@ -19,7 +21,7 @@ fn runtime<'a, C: Context<'a>>(cx: &mut C) -> NeonResult<&'static Runtime> {
 }
 
 thread_local! {
-    static COMPRESSOR: RefCell<jpeg_compressor::JpegCompressor> = RefCell::new(jpeg_compressor::JpegCompressor::new());
+    static COMPRESSOR: RefCell<JpegCompressor> = RefCell::new(JpegCompressor::new());
 }
 
 fn jpeg_encode_impl<'a>(cx: &mut FunctionContext<'a>) -> JsResult<'a, JsPromise> {
@@ -52,7 +54,7 @@ fn jpeg_encode_impl<'a>(cx: &mut FunctionContext<'a>) -> JsResult<'a, JsPromise>
         let clone = Arc::clone(&copy);
         let locked = clone.lock().unwrap();
 
-        let image: jpeg_compressor::Image = jpeg_compressor::Image {
+        let image: Image = Image {
             buffer: locked.as_slice(),
             width: width as u32,
             height: height as u32,
@@ -80,12 +82,6 @@ fn jpeg_encode_impl<'a>(cx: &mut FunctionContext<'a>) -> JsResult<'a, JsPromise>
     Ok(promise)
 }
 
-fn jpeg_encode(mut cx: FunctionContext) -> JsResult<JsPromise> {
+pub fn jpeg_encode(mut cx: FunctionContext) -> JsResult<JsPromise> {
     jpeg_encode_impl(&mut cx)
-}
-
-#[neon::main]
-fn main(mut cx: ModuleContext) -> NeonResult<()> {
-    cx.export_function("jpegEncode", jpeg_encode)?;
-    Ok(())
 }

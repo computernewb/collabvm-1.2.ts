@@ -60,6 +60,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "cvm-rs"
+version = "0.1.0"
+dependencies = [
+ "neon",
+ "once_cell",
+ "tokio",
+ "turbojpeg-sys",
+]
+
+[[package]]
 name = "getrandom"
 version = "0.2.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -81,16 +91,6 @@ name = "hermit-abi"
 version = "0.3.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d231dfb89cfffdbc30e7fc41579ed6066ad03abda9e567ccafae602b97ec5024"
-
-[[package]]
-name = "jpegturbo-rs"
-version = "0.1.0"
-dependencies = [
- "neon",
- "once_cell",
- "tokio",
- "turbojpeg-sys",
-]
 
 [[package]]
 name = "libc"
