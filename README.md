@@ -14,7 +14,7 @@ The CollabVM server requires the following to be installed on your server:
 
 1. Node.js (obviously)
 2. QEMU (Unless you just want to use a VNC Connection as your VM)
-3. Rust and Cargo
+3. A Rust toolchain (e.g: [rustup](https://rustup.rs))
 4. NASM assembler
 
 ### Installing dependencies on Arch
