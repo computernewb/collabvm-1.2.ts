@@ -178,6 +178,10 @@ export class QemuVM extends EventEmitter {
 		// Start QEMU
 		this.qemuProcess = execaCommand(split);
 
+		this.qemuProcess.stderr?.on('data', (data) => {
+			self.VMLog().Error("QEMU stderr: {0}", data.toString('utf8'));
+		})
+
 		this.qemuProcess.on('spawn', async () => {
 			self.VMLog().Info("QEMU started");
 			await Shared.Sleep(500);
