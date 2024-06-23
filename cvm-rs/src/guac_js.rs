@@ -21,8 +21,7 @@ fn guac_decode_impl<'a>(cx: &mut FunctionContext<'a>) -> JsResult<'a, JsArray> {
         }
 
         Err(e) => {
-            let err = cx.string(format!("{}", e));
-            return cx.throw(err);
+            return cx.throw_error(format!("{}", e));
         }
     }
 }
