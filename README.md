@@ -19,7 +19,7 @@ The CollabVM server requires the following to be installed on your server:
 
 ### Installing dependencies on Arch
 
-1. Install dependencies: `sudo pacman --noconfirm -S nodejs npm nasm rust`
+1. Install dependencies: `sudo pacman --noconfirm -S nodejs nasm rust`
 2. Enable corepack: `sudo corepack enable`
 
 ### Installing dependencies on Debian
