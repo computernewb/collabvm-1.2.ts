@@ -845,6 +845,10 @@ export default class CollabVMServer {
 		let display = this.VM.GetDisplay();
 		let displaySize = display.Size();
 
+		// TODO: actually throw an error here
+		if(displaySize.width == 0 && displaySize.height == 0)
+			return "no";
+
 		let encoded = await JPEGEncoder.Encode(display.Buffer(), displaySize, rect);
 
 		return encoded.toString('base64');
