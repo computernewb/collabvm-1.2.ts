@@ -15,6 +15,8 @@ import { Size, Rect, Logger } from '@cvmts/shared';
 import { JPEGEncoder } from './JPEGEncoder.js';
 import VM from './VM.js';
 import { ReaderModel } from '@maxmind/geoip2-node';
+import msgpack from "@ygoe/msgpack";
+import { CollabVMProtocolMessage, CollabVMProtocolMessageType } from './protocol/CollabVMProtocolMessage.js';
 
 // Instead of strange hacks we can just use nodejs provided
 // import.meta properties, which have existed since LTS if not before
@@ -441,6 +443,21 @@ export default class CollabVMServer {
 					}
 					this.sendVoteUpdate();
 					break;
+				case "cap": {
+					if (msgArr.length < 2) return;
+					// Capabilities can only be announced before connecting to the VM
+					if (client.connectedToNode) return;
+					var caps = [];
+					for (const cap of msgArr.slice(1)) switch(cap) {
+						case "bin": {
+							if (caps.indexOf("bin") !== -1) break;
+							client.Capabilities.bin = true;
+							caps.push("bin");
+							break;
+						}
+					}
+					client.sendMsg(cvm.guacEncode("cap", ...caps));
+				}
 				case 'admin':
 					if (msgArr.length < 2) return;
 					switch (msgArr[1]) {
@@ -649,11 +666,7 @@ export default class CollabVMServer {
 										height: displaySize.height
 									});
 
-									this.clients.forEach(async (client) => {
-										client.sendMsg(cvm.guacEncode('size', '0', displaySize.width.toString(), displaySize.height.toString()));
-										client.sendMsg(cvm.guacEncode('png', '0', '0', '0', '0', encoded));
-										client.sendMsg(cvm.guacEncode('sync', Date.now().toString()));
-									});
+									this.clients.forEach(async (client) => this.SendFullScreenWithSize(client));
 									break;
 							}
 							break;
@@ -806,14 +819,27 @@ export default class CollabVMServer {
 	}
 
 	private async OnDisplayRectangle(rect: Rect) {
-		let encodedb64 = await this.MakeRectData(rect);
-
+		let encoded = await this.MakeRectData(rect);
+		let encodedb64 = encoded.toString("base64");
+		let bmsg : CollabVMProtocolMessage = {
+			type: CollabVMProtocolMessageType.rect,
+			rect: {
+				x: rect.x,
+				y: rect.y,
+				data: encoded
+			},
+		};
+		var encodedbin = msgpack.encode(bmsg);
 		this.clients
 			.filter((c) => c.connectedToNode || c.viewMode == 1)
 			.forEach((c) => {
 				if (this.screenHidden && c.rank == Rank.Unregistered) return;
-				c.sendMsg(cvm.guacEncode('png', '0', '0', rect.x.toString(), rect.y.toString(), encodedb64));
-				c.sendMsg(cvm.guacEncode('sync', Date.now().toString()));
+				if (c.Capabilities.bin) {
+					c.socket.sendBinary(encodedbin);
+				} else {
+					c.sendMsg(cvm.guacEncode('png', '0', '0', rect.x.toString(), rect.y.toString(), encodedb64));
+					c.sendMsg(cvm.guacEncode('sync', Date.now().toString()));
+				}
 			});
 	}
 
@@ -838,7 +864,20 @@ export default class CollabVMServer {
 		});
 
 		client.sendMsg(cvm.guacEncode('size', '0', displaySize.width.toString(), displaySize.height.toString()));
-		client.sendMsg(cvm.guacEncode('png', '0', '0', '0', '0', encoded));
+
+		if (client.Capabilities.bin) {
+			let msg : CollabVMProtocolMessage = {
+				type: CollabVMProtocolMessageType.rect,
+				rect: {
+					x: 0,
+					y: 0,
+					data: encoded
+				}
+			};
+			client.socket.sendBinary(msgpack.encode(msg));
+		} else {
+			client.sendMsg(cvm.guacEncode('png', '0', '0', '0', '0', encoded.toString("base64")));
+		}
 	}
 
 	private async MakeRectData(rect: Rect) {
@@ -847,11 +886,11 @@ export default class CollabVMServer {
 
 		// TODO: actually throw an error here
 		if(displaySize.width == 0 && displaySize.height == 0)
-			return "no";
+			return Buffer.from("no")
 
 		let encoded = await JPEGEncoder.Encode(display.Buffer(), displaySize, rect);
 
-		return encoded.toString('base64');
+		return encoded;
 	}
 
 	async getThumbnail(): Promise<string> {

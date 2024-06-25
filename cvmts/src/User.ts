@@ -6,6 +6,7 @@ import RateLimiter from './RateLimiter.js';
 import { execa, execaCommand, ExecaSyncError } from 'execa';
 import { Logger } from '@cvmts/shared';
 import NetworkClient from './NetworkClient.js';
+import CollabVMCapabilities from './protocol/CollabVMCapabilities.js';
 
 export class User {
 	socket: NetworkClient;
@@ -19,6 +20,7 @@ export class User {
 	msgsSent: number;
 	Config: IConfig;
 	IP: IPData;
+	Capabilities: CollabVMCapabilities;
 	// Hide flag. Only takes effect if the user is logged in.
 	noFlag: boolean = false;
 	countryCode: string | null = null;
@@ -38,6 +40,7 @@ export class User {
 		this.Config = config;
 		this.socket = socket;
 		this.msgsSent = 0;
+		this.Capabilities = new CollabVMCapabilities();
 
 		this.socket.on('disconnect', () => {
 			// Unref the ip data for this connection

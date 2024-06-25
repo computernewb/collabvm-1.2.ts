@@ -64,6 +64,7 @@ __metadata:
     "@maxmind/geoip2-node": "npm:^5.0.0"
     "@types/node": "npm:^20.12.5"
     "@types/ws": "npm:^8.5.5"
+    "@ygoe/msgpack": "npm:^1.0.3"
     execa: "npm:^8.0.1"
     mnemonist: "npm:^0.39.5"
     prettier: "npm:^3.2.5"
@@ -1567,6 +1568,13 @@ __metadata:
   dependencies:
     "@types/node": "npm:*"
   checksum: 10c0/f1b7c1b99fef9f2fe7f1985ef7426d0cebe48cd031f1780fcdc7451eec7e31ac97028f16f50121a59bcf53086a1fc8c856fd5b7d3e00970e43d92ae27d6b43dc
+  languageName: node
+  linkType: hard
+
+"@ygoe/msgpack@npm:^1.0.3":
+  version: 1.0.3
+  resolution: "@ygoe/msgpack@npm:1.0.3"
+  checksum: 10c0/f4a9adc86f41b6ccc07fd7756adac28b71a38e6fb741ff4943b338f3bb6283154ae9ebf0614fa40e78cd3c09bbd79f4c5e60e136a8136a99a2b8385ba4710ed7
   languageName: node
   linkType: hard
 

@@ -2,6 +2,9 @@ import EventEmitter from 'events';
 import NetworkClient from '../NetworkClient.js';
 import { Socket } from 'net';
 
+const TextHeader = 0;
+const BinaryHeader = 1;
+
 export default class TCPClient extends EventEmitter implements NetworkClient {
 	private socket: Socket;
 	private cache: string;
@@ -34,7 +37,21 @@ export default class TCPClient extends EventEmitter implements NetworkClient {
 
 	send(msg: string): Promise<void> {
 		return new Promise((res, rej) => {
-			this.socket.write(msg, (err) => {
+			let _msg = new Uint32Array([TextHeader, ...Buffer.from(msg, "utf-8")]);
+			this.socket.write(Buffer.from(_msg), (err) => {
+				if (err) {
+					rej(err);
+					return;
+				}
+				res();
+			});
+		});
+	}
+
+	sendBinary(msg: Uint8Array): Promise<void> {
+		return new Promise((res, rej) => {
+			let _msg = new Uint32Array([BinaryHeader, msg.length, ...msg]);
+			this.socket.write(Buffer.from(_msg), (err) => {
 				if (err) {
 					rej(err);
 					return;

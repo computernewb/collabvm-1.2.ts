@@ -33,7 +33,22 @@ export default class WSClient extends EventEmitter implements NetworkClient {
 	getIP(): string {
 		return this.ip;
 	}
+
 	send(msg: string): Promise<void> {
+		return new Promise((res, rej) => {
+			if (!this.isOpen()) res();
+
+			this.socket.send(msg, (err) => {
+				if (err) {
+					rej(err);
+					return;
+				}
+				res();
+			});
+		});
+	}
+
+	sendBinary(msg: Uint8Array): Promise<void> {
 		return new Promise((res, rej) => {
 			if (!this.isOpen()) res();
 
