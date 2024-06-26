@@ -16,7 +16,7 @@ import { JPEGEncoder } from './JPEGEncoder.js';
 import VM from './VM.js';
 import { ReaderModel } from '@maxmind/geoip2-node';
 import * as msgpack from 'msgpackr';
-import { CollabVMProtocolMessage, CollabVMProtocolMessageType } from './protocol/CollabVMProtocolMessage.js';
+import { CollabVMProtocolMessage, CollabVMProtocolMessageType } from '@cvmts/collab-vm-1.2-binary-protocol';
 
 // Instead of strange hacks we can just use nodejs provided
 // import.meta properties, which have existed since LTS if not before

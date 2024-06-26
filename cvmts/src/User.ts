@@ -6,7 +6,7 @@ import RateLimiter from './RateLimiter.js';
 import { execa, execaCommand, ExecaSyncError } from 'execa';
 import { Logger } from '@cvmts/shared';
 import NetworkClient from './NetworkClient.js';
-import CollabVMCapabilities from './protocol/CollabVMCapabilities.js';
+import { CollabVMCapabilities } from '@cvmts/collab-vm-1.2-binary-protocol';
 
 export class User {
 	socket: NetworkClient;

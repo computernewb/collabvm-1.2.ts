@@ -47,6 +47,17 @@ __metadata:
   languageName: unknown
   linkType: soft
 
+"@cvmts/collab-vm-1.2-binary-protocol@workspace:collab-vm-1.2-binary-protocol":
+  version: 0.0.0-use.local
+  resolution: "@cvmts/collab-vm-1.2-binary-protocol@workspace:collab-vm-1.2-binary-protocol"
+  dependencies:
+    "@parcel/packager-ts": "npm:2.12.0"
+    "@parcel/transformer-typescript-types": "npm:2.12.0"
+    parcel: "npm:^2.12.0"
+    typescript: "npm:>=3.0.0"
+  languageName: unknown
+  linkType: soft
+
 "@cvmts/cvm-rs@npm:*, @cvmts/cvm-rs@workspace:cvm-rs":
   version: 0.0.0-use.local
   resolution: "@cvmts/cvm-rs@workspace:cvm-rs"
