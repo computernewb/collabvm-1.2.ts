@@ -15,7 +15,7 @@ import { Size, Rect, Logger } from '@cvmts/shared';
 import { JPEGEncoder } from './JPEGEncoder.js';
 import VM from './VM.js';
 import { ReaderModel } from '@maxmind/geoip2-node';
-import msgpack from "@ygoe/msgpack";
+import * as msgpack from 'msgpackr';
 import { CollabVMProtocolMessage, CollabVMProtocolMessageType } from './protocol/CollabVMProtocolMessage.js';
 
 // Instead of strange hacks we can just use nodejs provided
