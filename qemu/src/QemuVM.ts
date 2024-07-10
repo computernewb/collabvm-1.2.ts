@@ -37,7 +37,7 @@ export class QemuVM extends EventEmitter {
 
 	private qemuProcess: ExecaChildProcess | null = null;
 
-	private display: QemuDisplay;
+	private display: QemuDisplay | null;
 	private definition: QemuVmDefinition;
 	private addedAdditionalArguments = false;
 
@@ -137,7 +137,7 @@ export class QemuVM extends EventEmitter {
 	}
 
 	GetDisplay() {
-		return this.display;
+		return this.display!;
 	}
 
 	/// Private fun bits :)
@@ -260,6 +260,7 @@ export class QemuVM extends EventEmitter {
 			self.qmpInstance.on('close', onQmpError);
 			self.qmpInstance.on('error', (e: Error) => {
 				self.VMLog().Error("QMP Error: {0}", e.message);
+				onQmpError();
 			});
 
 			self.qmpInstance.on('event', async (ev) => {
@@ -277,7 +278,7 @@ export class QemuVM extends EventEmitter {
 			self.qmpInstance.on('qmp-ready', async (hadError) => {
 				self.VMLog().Info('QMP ready');
 
-				self.display.Connect();
+				self.display?.Connect();
 
 				// QMP has been connected so the VM is ready to be considered started
 				self.qmpFailCount = 0;
@@ -299,6 +300,9 @@ export class QemuVM extends EventEmitter {
 	private async DisconnectDisplay() {
 		try {
 			this.display?.Disconnect();
+
+			// create a new display (and gc the old one)
+			this.display = new QemuDisplay(this.GetVncPath());
 		} catch (err) {
 			// oh well lol
 		}
