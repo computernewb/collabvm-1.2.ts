@@ -16,7 +16,7 @@ export class IPData {
 	// Call when a connection is closed to "release" the ip data
 	Unref() {
 		if (this.refCount - 1 < 0) this.refCount = 0;
-		this.refCount--;
+		else this.refCount--;
 	}
 }
 
@@ -64,7 +64,7 @@ export class IPDataManager {
 setInterval(() => {
 	for (let tuple of IPDataManager.ipDatas) {
 		if (tuple[1].refCount == 0) {
-			IPDataManager.logger.Info('Deleted ipdata for IP {0}', tuple[0]);
+			IPDataManager.logger.Info('Deleted IPData for IP {0}', tuple[0]);
 			IPDataManager.ipDatas.delete(tuple[0]);
 		}
 	}

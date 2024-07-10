@@ -80,5 +80,5 @@ js side api:
 	remotingMouseEvent(client, x, y, buttons) - mouse event
 
  on the rust side a boxed client will contain an inner boxed `dyn RemotingProtocolClient` which will contain protocol specific dispatch,
- upon parsing a remoting URI we will create a given client (e.g, for `vnc://` we'd make the VNC one) 
+ upon parsing a remoting URI we will create a given client (e.g: for `vnc://` we'd make the VNC one)
 */

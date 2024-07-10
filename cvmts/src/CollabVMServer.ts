@@ -170,9 +170,6 @@ export default class CollabVMServer {
 			this.sendVoteUpdate();
 		}
 
-		// Unreference the IP data.
-		user.IP.Unref();
-
 		if (this.indefiniteTurn === user) this.indefiniteTurn = null;
 
 		this.clients.splice(clientIndex, 1);
