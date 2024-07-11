@@ -114,6 +114,10 @@ export class QemuDisplay extends EventEmitter {
 	Disconnect() {
 		this.vncShouldReconnect = false;
 		this.displayVnc.disconnect();
+
+		// bye bye!
+		this.displayVnc.removeAllListeners();
+		this.removeAllListeners();
 	}
 
 	Connected() {

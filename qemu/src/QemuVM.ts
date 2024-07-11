@@ -1,10 +1,11 @@
 import { execa, execaCommand, ExecaChildProcess } from 'execa';
 import { EventEmitter } from 'events';
-import QmpClient from './QmpClient.js';
+import { QmpClient, IQmpClientWriter, QmpEvent } from './QmpClient.js';
 import { QemuDisplay } from './QemuDisplay.js';
 import { unlink } from 'node:fs/promises';
 
 import * as Shared from '@cvmts/shared';
+import { Socket, connect } from 'net';
 
 export enum VMState {
 	Stopped,
@@ -28,10 +29,31 @@ const kVmTmpPathBase = `/tmp`;
 /// the VM is forcefully stopped.
 const kMaxFailCount = 5;
 
+// writer implementation for net.Socket
+class SocketWriter implements IQmpClientWriter {
+	socket;
+	client;
+  
+	constructor(socket: Socket, client: QmpClient) {
+	  this.socket = socket;
+	  this.client = client;
+  
+	  this.socket.on('data', (data) => {
+		this.client.feed(data);
+	  });
+	}
+  
+	writeSome(buffer: Buffer) {
+	  this.socket.write(buffer);
+	}
+  }
+  
+
 export class QemuVM extends EventEmitter {
 	private state = VMState.Stopped;
 
-	private qmpInstance: QmpClient | null = null;
+	private qmpInstance: QmpClient = new QmpClient();
+	private qmpSocket: Socket | null = null;
 	private qmpConnected = false;
 	private qmpFailCount = 0;
 
@@ -49,6 +71,30 @@ export class QemuVM extends EventEmitter {
 		this.logger = new Shared.Logger(`CVMTS.QEMU.QemuVM/${this.definition.id}`);
 
 		this.display = new QemuDisplay(this.GetVncPath());
+
+
+		let self = this;
+
+		// Handle the STOP event sent when using -no-shutdown
+		this.qmpInstance.on(QmpEvent.Stop, async () => {
+			await self.qmpInstance.execute('system_reset');
+		})
+
+		this.qmpInstance.on(QmpEvent.Reset, async () => {
+			await self.qmpInstance.execute('cont');
+		});
+
+		this.qmpInstance.on('connected', async () => {
+			self.VMLog().Info('QMP ready');
+
+			this.display = new QemuDisplay(this.GetVncPath());
+			self.display?.Connect();
+
+			// QMP has been connected so the VM is ready to be considered started
+			self.qmpFailCount = 0;
+			self.qmpConnected = true;
+			self.SetState(VMState.Started);
+		});
 	}
 
 	async Start() {
@@ -110,7 +156,7 @@ export class QemuVM extends EventEmitter {
 	}
 
 	async QmpCommand(command: string, args: any | null): Promise<any> {
-		return await this.qmpInstance?.Execute(command, args);
+		return await this.qmpInstance?.execute(command, args);
 	}
 
 	async MonitorCommand(command: string) {
@@ -191,7 +237,6 @@ export class QemuVM extends EventEmitter {
 		this.qemuProcess.on('exit', async (code) => {
 			self.VMLog().Info("QEMU process exited");
 
-
 			// this should be being done anways but it's very clearly not sometimes so
 			// fuck it, let's just force it here
 			try {
@@ -208,7 +253,6 @@ export class QemuVM extends EventEmitter {
 			}
 
 			await self.DisconnectDisplay();
-
 
 			if (self.state != VMState.Stopping) {
 				if (code == 0) {
@@ -237,62 +281,43 @@ export class QemuVM extends EventEmitter {
 		let self = this;
 
 		if (!this.qmpConnected) {
-			self.qmpInstance = new QmpClient();
-
-			let onQmpError = async () => {
-				if(self.qmpConnected) {
-					self.qmpConnected = false;
-
-					// If we aren't stopping, then we should care QMP disconnected
-					if (self.state != VMState.Stopping) {
-						if (self.qmpFailCount++ < kMaxFailCount) {
-							self.VMLog().Error(`Failed to connect to QMP ${self.qmpFailCount} times.`);
-							await Shared.Sleep(500);
-							await self.ConnectQmp();
-						} else {
-							self.VMLog().Error(`Reached max retries, giving up.`);
-							await self.Stop();
-						}
-					}
-				}
-			};
-
-			self.qmpInstance.on('close', onQmpError);
-			self.qmpInstance.on('error', (e: Error) => {
-				self.VMLog().Error("QMP Error: {0}", e.message);
-				onQmpError();
-			});
-
-			self.qmpInstance.on('event', async (ev) => {
-				switch (ev.event) {
-					// Handle the STOP event sent when using -no-shutdown
-					case 'STOP':
-						await self.qmpInstance?.Execute('system_reset');
-						break;
-					case 'RESET':
-						await self.qmpInstance?.Execute('cont');
-						break;
-				}
-			});
-
-			self.qmpInstance.on('qmp-ready', async (hadError) => {
-				self.VMLog().Info('QMP ready');
-
-				self.display?.Connect();
-
-				// QMP has been connected so the VM is ready to be considered started
-				self.qmpFailCount = 0;
-				self.qmpConnected = true;
-				self.SetState(VMState.Started);
-			});
-
 			try {
 				await Shared.Sleep(500);
-				this.qmpInstance?.ConnectUNIX(this.GetQmpPath());
+				this.qmpSocket = connect(this.GetQmpPath());
+
+				let onQmpClose = async () => {
+					if(self.qmpConnected) {
+						self.qmpConnected = false;
+						self.qmpSocket = null;
+	
+						// If we aren't stopping, then we should care QMP disconnected
+						if (self.state != VMState.Stopping) {
+							if (self.qmpFailCount++ < kMaxFailCount) {
+								self.VMLog().Error(`Failed to connect to QMP ${self.qmpFailCount} times.`);
+								await Shared.Sleep(500);
+								await self.ConnectQmp();
+							} else {
+								self.VMLog().Error(`Reached max retries, giving up.`);
+								await self.Stop();
+							}
+						}
+					}
+				};
+	
+				this.qmpSocket.on('close', onQmpClose);
+
+				this.qmpSocket.on('error', (e: Error) => {
+					self.VMLog().Error("QMP Error: {0}", e.message);
+				});
+
+				// Setup the QMP client.
+				let writer = new SocketWriter(this.qmpSocket, this.qmpInstance);
+				this.qmpInstance.reset();
+				this.qmpInstance.setWriter(writer);
 			} catch (err) {
 				// just try again
-				await Shared.Sleep(500);
-				await this.ConnectQmp();
+				//await Shared.Sleep(500);
+				//await this.ConnectQmp();
 			}
 		}
 	}
@@ -300,9 +325,7 @@ export class QemuVM extends EventEmitter {
 	private async DisconnectDisplay() {
 		try {
 			this.display?.Disconnect();
-
-			// create a new display (and gc the old one)
-			this.display = new QemuDisplay(this.GetVncPath());
+			this.display = null;
 		} catch (err) {
 			// oh well lol
 		}
@@ -310,11 +333,11 @@ export class QemuVM extends EventEmitter {
 
 	private async DisconnectQmp() {
 		if (this.qmpConnected) return;
-		if (this.qmpInstance == null) return;
+		if (this.qmpSocket == null) return;
 
 		this.qmpConnected = false;
-		this.qmpInstance.end();
-		this.qmpInstance = null;
+		this.qmpSocket?.end();
+
 		try {
 			await unlink(this.GetQmpPath());
 		} catch (err) {}

@@ -21,11 +21,9 @@
 	"dependencies": {
 		"@computernewb/nodejs-rfb": "*",
 		"@cvmts/shared": "*",
-		"execa": "^8.0.1",
-		"split": "^1.0.1"
+		"execa": "^8.0.1"
 	},
 	"devDependencies": {
-		"@types/split": "^1.0.5",
 		"parcel": "^2.12.0"
 	}
 }

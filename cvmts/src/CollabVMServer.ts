@@ -119,21 +119,22 @@ export default class CollabVMServer {
 		this.VM = vm;
 
 		// hack but whatever (TODO: less rickity)
+		let self = this;
 		if (config.vm.type == 'qemu') {
 			(vm as QemuVM).on('statechange', (newState: VMState) => {
 				if(newState == VMState.Started) {
-					this.logger.Info("started!!");
+					//self.logger.Info("started!!");
 
 					// well aware this sucks but whatever
-					this.VM.GetDisplay().on('resize', (size: Size) => this.OnDisplayResized(size));
-					this.VM.GetDisplay().on('rect', (rect: Rect) => this.OnDisplayRectangle(rect));
+					self.VM.GetDisplay().on('resize', (size: Size) => self.OnDisplayResized(size));
+					self.VM.GetDisplay().on('rect', (rect: Rect) => self.OnDisplayRectangle(rect));
 				}
 
 				if (newState == VMState.Stopped) {
-					this.logger.Info('stopped ?');
+					//self.logger.Info('stopped ?');
 					setTimeout(async () => {
-						this.logger.Info('restarting VM');
-						await this.VM.Start();
+						self.logger.Info('restarting VM');
+						await self.VM.Start();
 					}, kRestartTimeout);
 				}
 			});
