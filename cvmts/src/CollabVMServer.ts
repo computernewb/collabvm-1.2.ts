@@ -113,9 +113,6 @@ export default class CollabVMServer {
 
 		this.OnDisplayResized(initSize);
 
-//		vm.GetDisplay().on('resize', (size: Size) => this.OnDisplayResized(size));
-//		vm.GetDisplay().on('rect', (rect: Rect) => this.OnDisplayRectangle(rect));
-
 		this.VM = vm;
 
 		// hack but whatever (TODO: less rickity)
@@ -123,15 +120,12 @@ export default class CollabVMServer {
 		if (config.vm.type == 'qemu') {
 			(vm as QemuVM).on('statechange', (newState: VMState) => {
 				if(newState == VMState.Started) {
-					//self.logger.Info("started!!");
-
 					// well aware this sucks but whatever
 					self.VM.GetDisplay().on('resize', (size: Size) => self.OnDisplayResized(size));
 					self.VM.GetDisplay().on('rect', (rect: Rect) => self.OnDisplayRectangle(rect));
 				}
 
 				if (newState == VMState.Stopped) {
-					//self.logger.Info('stopped ?');
 					setTimeout(async () => {
 						self.logger.Info('restarting VM');
 						await self.VM.Start();
@@ -397,14 +391,14 @@ export default class CollabVMServer {
 					var y = parseInt(msgArr[2]);
 					var mask = parseInt(msgArr[3]);
 					if (x === undefined || y === undefined || mask === undefined) return;
-					this.VM.GetDisplay()!.MouseEvent(x, y, mask);
+					this.VM.GetDisplay()?.MouseEvent(x, y, mask);
 					break;
 				case 'key':
 					if (this.TurnQueue.peek() !== client && client.rank !== Rank.Admin) return;
 					var keysym = parseInt(msgArr[1]);
 					var down = parseInt(msgArr[2]);
 					if (keysym === undefined || (down !== 0 && down !== 1)) return;
-					this.VM.GetDisplay()!.KeyboardEvent(keysym, down === 1 ? true : false);
+					this.VM.GetDisplay()?.KeyboardEvent(keysym, down === 1 ? true : false);
 					break;
 				case 'vote':
 					if (!this.VM.SnapshotsSupported()) return;
@@ -503,14 +497,8 @@ export default class CollabVMServer {
 						case '5':
 							// QEMU Monitor
 							if (client.rank !== Rank.Admin) return;
-							/* Surely there could be rudimentary processing to convert some qemu monitor syntax to [XYZ hypervisor] if possible
-                        if (!(this.VM instanceof QEMUVM)) {
-                            client.sendMsg(cvm.guacEncode("admin", "2", "This is not a QEMU VM and therefore QEMU monitor commands cannot be run."));
-                            return;
-                        }
-*/
 							if (msgArr.length !== 4 || msgArr[2] !== this.Config.collabvm.node) return;
-							var output = await this.VM.MonitorCommand(msgArr[3]);
+							let output = await this.VM.MonitorCommand(msgArr[3]);
 							client.sendMsg(cvm.guacEncode('admin', '2', String(output)));
 							break;
 						case '8':

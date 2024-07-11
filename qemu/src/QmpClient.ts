@@ -51,11 +51,8 @@ class LineStream extends EventEmitter {
 		if (lines.length > 1) {
 			this.buffer = lines.pop()!;
 			lines = lines.filter((l) => !!l);
-
-			//console.log(lines)
 			lines.forEach(l => this.emit('line', l));
 		}
-		return [];
 	}
 
 	reset() {
@@ -98,16 +95,21 @@ export class QmpClient extends EventEmitter {
 		switch (this.state) {
 			case QmpClientState.Handshaking:
 				if (obj['return'] != undefined) {
+					// Once we get a return from our handshake execution,
+					// we have exited handshake state.
 					this.state = QmpClientState.Connected;
 					this.emit('connected');
 					return;
+				} else if(obj['QMP'] != undefined) {
+					// Send a `qmp_capabilities` command, to exit handshake state.
+					// We do not support any of the supported extended QMP capabilities currently,
+					// and probably never will (due to their relative uselessness.)
+					let capabilities = qmpStringify({
+						execute: 'qmp_capabilities'
+					});
+
+					this.writer?.writeSome(Buffer.from(capabilities, 'utf8'));
 				}
-
-				let capabilities = qmpStringify({
-					execute: 'qmp_capabilities'
-				});
-
-				this.writer?.writeSome(Buffer.from(capabilities, 'utf8'));
 				break;
 
 			case QmpClientState.Connected:
@@ -119,7 +121,7 @@ export class QmpClient extends EventEmitter {
 
 					let error: Error | null = obj.error ? new Error(obj.error.desc) : null;
 
-					if (cb.callback) cb.callback(error, obj.return);
+					if (cb.callback) cb.callback(error, obj.return || null);
 
 					this.callbacks.slice(this.callbacks.indexOf(cb));
 				} else if (obj['event']) {
@@ -132,7 +134,8 @@ export class QmpClient extends EventEmitter {
 		}
 	}
 
-	executeSync(command: string, args: any | undefined, callback: QmpClientCallback | null) {
+	// Executes a QMP command, using a user-provided callback for completion notification
+	executeCallback(command: string, args: any | undefined, callback: QmpClientCallback | null) {
 		let entry = {
 			callback: callback,
 			id: ++this.lastID
@@ -149,9 +152,10 @@ export class QmpClient extends EventEmitter {
 		this.writer?.writeSome(Buffer.from(qmpStringify(qmpOut), 'utf8'));
 	}
 
+	// Executes a QMP command asynchronously.
 	async execute(command: string, args: any | undefined = undefined): Promise<any> {
 		return new Promise((res, rej) => {
-			this.executeSync(command, args, (err, result) => {
+			this.executeCallback(command, args, (err, result) => {
 				if (err) rej(err);
 				res(result);
 			});
@@ -159,6 +163,7 @@ export class QmpClient extends EventEmitter {
 	}
 
 	reset() {
+		// Reset the line stream so it doesn't go awry
 		this.lineStream.reset();
 		this.state = QmpClientState.Handshaking;
 	}
