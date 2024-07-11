@@ -214,7 +214,7 @@ export class QemuVM extends EventEmitter {
 
 		this.qemuProcess.on('spawn', async () => {
 			self.VMLog().Info('QEMU started');
-			await Shared.Sleep(250);
+			await Shared.Sleep(500);
 			await self.ConnectQmp();
 		});
 
@@ -237,7 +237,7 @@ export class QemuVM extends EventEmitter {
 			if (self.state != VMState.Stopping) {
 				if (code == 0) {
 					// Wait a bit and restart QEMU.
-					await Shared.Sleep(250);
+					await Shared.Sleep(500);
 					await self.StartQemu(split);
 				} else {
 					self.VMLog().Error('QEMU exited with a non-zero exit code. This usually means an error in the command line. Stopping VM.');
@@ -267,11 +267,10 @@ export class QemuVM extends EventEmitter {
 			return;
 		}
 
+		await Shared.Sleep(500);
 		this.qmpSocket = connect(this.GetQmpPath());
 
 		this.qmpSocket.on('close', async () => {
-			self.qmpSocket?.removeAllListeners();
-
 			if (self.qmpConnected) {
 				await self.DisconnectQmp();
 
@@ -279,7 +278,7 @@ export class QemuVM extends EventEmitter {
 				if (self.state != VMState.Stopping) {
 					if (self.qmpFailCount++ < kMaxFailCount) {
 						self.VMLog().Error(`Failed to connect to QMP ${self.qmpFailCount} times.`);
-						await Shared.Sleep(250);
+						await Shared.Sleep(500);
 						await self.ConnectQmp();
 					} else {
 						self.VMLog().Error(`Reached max retries, giving up.`);
