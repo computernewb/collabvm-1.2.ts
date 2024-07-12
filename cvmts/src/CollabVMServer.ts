@@ -106,7 +106,7 @@ export default class CollabVMServer {
 		this.indefiniteTurn = null;
 		this.ModPerms = Utilities.MakeModPerms(this.Config.collabvm.moderatorPermissions);
 
-		// No size initially, since the
+		// No size initially, since there usually won't be a display connected at all during initalization
 		this.OnDisplayResized({
 			width: 0,
 			height: 0
@@ -114,12 +114,14 @@ export default class CollabVMServer {
 
 		this.VM = vm;
 
-		// hack but whatever (TODO: less rickity)
+		// this probably should be made general at some point,
+		// and the VM interface allowed to return a nullable display
+		// but i cba
 		let self = this;
 		if (config.vm.type == 'qemu') {
 			(vm as QemuVM).on('statechange', (newState: VMState) => {
 				if (newState == VMState.Started) {
-					self.logger.Info("VM started");
+					self.logger.Info('VM started');
 					// well aware this sucks but whatever
 					self.VM.GetDisplay().on('resize', (size: Size) => self.OnDisplayResized(size));
 					self.VM.GetDisplay().on('rect', (rect: Rect) => self.OnDisplayRectangle(rect));
@@ -256,12 +258,6 @@ export default class CollabVMServer {
 						return;
 					}
 
-					// Don't allow connecting if the VM hasn't started
-					if (this.VM.GetState() != VMState.Started) {
-						client.sendMsg(cvm.guacEncode('connect', '0'));
-						return;
-					}
-
 					client.connectedToNode = true;
 					client.sendMsg(cvm.guacEncode('connect', '1', '1', this.VM.SnapshotsSupported() ? '1' : '0', '0'));
 					if (this.ChatHistory.size !== 0) client.sendMsg(this.getChatHistoryMsg());
@@ -280,12 +276,6 @@ export default class CollabVMServer {
 					if (client.connectedToNode) return;
 					if (client.username || msgArr.length !== 3 || msgArr[1] !== this.Config.collabvm.node) {
 						// The use of connect here is intentional.
-						client.sendMsg(cvm.guacEncode('connect', '0'));
-						return;
-					}
-
-					// similar rationale to 'connect'
-					if (this.VM.GetState() != VMState.Started) {
 						client.sendMsg(cvm.guacEncode('connect', '0'));
 						return;
 					}
@@ -865,6 +855,8 @@ export default class CollabVMServer {
 
 	private async SendFullScreenWithSize(client: User) {
 		let display = this.VM.GetDisplay();
+		if (display == null) return;
+
 		let displaySize = display.Size();
 
 		let encoded = await this.MakeRectData({
@@ -893,11 +885,11 @@ export default class CollabVMServer {
 
 	private async MakeRectData(rect: Rect) {
 		let display = this.VM.GetDisplay();
-		let displaySize = display.Size();
 
 		// TODO: actually throw an error here
-		if (displaySize.width == 0 && displaySize.height == 0) return Buffer.from('no');
+		if (display == null) return Buffer.from('no');
 
+		let displaySize = display.Size();
 		let encoded = await JPEGEncoder.Encode(display.Buffer(), displaySize, rect);
 
 		return encoded;
