@@ -106,12 +106,11 @@ export default class CollabVMServer {
 		this.indefiniteTurn = null;
 		this.ModPerms = Utilities.MakeModPerms(this.Config.collabvm.moderatorPermissions);
 
-		let initSize = vm.GetDisplay().Size() || {
+		// No size initially, since the
+		this.OnDisplayResized({
 			width: 0,
 			height: 0
-		};
-
-		this.OnDisplayResized(initSize);
+		});
 
 		this.VM = vm;
 
@@ -119,7 +118,8 @@ export default class CollabVMServer {
 		let self = this;
 		if (config.vm.type == 'qemu') {
 			(vm as QemuVM).on('statechange', (newState: VMState) => {
-				if(newState == VMState.Started) {
+				if (newState == VMState.Started) {
+					self.logger.Info("VM started");
 					// well aware this sucks but whatever
 					self.VM.GetDisplay().on('resize', (size: Size) => self.OnDisplayResized(size));
 					self.VM.GetDisplay().on('rect', (rect: Rect) => self.OnDisplayRectangle(rect));
@@ -214,12 +214,11 @@ export default class CollabVMServer {
 							// Set username
 							if (client.countryCode !== null && client.noFlag) {
 								// privacy
-								for (let cl of this.clients.filter(c => c !== client)) {
+								for (let cl of this.clients.filter((c) => c !== client)) {
 									cl.sendMsg(cvm.guacEncode('remuser', '1', client.username!));
 								}
 								this.renameUser(client, res.username, false);
-							}
-							else this.renameUser(client, res.username, true);
+							} else this.renameUser(client, res.username, true);
 							// Set rank
 							client.rank = res.rank;
 							if (client.rank === Rank.Admin) {
@@ -241,18 +240,28 @@ export default class CollabVMServer {
 					}
 					break;
 				case 'noflag': {
-					if (client.connectedToNode) // too late
+					if (client.connectedToNode)
+						// too late
 						return;
 					client.noFlag = true;
 				}
 				case 'list':
-					client.sendMsg(cvm.guacEncode('list', this.Config.collabvm.node, this.Config.collabvm.displayname, this.screenHidden ? this.screenHiddenThumb : await this.getThumbnail()));
+					if (this.VM.GetState() == VMState.Started) {
+						client.sendMsg(cvm.guacEncode('list', this.Config.collabvm.node, this.Config.collabvm.displayname, this.screenHidden ? this.screenHiddenThumb : await this.getThumbnail()));
+					}
 					break;
 				case 'connect':
 					if (!client.username || msgArr.length !== 2 || msgArr[1] !== this.Config.collabvm.node) {
 						client.sendMsg(cvm.guacEncode('connect', '0'));
 						return;
 					}
+
+					// Don't allow connecting if the VM hasn't started
+					if (this.VM.GetState() != VMState.Started) {
+						client.sendMsg(cvm.guacEncode('connect', '0'));
+						return;
+					}
+
 					client.connectedToNode = true;
 					client.sendMsg(cvm.guacEncode('connect', '1', '1', this.VM.SnapshotsSupported() ? '1' : '0', '0'));
 					if (this.ChatHistory.size !== 0) client.sendMsg(this.getChatHistoryMsg());
@@ -271,6 +280,12 @@ export default class CollabVMServer {
 					if (client.connectedToNode) return;
 					if (client.username || msgArr.length !== 3 || msgArr[1] !== this.Config.collabvm.node) {
 						// The use of connect here is intentional.
+						client.sendMsg(cvm.guacEncode('connect', '0'));
+						return;
+					}
+
+					// similar rationale to 'connect'
+					if (this.VM.GetState() != VMState.Started) {
 						client.sendMsg(cvm.guacEncode('connect', '0'));
 						return;
 					}
@@ -443,20 +458,21 @@ export default class CollabVMServer {
 					}
 					this.sendVoteUpdate();
 					break;
-				case "cap": {
+				case 'cap': {
 					if (msgArr.length < 2) return;
 					// Capabilities can only be announced before connecting to the VM
 					if (client.connectedToNode) return;
 					var caps = [];
-					for (const cap of msgArr.slice(1)) switch(cap) {
-						case "bin": {
-							if (caps.indexOf("bin") !== -1) break;
-							client.Capabilities.bin = true;
-							caps.push("bin");
-							break;
+					for (const cap of msgArr.slice(1))
+						switch (cap) {
+							case 'bin': {
+								if (caps.indexOf('bin') !== -1) break;
+								client.Capabilities.bin = true;
+								caps.push('bin');
+								break;
+							}
 						}
-					}
-					client.sendMsg(cvm.guacEncode("cap", ...caps));
+					client.sendMsg(cvm.guacEncode('cap', ...caps));
 				}
 				case 'admin':
 					if (msgArr.length < 2) return;
@@ -719,10 +735,11 @@ export default class CollabVMServer {
 			if (announce) this.clients.forEach((c) => c.sendMsg(cvm.guacEncode('rename', '1', oldname, client.username!, client.rank.toString())));
 		} else {
 			this.logger.Info(`Rename ${client.IP.address} to ${client.username}`);
-			if (announce) this.clients.forEach((c) => {
-				c.sendMsg(cvm.guacEncode('adduser', '1', client.username!, client.rank.toString()));
-				if (client.countryCode !== null) c.sendMsg(cvm.guacEncode('flag', client.username!, client.countryCode));
-			});
+			if (announce)
+				this.clients.forEach((c) => {
+					c.sendMsg(cvm.guacEncode('adduser', '1', client.username!, client.rank.toString()));
+					if (client.countryCode !== null) c.sendMsg(cvm.guacEncode('flag', client.username!, client.countryCode));
+				});
 		}
 	}
 
@@ -733,9 +750,9 @@ export default class CollabVMServer {
 		return cvm.guacEncode(...arr);
 	}
 
-	getFlagMsg() : string {
+	getFlagMsg(): string {
 		var arr = ['flag'];
-		for (let c of this.clients.filter(cl => cl.countryCode !== null && cl.username && (!cl.noFlag || cl.rank === Rank.Unregistered))) {
+		for (let c of this.clients.filter((cl) => cl.countryCode !== null && cl.username && (!cl.noFlag || cl.rank === Rank.Unregistered))) {
 			arr.push(c.username!, c.countryCode!);
 		}
 		return cvm.guacEncode(...arr);
@@ -814,14 +831,14 @@ export default class CollabVMServer {
 
 	private async OnDisplayRectangle(rect: Rect) {
 		let encoded = await this.MakeRectData(rect);
-		let encodedb64 = encoded.toString("base64");
-		let bmsg : CollabVMProtocolMessage = {
+		let encodedb64 = encoded.toString('base64');
+		let bmsg: CollabVMProtocolMessage = {
 			type: CollabVMProtocolMessageType.rect,
 			rect: {
 				x: rect.x,
 				y: rect.y,
 				data: encoded
-			},
+			}
 		};
 		var encodedbin = msgpack.encode(bmsg);
 		this.clients
@@ -860,7 +877,7 @@ export default class CollabVMServer {
 		client.sendMsg(cvm.guacEncode('size', '0', displaySize.width.toString(), displaySize.height.toString()));
 
 		if (client.Capabilities.bin) {
-			let msg : CollabVMProtocolMessage = {
+			let msg: CollabVMProtocolMessage = {
 				type: CollabVMProtocolMessageType.rect,
 				rect: {
 					x: 0,
@@ -870,7 +887,7 @@ export default class CollabVMServer {
 			};
 			client.socket.sendBinary(msgpack.encode(msg));
 		} else {
-			client.sendMsg(cvm.guacEncode('png', '0', '0', '0', '0', encoded.toString("base64")));
+			client.sendMsg(cvm.guacEncode('png', '0', '0', '0', '0', encoded.toString('base64')));
 		}
 	}
 
@@ -879,8 +896,7 @@ export default class CollabVMServer {
 		let displaySize = display.Size();
 
 		// TODO: actually throw an error here
-		if(displaySize.width == 0 && displaySize.height == 0)
-			return Buffer.from("no")
+		if (displaySize.width == 0 && displaySize.height == 0) return Buffer.from('no');
 
 		let encoded = await JPEGEncoder.Encode(display.Buffer(), displaySize, rect);
 

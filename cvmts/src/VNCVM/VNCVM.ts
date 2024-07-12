@@ -4,7 +4,7 @@ import VM from '../VM';
 import VMDisplay from '../VMDisplay';
 import { Clamp, Logger, Rect, Size, Sleep } from '@cvmts/shared';
 import { VncClient } from '@computernewb/nodejs-rfb';
-import { BatchRects } from '@cvmts/qemu';
+import { BatchRects, VMState } from '@cvmts/qemu';
 import { execaCommand } from 'execa';
 
 export default class VNCVM extends EventEmitter implements VM, VMDisplay {
@@ -123,6 +123,11 @@ export default class VNCVM extends EventEmitter implements VM, VMDisplay {
 
 	GetDisplay(): VMDisplay {
 		return this;
+	}
+
+	GetState(): VMState {
+		// for now!
+		return VMState.Started;
 	}
 
 	SnapshotsSupported(): boolean {

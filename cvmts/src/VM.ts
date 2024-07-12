@@ -1,3 +1,4 @@
+import { VMState } from '@cvmts/qemu';
 import VMDisplay from './VMDisplay.js';
 
 export default interface VM {
@@ -7,5 +8,6 @@ export default interface VM {
 	Reset(): Promise<void>;
 	MonitorCommand(command: string): Promise<any>;
 	GetDisplay(): VMDisplay;
+	GetState(): VMState;
 	SnapshotsSupported(): boolean;
 }

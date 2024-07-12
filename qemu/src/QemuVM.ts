@@ -51,14 +51,14 @@ class SocketWriter implements IQmpClientWriter {
 export class QemuVM extends EventEmitter {
 	private state = VMState.Stopped;
 
+	// QMP stuff.
 	private qmpInstance: QmpClient = new QmpClient();
 	private qmpSocket: Socket | null = null;
-	private qmpConnected = false;
 	private qmpFailCount = 0;
 
 	private qemuProcess: ExecaChildProcess | null = null;
 
-	private display: QemuDisplay | null;
+	private display: QemuDisplay | null = null;
 	private definition: QemuVmDefinition;
 	private addedAdditionalArguments = false;
 
@@ -68,8 +68,6 @@ export class QemuVM extends EventEmitter {
 		super();
 		this.definition = def;
 		this.logger = new Shared.Logger(`CVMTS.QEMU.QemuVM/${this.definition.id}`);
-
-		this.display = new QemuDisplay(this.GetVncPath());
 
 		let self = this;
 
@@ -86,12 +84,16 @@ export class QemuVM extends EventEmitter {
 			self.VMLog().Info('QMP ready');
 
 			this.display = new QemuDisplay(this.GetVncPath());
-			self.display?.Connect();
 
-			// QMP has been connected so the VM is ready to be considered started
+			self.display?.on('connected', () => {
+				// The VM can now be considered started
+				self.VMLog().Info("Display connected");
+				self.SetState(VMState.Started);
+			})
+
+			// now that we've connected to VNC, connect to the display
 			self.qmpFailCount = 0;
-			self.qmpConnected = true;
-			self.SetState(VMState.Started);
+			self.display?.Connect();
 		});
 	}
 
@@ -170,6 +172,10 @@ export class QemuVM extends EventEmitter {
 		return this.display!;
 	}
 
+	GetState() {
+		return this.state;
+	}
+
 	/// Private fun bits :)
 
 	private VMLog() {
@@ -223,7 +229,6 @@ export class QemuVM extends EventEmitter {
 
 			// Disconnect from the display and QMP connections.
 			await self.DisconnectDisplay();
-			await self.DisconnectQmp();
 
 			// Remove the sockets for VNC and QMP.
 			try {
@@ -262,8 +267,10 @@ export class QemuVM extends EventEmitter {
 	private async ConnectQmp() {
 		let self = this;
 
-		if (this.qmpConnected) {
-			this.VMLog().Error('Already connected to QMP!');
+		if (this.qmpSocket) {
+			// This isn't really a problem (since we gate it)
+			// but I'd like to see if i could eliminate this
+			this.VMLog().Warning('QemuVM.ConnectQmp(): Already connected to QMP socket!');
 			return;
 		}
 
@@ -271,20 +278,20 @@ export class QemuVM extends EventEmitter {
 		this.qmpSocket = connect(this.GetQmpPath());
 
 		this.qmpSocket.on('close', async () => {
-			if (self.qmpConnected) {
-				await self.DisconnectQmp();
+			self.qmpSocket?.removeAllListeners();
+			self.qmpSocket = null;
 
-				// If we aren't stopping, then we should care QMP disconnected
-				if (self.state != VMState.Stopping) {
-					if (self.qmpFailCount++ < kMaxFailCount) {
-						self.VMLog().Error(`Failed to connect to QMP ${self.qmpFailCount} times.`);
-						await Shared.Sleep(500);
-						await self.ConnectQmp();
-					} else {
-						self.VMLog().Error(`Reached max retries, giving up.`);
-						await self.Stop();
-						return;
-					}
+			// If we aren't stopping (i.e: disconnection wasn't because we disconnected), 
+			// then we should care QMP disconnected
+			if (self.state != VMState.Stopping) {
+				if (self.qmpFailCount++ < kMaxFailCount) {
+					self.VMLog().Error(`Failed to connect to QMP ${self.qmpFailCount} times.`);
+					await Shared.Sleep(500);
+					await self.ConnectQmp();
+				} else {
+					self.VMLog().Error(`Reached max retries, giving up.`);
+					await self.Stop();
+					return;
 				}
 			}
 		});
@@ -293,10 +300,15 @@ export class QemuVM extends EventEmitter {
 			self.VMLog().Error('QMP socket error: {0}', e.message);
 		});
 
-		// Setup the QMP client.
-		let writer = new SocketWriter(this.qmpSocket, this.qmpInstance);
-		this.qmpInstance.reset();
-		this.qmpInstance.setWriter(writer);
+		this.qmpSocket.on('connect', () => {
+			self.VMLog().Info("Connected to QMP socket");
+
+			// Setup the QMP client.
+			let writer = new SocketWriter(self.qmpSocket!, self.qmpInstance);
+			self.qmpInstance.reset();
+			self.qmpInstance.setWriter(writer);
+		})
+
 	}
 
 	private async DisconnectDisplay() {
@@ -306,14 +318,5 @@ export class QemuVM extends EventEmitter {
 		} catch (err) {
 			// oh well lol
 		}
-	}
-
-	private async DisconnectQmp() {
-		if (!this.qmpConnected) return;
-		this.qmpConnected = false;
-
-		if (this.qmpSocket == null) return;
-		this.qmpSocket?.end();
-		this.qmpSocket = null;
 	}
 }
