@@ -31,7 +31,7 @@ export enum QmpEvent {
 	Stop = 'STOP',
 	VncConnected = 'VNC_CONNECTED',
 	VncDisconnected = 'VNC_DISCONNECTED',
-	VncInitalized = 'VNC_INITALIZED',
+	VncInitialized = 'VNC_INITIALIZED',
 	Watchdog = 'WATCHDOG'
 }
 
@@ -79,7 +79,7 @@ export class QmpClient extends EventEmitter {
 		});
 	}
 
-	setWriter(writer: IQmpClientWriter) {
+	setWriter(writer: IQmpClientWriter|null) {
 		this.writer = writer;
 	}
 
