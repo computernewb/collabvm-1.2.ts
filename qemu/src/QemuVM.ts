@@ -1,12 +1,11 @@
-import { execa, execaCommand, ExecaChildProcess } from 'execa';
+import { execaCommand, ExecaChildProcess } from 'execa';
 import { EventEmitter } from 'events';
 import { QmpClient, IQmpClientWriter, QmpEvent } from './QmpClient.js';
 import { QemuDisplay } from './QemuDisplay.js';
 import { unlink } from 'node:fs/promises';
 
 import * as Shared from '@cvmts/shared';
-import { Socket, connect } from 'net';
-import { Readable, Stream, Writable } from 'stream';
+import { Readable, Writable } from 'stream';
 
 export enum VMState {
 	Stopped,
@@ -23,6 +22,10 @@ export type QemuVmDefinition = {
 
 /// Temporary path base (for UNIX sockets/etc.)
 const kVmTmpPathBase = `/tmp`;
+
+// Test so I can test removing any (or well, the lone) sleep calls,
+// in the qemuvm code.
+const kTestDisableSleep = true;
 
 // writer implementation for process standard I/O
 class StdioWriter implements IQmpClientWriter {
@@ -41,7 +44,8 @@ class StdioWriter implements IQmpClientWriter {
 	}
 
 	writeSome(buffer: Buffer) {
-		this.stdin.write(buffer);
+		if(!this.stdin.closed)
+			this.stdin.write(buffer);
 	}
 }
 
@@ -82,9 +86,9 @@ export class QemuVM extends EventEmitter {
 
 			self.display?.on('connected', () => {
 				// The VM can now be considered started
-				self.VMLog().Info("Display connected");
+				self.VMLog().Info('Display connected');
 				self.SetState(VMState.Started);
-			})
+			});
 
 			// now that QMP has connected, connect to the display
 			self.display?.Connect();
@@ -232,8 +236,9 @@ export class QemuVM extends EventEmitter {
 
 			if (self.state != VMState.Stopping) {
 				if (code == 0) {
-					// Wait a bit and restart QEMU.
-					await Shared.Sleep(500);
+					if(!kTestDisableSleep)
+						await Shared.Sleep(500);
+
 					await self.StartQemu(split);
 				} else {
 					self.VMLog().Error('QEMU exited with a non-zero exit code. This usually means an error in the command line. Stopping VM.');
@@ -258,7 +263,7 @@ export class QemuVM extends EventEmitter {
 	private async QmpStdioInit() {
 		let self = this;
 
-		self.VMLog().Info("Initializing QMP over stdio");
+		self.VMLog().Info('Initializing QMP over stdio');
 
 		// Setup the QMP client.
 		let writer = new StdioWriter(this.qemuProcess?.stdout!, this.qemuProcess?.stdin!, self.qmpInstance);
