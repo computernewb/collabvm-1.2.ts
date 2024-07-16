@@ -23,10 +23,6 @@ export type QemuVmDefinition = {
 /// Temporary path base (for UNIX sockets/etc.)
 const kVmTmpPathBase = `/tmp`;
 
-// Test so I can test removing any (or well, the lone) sleep calls,
-// in the qemuvm code.
-const kTestDisableSleep = true;
-
 // writer implementation for process standard I/O
 class StdioWriter implements IQmpClientWriter {
 	stdout;
@@ -236,9 +232,6 @@ export class QemuVM extends EventEmitter {
 
 			if (self.state != VMState.Stopping) {
 				if (code == 0) {
-					if(!kTestDisableSleep)
-						await Shared.Sleep(500);
-
 					await self.StartQemu(split);
 				} else {
 					self.VMLog().Error('QEMU exited with a non-zero exit code. This usually means an error in the command line. Stopping VM.');
