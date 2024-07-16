@@ -185,10 +185,6 @@ export class QemuVM extends EventEmitter {
 		this.emit('statechange', this.state);
 	}
 
-	private GetQmpPath() {
-		return `${kVmTmpPathBase}/cvmts-${this.definition.id}-mon`;
-	}
-
 	private GetVncPath() {
 		return `${kVmTmpPathBase}/cvmts-${this.definition.id}-vnc`;
 	}
