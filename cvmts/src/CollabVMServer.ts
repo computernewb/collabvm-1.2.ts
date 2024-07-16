@@ -6,17 +6,19 @@ import * as cvm from '@cvmts/cvm-rs';
 import CircularBuffer from 'mnemonist/circular-buffer.js';
 import Queue from 'mnemonist/queue.js';
 import { createHash } from 'crypto';
-import { VMState, QemuVM, QemuVmDefinition } from '@cvmts/qemu';
+import { VMState, QemuVM, QemuVmDefinition } from '@computernewb/superqemu';
 import { IPDataManager } from './IPData.js';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import AuthManager from './AuthManager.js';
-import { Size, Rect, Logger } from '@cvmts/shared';
 import { JPEGEncoder } from './JPEGEncoder.js';
 import VM from './VM.js';
 import { ReaderModel } from '@maxmind/geoip2-node';
 import * as msgpack from 'msgpackr';
 import { CollabVMProtocolMessage, CollabVMProtocolMessageType } from '@cvmts/collab-vm-1.2-binary-protocol';
+
+import { Size, Rect } from './VMDisplay.js';
+import pino from 'pino';
 
 // Instead of strange hacks we can just use nodejs provided
 // import.meta properties, which have existed since LTS if not before
@@ -35,6 +37,7 @@ type VoteTally = {
 	yes: number;
 	no: number;
 };
+
 
 export default class CollabVMServer {
 	private Config: IConfig;
@@ -87,7 +90,7 @@ export default class CollabVMServer {
 	// Geoip
 	private geoipReader: ReaderModel | null;
 
-	private logger = new Logger('CVMTS.Server');
+	private logger = pino({ name: 'CVMTS.Server' });
 
 	constructor(config: IConfig, vm: VM, auth: AuthManager | null, geoipReader: ReaderModel | null) {
 		this.Config = config;
@@ -121,7 +124,7 @@ export default class CollabVMServer {
 		if (config.vm.type == 'qemu') {
 			(vm as QemuVM).on('statechange', (newState: VMState) => {
 				if (newState == VMState.Started) {
-					self.logger.Info('VM started');
+					self.logger.info('VM started');
 					// well aware this sucks but whatever
 					self.VM.GetDisplay().on('resize', (size: Size) => self.OnDisplayResized(size));
 					self.VM.GetDisplay().on('rect', (rect: Rect) => self.OnDisplayRectangle(rect));
@@ -129,7 +132,7 @@ export default class CollabVMServer {
 
 				if (newState == VMState.Stopped) {
 					setTimeout(async () => {
-						self.logger.Info('restarting VM');
+						self.logger.info('restarting VM');
 						await self.VM.Start();
 					}, kRestartTimeout);
 				}
@@ -154,7 +157,7 @@ export default class CollabVMServer {
 			try {
 				user.countryCode = this.geoipReader!.country(user.IP.address).country!.isoCode;
 			} catch (error) {
-				this.logger.Warning(`Failed to get country code for ${user.IP.address}: ${(error as Error).message}`);
+				this.logger.warn(`Failed to get country code for ${user.IP.address}: ${(error as Error).message}`);
 			}
 		}
 		user.socket.on('msg', (msg: string) => this.onMessage(user, msg));
@@ -179,7 +182,7 @@ export default class CollabVMServer {
 
 		this.clients.splice(clientIndex, 1);
 
-		this.logger.Info(`Disconnect From ${user.IP.address}${user.username ? ` with username ${user.username}` : ''}`);
+		this.logger.info(`Disconnect From ${user.IP.address}${user.username ? ` with username ${user.username}` : ''}`);
 		if (!user.username) return;
 		if (this.TurnQueue.toArray().indexOf(user) !== -1) {
 			var hadturn = this.TurnQueue.peek() === user;
@@ -204,7 +207,7 @@ export default class CollabVMServer {
 					try {
 						let res = await this.auth!.Authenticate(msgArr[1], client);
 						if (res.clientSuccess) {
-							this.logger.Info(`${client.IP.address} logged in as ${res.username}`);
+							this.logger.info(`${client.IP.address} logged in as ${res.username}`);
 							client.sendMsg(cvm.guacEncode('login', '1'));
 							let old = this.clients.find((c) => c.username === res.username);
 							if (old) {
@@ -236,7 +239,7 @@ export default class CollabVMServer {
 							}
 						}
 					} catch (err) {
-						this.logger.Error(`Error authenticating client ${client.IP.address}: ${(err as Error).message}`);
+						this.logger.error(`Error authenticating client ${client.IP.address}: ${(err as Error).message}`);
 						// for now?
 						client.sendMsg(cvm.guacEncode('login', '0', 'There was an internal error while authenticating. Please let a staff member know as soon as possible'));
 					}
@@ -679,7 +682,7 @@ export default class CollabVMServer {
 			}
 		} catch (err) {
 			// No
-			this.logger.Error(`User ${user?.IP.address} ${user?.username ? `with username ${user?.username}` : ''} sent broken Guacamole: ${err as Error}`);
+			this.logger.error(`User ${user?.IP.address} ${user?.username ? `with username ${user?.username}` : ''} sent broken Guacamole: ${err as Error}`);
 			user?.kick();
 		}
 	}
@@ -721,10 +724,10 @@ export default class CollabVMServer {
 
 		client.sendMsg(cvm.guacEncode('rename', '0', status, client.username!, client.rank.toString()));
 		if (hadName) {
-			this.logger.Info(`Rename ${client.IP.address} from ${oldname} to ${client.username}`);
+			this.logger.info(`Rename ${client.IP.address} from ${oldname} to ${client.username}`);
 			if (announce) this.clients.forEach((c) => c.sendMsg(cvm.guacEncode('rename', '1', oldname, client.username!, client.rank.toString())));
 		} else {
-			this.logger.Info(`Rename ${client.IP.address} to ${client.username}`);
+			this.logger.info(`Rename ${client.IP.address} to ${client.username}`);
 			if (announce)
 				this.clients.forEach((c) => {
 					c.sendMsg(cvm.guacEncode('adduser', '1', client.username!, client.rank.toString()));

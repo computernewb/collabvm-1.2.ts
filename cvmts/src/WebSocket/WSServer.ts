@@ -8,20 +8,19 @@ import { isIP } from 'net';
 import { IPDataManager } from '../IPData.js';
 import WSClient from './WSClient.js';
 import { User } from '../User.js';
-import { Logger } from '@cvmts/shared';
+import pino from 'pino';
 
 export default class WSServer extends EventEmitter implements NetworkServer {
 	private httpServer: http.Server;
 	private wsServer: WebSocketServer;
 	private clients: WSClient[];
 	private Config: IConfig;
-	private logger: Logger;
+	private logger = pino({ name: 'CVMTS.WSServer' });
 
 	constructor(config: IConfig) {
 		super();
 		this.Config = config;
 		this.clients = [];
-		this.logger = new Logger('CVMTS.WSServer');
 		this.httpServer = http.createServer();
 		this.wsServer = new WebSocketServer({ noServer: true });
 		this.httpServer.on('upgrade', (req: http.IncomingMessage, socket: internal.Duplex, head: Buffer) => this.httpOnUpgrade(req, socket, head));
@@ -34,7 +33,7 @@ export default class WSServer extends EventEmitter implements NetworkServer {
 
 	start(): void {
 		this.httpServer.listen(this.Config.http.port, this.Config.http.host, () => {
-			this.logger.Info(`WebSocket server listening on ${this.Config.http.host}:${this.Config.http.port}`);
+			this.logger.info(`WebSocket server listening on ${this.Config.http.host}:${this.Config.http.port}`);
 		});
 	}
 
@@ -94,7 +93,7 @@ export default class WSServer extends EventEmitter implements NetworkServer {
 			// Make sure x-forwarded-for is set
 			if (req.headers['x-forwarded-for'] === undefined) {
 				killConnection();
-				this.logger.Error('X-Forwarded-For header not set. This is most likely a misconfiguration of your reverse proxy.');
+				this.logger.error('X-Forwarded-For header not set. This is most likely a misconfiguration of your reverse proxy.');
 				return;
 			}
 			try {
@@ -102,7 +101,7 @@ export default class WSServer extends EventEmitter implements NetworkServer {
 				ip = req.headers['x-forwarded-for']?.toString().replace(/\ /g, '').split(',')[0];
 			} catch {
 				// If we can't get the IP, kill the connection
-				this.logger.Error('Invalid X-Forwarded-For header. This is most likely a misconfiguration of your reverse proxy.');
+				this.logger.error('Invalid X-Forwarded-For header. This is most likely a misconfiguration of your reverse proxy.');
 				killConnection();
 				return;
 			}
@@ -135,10 +134,10 @@ export default class WSServer extends EventEmitter implements NetworkServer {
 		this.emit('connect', user);
 
 		ws.on('error', (e) => {
-			this.logger.Error(`${e} (caused by connection ${ip})`);
+			this.logger.error(`${e} (caused by connection ${ip})`);
 			ws.close();
 		});
 
-		this.logger.Info(`New WebSocket connection from ${user.IP.address}`);
+		this.logger.info(`New WebSocket connection from ${user.IP.address}`);
 	}
 }

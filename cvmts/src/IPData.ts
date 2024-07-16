@@ -1,4 +1,4 @@
-import { Logger } from '@cvmts/shared';
+import pino from 'pino';
 
 export class IPData {
 	tempMuteExpireTimeout?: NodeJS.Timeout;
@@ -22,7 +22,7 @@ export class IPData {
 
 export class IPDataManager {
 	static ipDatas = new Map<string, IPData>();
-	static logger = new Logger('CVMTS.IPDataManager');
+	static logger = pino({ name: 'CVMTS.IPDataManager' });
 
 	static GetIPData(address: string) {
 		if (IPDataManager.ipDatas.has(address)) {
@@ -64,7 +64,7 @@ export class IPDataManager {
 setInterval(() => {
 	for (let tuple of IPDataManager.ipDatas) {
 		if (tuple[1].refCount == 0) {
-			IPDataManager.logger.Info('Deleted IPData for IP {0}', tuple[0]);
+			IPDataManager.logger.info(`Deleted IPData for IP ${tuple[0]}`);
 			IPDataManager.ipDatas.delete(tuple[0]);
 		}
 	}

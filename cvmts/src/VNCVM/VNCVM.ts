@@ -1,15 +1,23 @@
 import EventEmitter from 'events';
 import VNCVMDef from './VNCVMDef';
 import VM from '../VM';
-import VMDisplay from '../VMDisplay';
-import { Clamp, Logger, Rect, Size, Sleep } from '@cvmts/shared';
+import { Size, Rect, VMDisplay } from '../VMDisplay';
 import { VncClient } from '@computernewb/nodejs-rfb';
-import { BatchRects, VMState } from '@cvmts/qemu';
+import { BatchRects, VMState } from '@computernewb/superqemu';
 import { execaCommand } from 'execa';
+import pino from 'pino';
+
+function Clamp(input: number, min: number, max: number) {
+	return Math.min(Math.max(input, min), max);
+}
+
+async function Sleep(ms: number) {
+	return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 export default class VNCVM extends EventEmitter implements VM, VMDisplay {
 	def: VNCVMDef;
-	logger: Logger;
+	logger;
 	private displayVnc = new VncClient({
 		debug: false,
 		fps: 60,
@@ -20,7 +28,8 @@ export default class VNCVM extends EventEmitter implements VM, VMDisplay {
 	constructor(def: VNCVMDef) {
 		super();
 		this.def = def;
-		this.logger = new Logger(`CVMTS.VNCVM/${this.def.vncHost}:${this.def.vncPort}`);
+		// TODO: Now that we're using an actual structured logger can we please
+		this.logger = pino({ name: `CVMTS.VNCVM/${this.def.vncHost}:${this.def.vncPort}` });
 
 		this.displayVnc.on('connectTimeout', () => {
 			this.Reconnect();
@@ -31,7 +40,7 @@ export default class VNCVM extends EventEmitter implements VM, VMDisplay {
 		});
 
 		this.displayVnc.on('disconnect', () => {
-			this.logger.Info('Disconnected');
+			this.logger.info('Disconnected');
 			this.Reconnect();
 		});
 
@@ -40,7 +49,7 @@ export default class VNCVM extends EventEmitter implements VM, VMDisplay {
 		});
 
 		this.displayVnc.on('firstFrameUpdate', () => {
-			this.logger.Info('Connected');
+			this.logger.info('Connected');
 			// apparently this library is this good.
 			// at least it's better than the two others which exist.
 			this.displayVnc.changeFps(60);
@@ -101,13 +110,13 @@ export default class VNCVM extends EventEmitter implements VM, VMDisplay {
 	}
 
 	async Start(): Promise<void> {
-		this.logger.Info('Connecting');
+		this.logger.info('Connecting');
 		if (this.def.startCmd) await execaCommand(this.def.startCmd, { shell: true });
 		this.Connect();
 	}
 
 	async Stop(): Promise<void> {
-		this.logger.Info('Disconnecting');
+		this.logger.info('Disconnecting');
 		this.Disconnect();
 		if (this.def.stopCmd) await execaCommand(this.def.stopCmd, { shell: true });
 	}

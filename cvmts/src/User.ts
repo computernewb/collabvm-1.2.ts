@@ -4,9 +4,9 @@ import { IPData } from './IPData.js';
 import IConfig from './IConfig.js';
 import RateLimiter from './RateLimiter.js';
 import { execa, execaCommand, ExecaSyncError } from 'execa';
-import { Logger } from '@cvmts/shared';
 import NetworkClient from './NetworkClient.js';
 import { CollabVMCapabilities } from '@cvmts/collab-vm-1.2-binary-protocol';
+import pino from 'pino';
 
 export class User {
 	socket: NetworkClient;
@@ -31,7 +31,7 @@ export class User {
 	TurnRateLimit: RateLimiter;
 	VoteRateLimit: RateLimiter;
 
-	private logger = new Logger('CVMTS.User');
+	private logger = pino({ name: 'CVMTS.User' });
 
 	constructor(socket: NetworkClient, ip: IPData, config: IConfig, username?: string, node?: string) {
 		this.IP = ip;
@@ -148,7 +148,7 @@ export class User {
 					await execa(args.shift()!, args, { stdout: process.stdout, stderr: process.stderr });
 					this.kick();
 				} else {
-					this.logger.Error(`Failed to ban ${this.IP.address} (${this.username}): Empty command`);
+					this.logger.error(`Failed to ban ${this.IP.address} (${this.username}): Empty command`);
 				}
 			} else if (typeof this.Config.collabvm.bancmd == 'string') {
 				let cmd: string = this.banCmdArgs(this.Config.collabvm.bancmd);
@@ -156,11 +156,11 @@ export class User {
 					await execaCommand(cmd, { stdout: process.stdout, stderr: process.stderr });
 					this.kick();
 				} else {
-					this.logger.Error(`Failed to ban ${this.IP.address} (${this.username}): Empty command`);
+					this.logger.error(`Failed to ban ${this.IP.address} (${this.username}): Empty command`);
 				}
 			}
 		} catch (e) {
-			this.logger.Error(`Failed to ban ${this.IP.address} (${this.username}): ${(e as ExecaSyncError).shortMessage}`);
+			this.logger.error(`Failed to ban ${this.IP.address} (${this.username}): ${(e as ExecaSyncError).shortMessage}`);
 		}
 	}
 

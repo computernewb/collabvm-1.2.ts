@@ -3,8 +3,6 @@
 	"workspaces": [
 		"shared",
 		"cvm-rs",
-		"nodejs-rfb",
-		"qemu",
 		"cvmts",
 		"collab-vm-1.2-binary-protocol"
 	],

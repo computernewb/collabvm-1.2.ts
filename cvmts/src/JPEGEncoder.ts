@@ -1,4 +1,4 @@
-import { Size, Rect } from '@cvmts/shared';
+import { Size, Rect } from './VMDisplay.js';
 import sharp from 'sharp';
 import * as cvm from '@cvmts/cvm-rs';
 

@@ -1,7 +1,20 @@
-import { Size } from '@cvmts/shared';
 import EventEmitter from 'node:events';
 
-export default interface VMDisplay extends EventEmitter {
+// not great but whatever
+// nodejs-rfb COULD probably export them though.
+export type Size = {
+	width: number;
+	height: number;
+};
+
+export type Rect = {
+	x: number;
+	y: number;
+	width: number;
+	height: number;
+};
+
+export interface VMDisplay extends EventEmitter {
 	Connect(): void;
 	Disconnect(): void;
 	Connected(): boolean;

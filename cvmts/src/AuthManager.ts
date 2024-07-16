@@ -1,11 +1,8 @@
-import { Logger } from '@cvmts/shared';
 import { Rank, User } from './User.js';
 
 export default class AuthManager {
 	apiEndpoint: string;
 	secretKey: string;
-
-	private logger = new Logger('CVMTS.AuthMan');
 
 	constructor(apiEndpoint: string, secretKey: string) {
 		this.apiEndpoint = apiEndpoint;

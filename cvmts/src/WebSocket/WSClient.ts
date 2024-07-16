@@ -1,7 +1,6 @@
 import { WebSocket } from 'ws';
 import NetworkClient from '../NetworkClient.js';
 import EventEmitter from 'events';
-import { Logger } from '@cvmts/shared';
 
 export default class WSClient extends EventEmitter implements NetworkClient {
 	socket: WebSocket;

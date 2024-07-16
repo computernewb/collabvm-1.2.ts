@@ -1,5 +1,5 @@
-import { VMState } from '@cvmts/qemu';
-import VMDisplay from './VMDisplay.js';
+import { VMState } from '@computernewb/superqemu';
+import { VMDisplay } from './VMDisplay.js';
 
 export default interface VM {
 	Start(): Promise<void>;
