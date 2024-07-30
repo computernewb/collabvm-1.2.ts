@@ -1,0 +1,33 @@
+{
+  "name": "@cvmts/cvmts",
+  "version": "1.0.0",
+  "description": "replacement for collabvm 1.2.11 because the old one :boom:",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc -outDir dist -rootDir src/",
+    "serve": "node dist/index.js"
+  },
+  "author": "Elijah R, modeco80",
+  "license": "GPL-3.0",
+  "dependencies": {
+    "@computernewb/nodejs-rfb": "^0.3.0",
+    "@computernewb/superqemu": "^0.1.0",
+    "@cvmts/cvm-rs": "*",
+    "@maxmind/geoip2-node": "^5.0.0",
+    "execa": "^8.0.1",
+    "mnemonist": "^0.39.5",
+    "msgpackr": "^1.10.2",
+    "pino": "^9.3.1",
+    "sharp": "^0.33.3",
+    "toml": "^3.0.0",
+    "ws": "^8.14.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.12.5",
+    "@types/ws": "^8.5.5",
+    "pino-pretty": "^11.2.1",
+    "prettier": "^3.2.5",
+    "typescript": "^5.4.4"
+  }
+}

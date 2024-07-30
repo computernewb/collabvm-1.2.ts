@@ -10,8 +10,20 @@ proxyAllowedIps = ["127.0.0.1"]
 origin = false
 # Origins to accept connections from.
 originAllowedDomains = ["computernewb.com"]
-# Maximum amount of active connections allowed from the same IP.
-maxConnections = 3
+
+[geoip]
+# Enables support for showing country flags next to usernames.
+enabled = false
+# Directory to store and load GeoIP databases from.
+directory = "geoip/"
+# MaxMind license key and account ID (https://www.maxmind.com/en/accounts/current/license-key)
+accountID = ""
+licenseKey = ""
+
+[tcp]
+enabled = false
+host = "0.0.0.0"
+port = 6014
 
 [auth]
 enabled = false
@@ -25,6 +37,9 @@ callForReset = false
 vote = true
 
 [vm]
+type = "qemu"
+
+[qemu]
 qemuArgs = "qemu-system-x86_64"
 vncPort = 5900
 snapshots = true
@@ -34,10 +49,20 @@ snapshots = true
 # Comment out qmpSockDir if you're using Windows.
 qmpSockDir = "/tmp/"
 
+[vncvm]
+vncHost = "127.0.0.1"
+vncPort = 5900
+# startCmd = ""
+# stopCmd = ""
+# rebootCmd = ""
+# restoreCmd = ""
+
 [collabvm]
 node = "acoolvm"
 displayname = "A <b>Really</b> Cool CollabVM Instance"
 motd = "welcome!"
+# Maximum amount of active connections allowed from the same IP.
+maxConnections = 3
 # Command used to ban an IP.
 # Use $IP to specify an ip and (optionally) use $NAME to specify a username
 bancmd = "iptables -A INPUT -s $IP -j REJECT"

@@ -1,27 +1,25 @@
 {
-  "name": "collabvm1.ts",
-  "version": "1.0.0",
-  "description": "replacement for collabvm 1.2.11 because the old one :boom:",
-  "main": "build/index.js",
-  "scripts": {
-    "build": "tsc",
-    "serve": "node build/index.js"
-  },
-  "author": "Elijah R",
-  "license": "GPL-3.0",
-  "dependencies": {
-    "@types/node": "^20.6.0",
-    "@types/sharp": "^0.31.1",
-    "@types/ws": "^8.5.5",
-    "async-mutex": "^0.4.0",
-    "canvas": "^2.11.2",
-    "execa": "^8.0.1",
-    "jimp": "^0.22.10",
-    "mnemonist": "^0.39.5",
-    "rfb2": "github:elijahr2411/node-rfb2",
-    "toml": "^3.0.0",
-    "typescript": "^5.2.2",
-    "ws": "^8.14.1"
-  },
-  "type": "module"
+	"name": "cvmts-repo",
+	"workspaces": [
+		"shared",
+		"cvm-rs",
+		"cvmts",
+		"collab-vm-1.2-binary-protocol"
+	],
+	"devDependencies": {
+		"@parcel/packager-ts": "2.12.0",
+		"@parcel/transformer-sass": "2.12.0",
+		"@parcel/transformer-typescript-types": "2.12.0",
+		"@types/node": "^20.14.10",
+		"just-install": "^2.0.1",
+		"parcel": "^2.12.0",
+		"prettier": "^3.2.5",
+		"typescript": "^5.4.4"
+	},
+	"packageManager": "yarn@4.1.1",
+	"scripts": {
+		"build": "just",
+		"serve": "node cvmts/dist/index.js",
+		"clean": "rm -rf .parcel-cache .yarn **/node_modules **/dist cvm-rs/target cvm-rs/index.node"
+	}
 }
