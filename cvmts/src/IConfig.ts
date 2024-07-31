@@ -40,12 +40,13 @@ export default interface IConfig {
 		snapshots: boolean;
 	};
 	vncvm: VNCVMDef;
+	mysql: MySQLConfig;
+	bans: BanConfig;
 	collabvm: {
 		node: string;
 		displayname: string;
 		motd: string;
 		maxConnections: number;
-		bancmd: string | string[];
 		moderatorEnabled: boolean;
 		usernameblacklist: string[];
 		maxChatLength: number;
@@ -69,6 +70,19 @@ export default interface IConfig {
 		turnpass: string;
 		moderatorPermissions: Permissions;
 	};
+}
+
+export interface MySQLConfig {
+	enabled: boolean;
+	host: string;
+	username: string;
+	password: string;
+	database: string;
+}
+
+export interface BanConfig {
+	bancmd: string | string[] | undefined;
+	cvmban: boolean;
 }
 
 export interface Permissions {
