@@ -13,6 +13,8 @@ import VM from './VM.js';
 import VNCVM from './VNCVM/VNCVM.js';
 import GeoIPDownloader from './GeoIPDownloader.js';
 import pino from 'pino';
+import { Database } from './Database.js';
+import { BanManager } from './BanManager.js';
 
 let logger = pino();
 
@@ -52,6 +54,20 @@ async function start() {
 	}
 	// Init the auth manager if enabled
 	let auth = Config.auth.enabled ? new AuthManager(Config.auth.apiEndpoint, Config.auth.secretKey) : null;
+	// Database and ban manager
+	if (Config.bans.cvmban && !Config.mysql.enabled) {
+		logger.error("MySQL must be configured to use cvmban.");
+		process.exit(1);
+	}
+	if (!Config.bans.cvmban && !Config.bans.bancmd) {
+		logger.warn("Neither cvmban nor ban command are configured. Bans will not function.");
+	}
+	let db = undefined;
+	if (Config.mysql.enabled) {
+		db = new Database(Config.mysql);
+		await db.init();
+	}
+	let banmgr = new BanManager(Config.bans, db);
 	switch (Config.vm.type) {
 		case 'qemu': {
 			// Fire up the VM
@@ -79,14 +95,14 @@ async function start() {
 
 	await VM.Start();
 	// Start up the server
-	var CVM = new CollabVMServer(Config, VM, auth, geoipReader);
+	var CVM = new CollabVMServer(Config, VM, banmgr, auth, geoipReader);
 
-	var WS = new WSServer(Config);
+	var WS = new WSServer(Config, banmgr);
 	WS.on('connect', (client: User) => CVM.addUser(client));
 	WS.start();
 
 	if (Config.tcp.enabled) {
-		var TCP = new TCPServer(Config);
+		var TCP = new TCPServer(Config, banmgr);
 		TCP.on('connect', (client: User) => CVM.addUser(client));
 		TCP.start();
 	}

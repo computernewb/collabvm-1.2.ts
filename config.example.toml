@@ -52,18 +52,35 @@ vncPort = 5900
 # rebootCmd = ""
 # restoreCmd = ""
 
+[mysql]
+# Configures the MySQL database. This is ONLY required if you use the internal cvmban banning system (configured below)
+enabled = false
+host = "127.0.0.1"
+username = "root"
+password = "hunter2"
+database = "cvmts"
+
+# This section configures banning users. Note that if you leave this default, banning will NOT function and will be as effective as a kick.
+[bans]
+# If defined, a command that is run to ban a user from the VM.
+# Use $IP to specify an ip and (optionally) use $NAME to specify a username
+# bancmd = ""
+# If true, enables the internal banning of users using the above MySQL database
+cvmban = false
+
 [collabvm]
 node = "acoolvm"
 displayname = "A <b>Really</b> Cool CollabVM Instance"
 motd = "welcome!"
 # Maximum amount of active connections allowed from the same IP.
 maxConnections = 3
-# Command used to ban an IP.
-# Use $IP to specify an ip and (optionally) use $NAME to specify a username
-bancmd = "iptables -A INPUT -s $IP -j REJECT"
+# Moderator rank enabled
 moderatorEnabled = true
+# List of disallowed usernames
 usernameblacklist = []
+# Maximum length of a chat message
 maxChatLength = 100
+# Maximum messages in the chat history buffer before old messages are overwritten
 maxChatHistoryLength = 10
 # Limit the amount of users allowed in the turn queue at the same time from the same IP
 turnlimit = {enabled = true, maximum = 1}

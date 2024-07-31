@@ -9,6 +9,7 @@ import { IPDataManager } from '../IPData.js';
 import WSClient from './WSClient.js';
 import { User } from '../User.js';
 import pino from 'pino';
+import { BanManager } from '../BanManager.js';
 
 export default class WSServer extends EventEmitter implements NetworkServer {
 	private httpServer: http.Server;
@@ -16,8 +17,9 @@ export default class WSServer extends EventEmitter implements NetworkServer {
 	private clients: WSClient[];
 	private Config: IConfig;
 	private logger = pino({ name: 'CVMTS.WSServer' });
+	private banmgr: BanManager;
 
-	constructor(config: IConfig) {
+	constructor(config: IConfig, banmgr: BanManager) {
 		super();
 		this.Config = config;
 		this.clients = [];
@@ -29,6 +31,7 @@ export default class WSServer extends EventEmitter implements NetworkServer {
 			res.write('This server only accepts WebSocket connections.');
 			res.end();
 		});
+		this.banmgr = banmgr;
 	}
 
 	start(): void {
@@ -41,7 +44,7 @@ export default class WSServer extends EventEmitter implements NetworkServer {
 		this.httpServer.close();
 	}
 
-	private httpOnUpgrade(req: http.IncomingMessage, socket: internal.Duplex, head: Buffer) {
+	private async httpOnUpgrade(req: http.IncomingMessage, socket: internal.Duplex, head: Buffer) {
 		var killConnection = () => {
 			socket.write('HTTP/1.1 400 Bad Request\n\n400 Bad Request');
 			socket.destroy();
@@ -118,6 +121,12 @@ export default class WSServer extends EventEmitter implements NetworkServer {
 		} else {
 			if (!req.socket.remoteAddress) return;
 			ip = req.socket.remoteAddress;
+		}
+
+		if (await this.banmgr.isIPBanned(ip)) {
+			socket.write("HTTP/1.1 403 Forbidden\n\nYou have been banned.");
+			socket.destroy();
+			return;
 		}
 
 		this.wsServer.handleUpgrade(req, socket, head, (ws: WebSocket) => {

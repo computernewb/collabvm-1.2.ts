@@ -7,6 +7,7 @@ import { execa, execaCommand, ExecaSyncError } from 'execa';
 import NetworkClient from './NetworkClient.js';
 import { CollabVMCapabilities } from '@cvmts/collab-vm-1.2-binary-protocol';
 import pino from 'pino';
+import { BanManager } from './BanManager.js';
 
 export class User {
 	socket: NetworkClient;
@@ -133,35 +134,11 @@ export class User {
 		this.sendMsg(cvm.guacEncode('chat', '', 'You are no longer muted.'));
 	}
 
-	private banCmdArgs(arg: string): string {
-		return arg.replace(/\$IP/g, this.IP.address).replace(/\$NAME/g, this.username || '');
-	}
-
-	async ban() {
+	async ban(banmgr: BanManager) {
 		// Prevent the user from taking turns or chatting, in case the ban command takes a while
 		this.IP.muted = true;
-
-		try {
-			if (Array.isArray(this.Config.collabvm.bancmd)) {
-				let args: string[] = this.Config.collabvm.bancmd.map((a: string) => this.banCmdArgs(a));
-				if (args.length || args[0].length) {
-					await execa(args.shift()!, args, { stdout: process.stdout, stderr: process.stderr });
-					this.kick();
-				} else {
-					this.logger.error(`Failed to ban ${this.IP.address} (${this.username}): Empty command`);
-				}
-			} else if (typeof this.Config.collabvm.bancmd == 'string') {
-				let cmd: string = this.banCmdArgs(this.Config.collabvm.bancmd);
-				if (cmd.length) {
-					await execaCommand(cmd, { stdout: process.stdout, stderr: process.stderr });
-					this.kick();
-				} else {
-					this.logger.error(`Failed to ban ${this.IP.address} (${this.username}): Empty command`);
-				}
-			}
-		} catch (e) {
-			this.logger.error(`Failed to ban ${this.IP.address} (${this.username}): ${(e as ExecaSyncError).shortMessage}`);
-		}
+		await banmgr.BanUser(this.IP.address, this.username || '');
+		await this.kick();
 	}
 
 	async kick() {

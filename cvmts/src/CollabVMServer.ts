@@ -19,6 +19,7 @@ import { CollabVMProtocolMessage, CollabVMProtocolMessageType } from '@cvmts/col
 
 import { Size, Rect } from './VMDisplay.js';
 import pino from 'pino';
+import { BanManager } from './BanManager.js';
 
 // Instead of strange hacks we can just use nodejs provided
 // import.meta properties, which have existed since LTS if not before
@@ -90,9 +91,12 @@ export default class CollabVMServer {
 	// Geoip
 	private geoipReader: ReaderModel | null;
 
+	// Ban manager
+	private banmgr: BanManager;
+
 	private logger = pino({ name: 'CVMTS.Server' });
 
-	constructor(config: IConfig, vm: VM, auth: AuthManager | null, geoipReader: ReaderModel | null) {
+	constructor(config: IConfig, vm: VM, banmgr: BanManager, auth: AuthManager | null, geoipReader: ReaderModel | null) {
 		this.Config = config;
 		this.ChatHistory = new CircularBuffer<ChatHistory>(Array, this.Config.collabvm.maxChatHistoryLength);
 		this.TurnQueue = new Queue<User>();
@@ -147,6 +151,8 @@ export default class CollabVMServer {
 		this.auth = auth;
 
 		this.geoipReader = geoipReader;
+
+		this.banmgr = banmgr;
 	}
 
 	public addUser(user: User) {
@@ -530,7 +536,8 @@ export default class CollabVMServer {
 							if (client.rank !== Rank.Admin && (client.rank !== Rank.Moderator || !this.Config.collabvm.moderatorPermissions.ban)) return;
 							var user = this.clients.find((c) => c.username === msgArr[2]);
 							if (!user) return;
-							user.ban();
+							this.logger.info(`Banning ${user.username!} (${user.IP.address}) by request of ${client.username!}`);
+							user.ban(this.banmgr);
 						case '13':
 							// Force Vote
 							if (msgArr.length !== 3) return;
