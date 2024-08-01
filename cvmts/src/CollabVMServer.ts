@@ -137,6 +137,10 @@ export default class CollabVMServer {
 					}, kRestartTimeout);
 				}
 			});
+		} else {
+			// this sucks too fix this
+			self.VM.GetDisplay().on('resize', (size: Size) => self.OnDisplayResized(size));
+			self.VM.GetDisplay().on('rect', (rect: Rect) => self.OnDisplayRectangle(rect));
 		}
 
 		// authentication manager
