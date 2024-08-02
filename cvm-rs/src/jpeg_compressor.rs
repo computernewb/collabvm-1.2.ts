@@ -45,7 +45,7 @@ impl JpegCompressor {
             vec.resize(size, 0);
 
             let mut ptr: *mut u8 = vec.as_mut_ptr();
-            let mut size: u64 = 0;
+            let mut size: libc::c_ulong = 0;
 
             let res = tjCompress2(
                 self.handle,

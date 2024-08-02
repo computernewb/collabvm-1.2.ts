@@ -11,15 +11,15 @@
 		"@parcel/transformer-sass": "2.12.0",
 		"@parcel/transformer-typescript-types": "2.12.0",
 		"@types/node": "^20.14.10",
-		"just-install": "^2.0.1",
 		"parcel": "^2.12.0",
 		"prettier": "^3.2.5",
+		"rimraf": "^6.0.1",
 		"typescript": "^5.4.4"
 	},
 	"packageManager": "yarn@4.1.1",
 	"scripts": {
-		"build": "just",
+		"build": "yarn workspaces foreach -Apt run build",
 		"serve": "node cvmts/dist/index.js",
-		"clean": "rm -rf .parcel-cache .yarn **/node_modules **/dist cvm-rs/target cvm-rs/index.node"
+		"clean": "npx rimraf .parcel-cache .yarn **/node_modules **/dist cvm-rs/target cvm-rs/index.node"
 	}
 }

@@ -1,7 +1,7 @@
 [package]
 name = "cvm-rs"
 description = "Rust utility library for cvmts. Runs all the high performance code"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 exclude = ["index.node"]
 
@@ -10,6 +10,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 neon = "1"
+libc = "0.2.155"
 
 # Required for JPEG
 once_cell = "1.19.0"

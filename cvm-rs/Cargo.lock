@@ -61,8 +61,9 @@ dependencies = [
 
 [[package]]
 name = "cvm-rs"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
+ "libc",
  "neon",
  "once_cell",
  "tokio",
