@@ -43,11 +43,6 @@ type = "qemu"
 qemuArgs = "qemu-system-x86_64"
 vncPort = 5900
 snapshots = true
-# Uncomment qmpHost and qmpPort if you're using Windows.
-#qmpHost = "127.0.0.1"
-#qmpPort = "5800"
-# Comment out qmpSockDir if you're using Windows.
-qmpSockDir = "/tmp/"
 
 [vncvm]
 vncHost = "127.0.0.1"

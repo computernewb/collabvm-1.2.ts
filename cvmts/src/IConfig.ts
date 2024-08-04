@@ -38,9 +38,6 @@ export default interface IConfig {
 		qemuArgs: string;
 		vncPort: number;
 		snapshots: boolean;
-		qmpHost: string | null;
-		qmpPort: number | null;
-		qmpSockDir: string | null;
 	};
 	vncvm: VNCVMDef;
 	collabvm: {
