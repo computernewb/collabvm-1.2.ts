@@ -53,6 +53,7 @@ type = "qemu"
 # Only used if vm.type is set to "qemu"
 [qemu]
 qemuArgs = "qemu-system-x86_64"
+# VNC port to be used for this VM. Must be unique among all VMs. Only used on Windows, as unix sockets are used on Linux.
 vncPort = 5900
 snapshots = true
 

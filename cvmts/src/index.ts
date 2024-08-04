@@ -74,7 +74,10 @@ async function start() {
 			let def: QemuVmDefinition = {
 				id: Config.collabvm.node,
 				command: Config.qemu.qemuArgs,
-				snapshot: Config.qemu.snapshots
+				snapshot: Config.qemu.snapshots,
+				forceTcp: false,
+				vncHost: '127.0.0.1',
+				vncPort: Config.qemu.vncPort,
 			};
 
 			VM = new QemuVM(def);
