@@ -8,10 +8,10 @@ use neon::prelude::*;
 
 #[neon::main]
 fn main(mut cx: ModuleContext) -> NeonResult<()> {
-    // Mostly transitionary, later on API should change
-    cx.export_function("jpegEncode", jpeg_js::jpeg_encode)?;
+	// Mostly transitionary, later on API should change
+	cx.export_function("jpegEncode", jpeg_js::jpeg_encode)?;
 
-    cx.export_function("guacDecode", guac_js::guac_decode)?;
-    cx.export_function("guacEncode", guac_js::guac_encode)?;
-    Ok(())
+	cx.export_function("guacDecode", guac_js::guac_decode)?;
+	cx.export_function("guacEncode", guac_js::guac_encode)?;
+	Ok(())
 }
