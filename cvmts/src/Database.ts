@@ -1,17 +1,17 @@
 import pino, { Logger } from "pino";
 import { MySQLConfig } from "./IConfig";
-import * as mysql from 'mysql2/promise';
+import mariadb from 'mariadb';
 
 export class Database {
     cfg: MySQLConfig;
     logger: Logger;
-    db: mysql.Pool;
+    db: mariadb.Pool;
     constructor(config: MySQLConfig) {
         this.cfg = config;
         this.logger = pino({
             name: "CVMTS.Database"
         });
-        this.db = mysql.createPool({
+        this.db = mariadb.createPool({
             host: this.cfg.host,
             user: this.cfg.username,
             password: this.cfg.password,
@@ -37,8 +37,8 @@ export class Database {
 
     async isIPBanned(ip: string): Promise<boolean> {
         let conn = await this.db.getConnection();
-        let res = (await conn.query('SELECT COUNT(ip) AS cnt FROM bans WHERE ip = ?', [ip])) as mysql.RowDataPacket;
+        let res = (await conn.query('SELECT COUNT(ip) AS cnt FROM bans WHERE ip = ?', [ip]));
         conn.release();
-        return res[0][0]['cnt'] !== 0;
+        return res[0]['cnt'] !== 0n;
     }
 }
