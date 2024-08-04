@@ -61,13 +61,13 @@ impl JpegCompressor {
                 (TJFLAG_NOREALLOC) as i32,
             );
 
-			// TODO: Result sex so we can actually notify failure
+            // TODO: Result sex so we can actually notify failure
             if res == -1 {
                 return Vec::new();
             }
 
-			// Truncate down to the size we're given back
-			vec.truncate(size as usize);
+            // Truncate down to the size we're given back
+            vec.truncate(size as usize);
             return vec;
         }
     }

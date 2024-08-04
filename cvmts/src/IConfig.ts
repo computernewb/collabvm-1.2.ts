@@ -14,7 +14,7 @@ export default interface IConfig {
 		directory: string;
 		accountID: string;
 		licenseKey: string;
-	}
+	};
 	tcp: {
 		enabled: boolean;
 		host: string;

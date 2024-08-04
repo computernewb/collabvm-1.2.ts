@@ -1,5 +1,5 @@
-use neon::prelude::*;
 use crate::guac;
+use neon::prelude::*;
 
 fn guac_decode_impl<'a>(cx: &mut FunctionContext<'a>) -> JsResult<'a, JsArray> {
     let input = cx.argument::<JsString>(0)?.value(cx);

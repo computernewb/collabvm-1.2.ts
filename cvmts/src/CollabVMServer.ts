@@ -39,7 +39,6 @@ type VoteTally = {
 	no: number;
 };
 
-
 export default class CollabVMServer {
 	private Config: IConfig;
 

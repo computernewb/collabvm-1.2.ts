@@ -21,15 +21,21 @@ accountID = ""
 licenseKey = ""
 
 [tcp]
+# Enabled the raw TCP socket server
+# You usually want to leave this disabled
 enabled = false
 host = "0.0.0.0"
 port = 6014
 
 [auth]
+# Enables the CollabVM account authentication system
+# Requires an authentication server (https://git.computernewb.com/collabvm/CollabVMAuthServer)
 enabled = false
 apiEndpoint = ""
 secretKey = "hunter2"
 
+# When account authentication is enabled, this section defines what guests can and can't do
+# Has no effect if auth is disabled
 [auth.guestPermissions]
 chat = true
 turn = false
@@ -37,13 +43,21 @@ callForReset = false
 vote = true
 
 [vm]
+# Configures the type of VM this server will use
+# Supported values:
+#    "qemu" - Runs a QEMU VM
+#    "vncvm" - Connects to an existing VNC server
 type = "qemu"
 
+# QEMU options
+# Only used if vm.type is set to "qemu"
 [qemu]
 qemuArgs = "qemu-system-x86_64"
 vncPort = 5900
 snapshots = true
 
+# VNC options
+# Only used if vm.type is set to "vncvm"
 [vncvm]
 vncHost = "127.0.0.1"
 vncPort = 5900
@@ -69,12 +83,16 @@ database = "cvmts"
 cvmban = false
 
 [collabvm]
+# Node ID for this server
+# Make sure this is unique among all the other nodes in a webapp
 node = "acoolvm"
+# HTML display name shown on the VM list
 displayname = "A <b>Really</b> Cool CollabVM Instance"
+# HTML message shown in the chat when a user joins
 motd = "welcome!"
 # Maximum amount of active connections allowed from the same IP.
 maxConnections = 3
-# Moderator rank enabled
+# Moderator rank enabled (permissions are defined below)
 moderatorEnabled = true
 # List of disallowed usernames
 usernameblacklist = []
@@ -83,9 +101,9 @@ maxChatLength = 100
 # Maximum messages in the chat history buffer before old messages are overwritten
 maxChatHistoryLength = 10
 # Limit the amount of users allowed in the turn queue at the same time from the same IP
-turnlimit = {enabled = true, maximum = 1}
+turnlimit = { enabled = true, maximum = 1 }
 # Temporarily mute a user if they send more than x messages in n seconds
-automute = {enabled = true, seconds = 5, messages = 5}
+automute = { enabled = true, seconds = 5, messages = 5 }
 # How long a temporary mute lasts, in seconds
 tempMuteTime = 30
 # How long a turn lasts, in seconds
@@ -103,8 +121,9 @@ modpass = "fb8c2e2b85ca81eb4350199faddd983cb26af3064614e737ea9f479621cfa57a"
 turnwhitelist = false
 # SHA256 sum for the password to take a turn. Only takes effect if turnwhitelist == true. If set to an empty string or not provided, only admins and mods can take turns
 turnpass = ""
-[collabvm.moderatorPermissions]
+
 # What a moderator can and can't do
+[collabvm.moderatorPermissions]
 restore = true
 reboot = true
 ban = true

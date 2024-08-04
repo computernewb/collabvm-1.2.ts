@@ -1,7 +1,6 @@
 {
 	"name": "cvmts-repo",
 	"workspaces": [
-		"shared",
 		"cvm-rs",
 		"cvmts",
 		"collab-vm-1.2-binary-protocol"
@@ -13,7 +12,8 @@
 		"@types/jsbn": "^1.2.33",
 		"@types/node": "^20.14.10",
 		"parcel": "^2.12.0",
-		"prettier": "^3.2.5",
+		"prettier": "^3.3.3",
+		"prettier-plugin-toml": "^2.0.1",
 		"rimraf": "^6.0.1",
 		"typescript": "^5.4.4"
 	},
@@ -21,6 +21,7 @@
 	"scripts": {
 		"build": "yarn workspaces foreach -Apt run build",
 		"serve": "node cvmts/dist/index.js",
-		"clean": "npx rimraf .parcel-cache .yarn **/node_modules **/dist cvm-rs/target cvm-rs/index.node"
+		"clean": "npx rimraf .parcel-cache .yarn **/node_modules **/dist cvm-rs/target cvm-rs/index.node",
+		"format": "prettier -w config.example.toml && yarn workspaces foreach -Apt run format"
 	}
 }

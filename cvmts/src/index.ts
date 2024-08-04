@@ -56,11 +56,11 @@ async function start() {
 	let auth = Config.auth.enabled ? new AuthManager(Config.auth.apiEndpoint, Config.auth.secretKey) : null;
 	// Database and ban manager
 	if (Config.bans.cvmban && !Config.mysql.enabled) {
-		logger.error("MySQL must be configured to use cvmban.");
+		logger.error('MySQL must be configured to use cvmban.');
 		process.exit(1);
 	}
 	if (!Config.bans.cvmban && !Config.bans.bancmd) {
-		logger.warn("Neither cvmban nor ban command are configured. Bans will not function.");
+		logger.warn('Neither cvmban nor ban command are configured. Bans will not function.');
 	}
 	let db = undefined;
 	if (Config.mysql.enabled) {

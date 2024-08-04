@@ -37,7 +37,7 @@ export default class TCPClient extends EventEmitter implements NetworkClient {
 
 	send(msg: string): Promise<void> {
 		return new Promise((res, rej) => {
-			let _msg = new Uint32Array([TextHeader, ...Buffer.from(msg, "utf-8")]);
+			let _msg = new Uint32Array([TextHeader, ...Buffer.from(msg, 'utf-8')]);
 			this.socket.write(Buffer.from(_msg), (err) => {
 				if (err) {
 					rej(err);

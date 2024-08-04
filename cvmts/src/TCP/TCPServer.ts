@@ -11,7 +11,7 @@ import { BanManager } from '../BanManager.js';
 export default class TCPServer extends EventEmitter implements NetworkServer {
 	listener: Server;
 	Config: IConfig;
-	logger = pino({name: 'CVMTS.TCPServer'});
+	logger = pino({ name: 'CVMTS.TCPServer' });
 	clients: TCPClient[];
 	private banmgr: BanManager;
 
@@ -27,7 +27,7 @@ export default class TCPServer extends EventEmitter implements NetworkServer {
 	private async onConnection(socket: Socket) {
 		this.logger.info(`New TCP connection from ${socket.remoteAddress}`);
 		if (await this.banmgr.isIPBanned(socket.remoteAddress!)) {
-			socket.write("6.banned;");
+			socket.write('6.banned;');
 			socket.destroy();
 			return;
 		}

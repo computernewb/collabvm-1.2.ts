@@ -88,7 +88,6 @@ __metadata:
     msgpackr: "npm:^1.10.2"
     pino: "npm:^9.3.1"
     pino-pretty: "npm:^11.2.1"
-    prettier: "npm:^3.2.5"
     sharp: "npm:^0.33.3"
     toml: "npm:^3.0.0"
     typescript: "npm:^5.4.4"
@@ -1466,6 +1465,22 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@taplo/core@npm:^0.1.0":
+  version: 0.1.1
+  resolution: "@taplo/core@npm:0.1.1"
+  checksum: 10c0/c36f761431b2e959742d8e186e74306fb8991d84589e2f03b6481244cc407275fa448a217ef87b8aa1e226615fd7ba85c60e6f0221f01d891b90dd30b45cb13b
+  languageName: node
+  linkType: hard
+
+"@taplo/lib@npm:^0.4.0-alpha.2":
+  version: 0.4.0-alpha.2
+  resolution: "@taplo/lib@npm:0.4.0-alpha.2"
+  dependencies:
+    "@taplo/core": "npm:^0.1.0"
+  checksum: 10c0/650ed35ba949054eb8dcfbaf77d6154d9639f5d8fa96d89546c399a95e699d7e01f65e308f89478d41e0120baa3572f25595fe088d19e62cc56ad3eb2b5acbb5
+  languageName: node
+  linkType: hard
+
 "@trysound/sax@npm:0.2.0":
   version: 0.2.0
   resolution: "@trysound/sax@npm:0.2.0"
@@ -1966,7 +1981,8 @@ __metadata:
     "@types/jsbn": "npm:^1.2.33"
     "@types/node": "npm:^20.14.10"
     parcel: "npm:^2.12.0"
-    prettier: "npm:^3.2.5"
+    prettier: "npm:^3.3.3"
+    prettier-plugin-toml: "npm:^2.0.1"
     rimraf: "npm:^6.0.1"
     typescript: "npm:^5.4.4"
   languageName: unknown
@@ -3504,7 +3520,18 @@ __metadata:
   languageName: node
   linkType: hard
 
-"prettier@npm:^3.2.5":
+"prettier-plugin-toml@npm:^2.0.1":
+  version: 2.0.1
+  resolution: "prettier-plugin-toml@npm:2.0.1"
+  dependencies:
+    "@taplo/lib": "npm:^0.4.0-alpha.2"
+  peerDependencies:
+    prettier: ^3.0.3
+  checksum: 10c0/8a67133b1a71d82f6fe20fe92e18251ae2930d0fe96d18af8c2333cc8fffce408642b6d6f21441932a97a248815cc82b3f372971eae84aab80cad2f0d78bdc68
+  languageName: node
+  linkType: hard
+
+"prettier@npm:^3.3.3":
   version: 3.3.3
   resolution: "prettier@npm:3.3.3"
   bin:

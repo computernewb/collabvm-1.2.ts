@@ -41,7 +41,7 @@ fn jpeg_encode_impl<'a>(cx: &mut FunctionContext<'a>) -> JsResult<'a, JsPromise>
 
     let copy: Arc<Mutex<Vec<u8>>> = Arc::new(Mutex::new(Vec::with_capacity(buf.len())));
 
-	// Copy from the node buffer to our temporary buffer
+    // Copy from the node buffer to our temporary buffer
     {
         let mut locked = copy.lock().unwrap();
         let cap = locked.capacity();
@@ -49,8 +49,8 @@ fn jpeg_encode_impl<'a>(cx: &mut FunctionContext<'a>) -> JsResult<'a, JsPromise>
         locked.copy_from_slice(buf);
     }
 
-	// Spawn off a tokio blocking pool thread that will do the work for us
-	runtime.spawn_blocking(move || {
+    // Spawn off a tokio blocking pool thread that will do the work for us
+    runtime.spawn_blocking(move || {
         let clone = Arc::clone(&copy);
         let locked = clone.lock().unwrap();
 
@@ -70,7 +70,7 @@ fn jpeg_encode_impl<'a>(cx: &mut FunctionContext<'a>) -> JsResult<'a, JsPromise>
             b.compress_buffer(&image)
         });
 
-		// Fulfill the Javascript promise with our encoded buffer
+        // Fulfill the Javascript promise with our encoded buffer
         deferred.settle_with(&channel, move |mut cx| {
             let mut buf = cx.buffer(vec.len())?;
             let slice = buf.as_mut_slice(&mut cx);

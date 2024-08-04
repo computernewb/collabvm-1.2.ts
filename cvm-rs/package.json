@@ -8,7 +8,8 @@
   "scripts": {
     "build": "cargo-cp-artifact -nc index.node -- cargo build --release --message-format=json-render-diagnostics",
     "install": "yarn build",
-    "test": "cargo test"
+    "test": "cargo test",
+    "format": "cargo fmt"
   },
   "devDependencies": {
     "cargo-cp-artifact": "^0.1"

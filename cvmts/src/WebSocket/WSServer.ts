@@ -124,7 +124,7 @@ export default class WSServer extends EventEmitter implements NetworkServer {
 		}
 
 		if (await this.banmgr.isIPBanned(ip)) {
-			socket.write("HTTP/1.1 403 Forbidden\n\nYou have been banned.");
+			socket.write('HTTP/1.1 403 Forbidden\n\nYou have been banned.');
 			socket.destroy();
 			return;
 		}
