@@ -41,14 +41,14 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@computernewb/superqemu@npm:^0.2.1":
-  version: 0.2.1
-  resolution: "@computernewb/superqemu@npm:0.2.1"
+"@computernewb/superqemu@npm:^0.2.2":
+  version: 0.2.2
+  resolution: "@computernewb/superqemu@npm:0.2.2"
   dependencies:
     "@computernewb/nodejs-rfb": "npm:^0.3.0"
     execa: "npm:^8.0.1"
     pino: "npm:^9.3.1"
-  checksum: 10c0/5b129fd758aed6d0f18768d8a103ef8ca508600941e72a37aae5aad510372ef5ef44282baf679ac4c9094ac9caef2d1275a5959145e6bc827f2ad3462694a420
+  checksum: 10c0/db4bfed554661544028e4fa41f1869adf64292ffe2864a807e8dc0c0f1c3538cfef72292d202a8dad8ab2c066b54b3296c9456e64ea685b07a981fed89d8d6c5
   languageName: node
   linkType: hard
 
@@ -76,7 +76,7 @@ __metadata:
   resolution: "@cvmts/cvmts@workspace:cvmts"
   dependencies:
     "@computernewb/nodejs-rfb": "npm:^0.3.0"
-    "@computernewb/superqemu": "npm:^0.2.1"
+    "@computernewb/superqemu": "npm:^0.2.2"
     "@cvmts/cvm-rs": "npm:*"
     "@maxmind/geoip2-node": "npm:^5.0.0"
     "@types/node": "npm:^20.12.5"
