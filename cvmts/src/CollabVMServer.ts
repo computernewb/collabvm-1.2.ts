@@ -355,7 +355,7 @@ export default class CollabVMServer {
 					client.onMsgSent();
 					break;
 				case 'turn':
-					if ((!this.turnsAllowed || this.Config.collabvm.turnwhitelist) && client.rank !== Rank.Admin && client.rank !== Rank.Moderator && client.rank !== Rank.Turn) return;
+					if ((!this.turnsAllowed || this.Config.collabvm.turnwhitelist) && client.rank !== Rank.Admin && client.rank !== Rank.Moderator && !client.turnWhitelist) return;
 					if (this.Config.auth.enabled && client.rank === Rank.Unregistered && !this.Config.auth.guestPermissions.turn) {
 						client.sendMsg(cvm.guacEncode('chat', '', 'You need to login to do that.'));
 						return;
@@ -419,7 +419,7 @@ export default class CollabVMServer {
 					break;
 				case 'vote':
 					if (!this.VM.SnapshotsSupported()) return;
-					if ((!this.turnsAllowed || this.Config.collabvm.turnwhitelist) && client.rank !== Rank.Admin && client.rank !== Rank.Moderator && client.rank !== Rank.Turn) return;
+					if ((!this.turnsAllowed || this.Config.collabvm.turnwhitelist) && client.rank !== Rank.Admin && client.rank !== Rank.Moderator && !client.turnWhitelist) return;
 					if (!client.connectedToNode) return;
 					if (msgArr.length !== 2) return;
 					if (!client.VoteRateLimit.request()) return;
@@ -481,25 +481,31 @@ export default class CollabVMServer {
 					switch (msgArr[1]) {
 						case '2':
 							// Login
-							if (this.Config.auth.enabled) {
-								client.sendMsg(cvm.guacEncode('chat', '', 'This server does not support staff passwords. Please log in to become staff.'));
-								return;
-							}
+
 							if (!client.LoginRateLimit.request() || !client.username) return;
 							if (msgArr.length !== 3) return;
 							var sha256 = createHash('sha256');
 							sha256.update(msgArr[2]);
 							var pwdHash = sha256.digest('hex');
 							sha256.destroy();
+
+							if (this.Config.collabvm.turnwhitelist && pwdHash === this.Config.collabvm.turnpass) {
+								client.turnWhitelist = true;
+								client.sendMsg(cvm.guacEncode('chat', '', 'You may now take turns.'));
+								return;
+							}
+
+							if (this.Config.auth.enabled) {
+								client.sendMsg(cvm.guacEncode('chat', '', 'This server does not support staff passwords. Please log in to become staff.'));
+								return;
+							}
+
 							if (pwdHash === this.Config.collabvm.adminpass) {
 								client.rank = Rank.Admin;
 								client.sendMsg(cvm.guacEncode('admin', '0', '1'));
 							} else if (this.Config.collabvm.moderatorEnabled && pwdHash === this.Config.collabvm.modpass) {
 								client.rank = Rank.Moderator;
 								client.sendMsg(cvm.guacEncode('admin', '0', '3', this.ModPerms.toString()));
-							} else if (this.Config.collabvm.turnwhitelist && pwdHash === this.Config.collabvm.turnpass) {
-								client.rank = Rank.Turn;
-								client.sendMsg(cvm.guacEncode('chat', '', 'You may now take turns.'));
 							} else {
 								client.sendMsg(cvm.guacEncode('admin', '0', '0'));
 								return;

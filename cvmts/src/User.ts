@@ -22,6 +22,7 @@ export class User {
 	Config: IConfig;
 	IP: IPData;
 	Capabilities: CollabVMCapabilities;
+	turnWhitelist: boolean = false;
 	// Hide flag. Only takes effect if the user is logged in.
 	noFlag: boolean = false;
 	countryCode: string | null = null;
@@ -153,6 +154,4 @@ export enum Rank {
 	Registered = 1,
 	Admin = 2,
 	Moderator = 3,
-	// Giving a good gap between server only internal ranks just in case
-	Turn = 10
 }
