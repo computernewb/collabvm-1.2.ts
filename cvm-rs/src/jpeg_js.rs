@@ -4,25 +4,39 @@ use neon::prelude::*;
 use neon::types::buffer::TypedArray;
 
 use once_cell::sync::OnceCell;
-use tokio::runtime::Runtime;
 
 use std::cell::RefCell;
 
+use rayon::{ThreadPool, ThreadPoolBuilder};
+
 use crate::jpeg_compressor::*;
 
-/// Gives a static Tokio runtime. We should replace this with
-/// rayon or something, but for now tokio works.
-fn runtime<'a, C: Context<'a>>(cx: &mut C) -> NeonResult<&'static Runtime> {
-	static RUNTIME: OnceCell<Runtime> = OnceCell::new();
+/// Gives a Rayon thread pool we use for parallelism
+fn rayon_pool<'a, C: Context<'a>>(cx: &mut C) -> NeonResult<&'static ThreadPool> {
+	static RUNTIME: OnceCell<ThreadPool> = OnceCell::new();
 
 	RUNTIME
-		.get_or_try_init(Runtime::new)
+		.get_or_try_init(|| {
+			// spawn at least 4 threads
+			let mut nr_threads = std::thread::available_parallelism().expect("??").get() / 8;
+			if nr_threads == 0 {
+				nr_threads = 4;
+			}
+
+			ThreadPoolBuilder::new()
+				.num_threads(nr_threads)
+				.thread_name(|index| format!("cvmrs_jpeg_{}", index + 1))
+				.build()
+		})
 		.or_else(|err| cx.throw_error(&err.to_string()))
 }
 
 thread_local! {
 	static COMPRESSOR: RefCell<JpegCompressor> = RefCell::new(JpegCompressor::new());
 }
+
+// TODO: We should probably allow passing an array of images to encode, which would
+// increase parallelism heavily.
 
 fn jpeg_encode_impl<'a>(cx: &mut FunctionContext<'a>) -> JsResult<'a, JsPromise> {
 	let input = cx.argument::<JsObject>(0)?;
@@ -35,7 +49,7 @@ fn jpeg_encode_impl<'a>(cx: &mut FunctionContext<'a>) -> JsResult<'a, JsPromise>
 
 	let (deferred, promise) = cx.promise();
 	let channel = cx.channel();
-	let runtime = runtime(cx)?;
+	let pool = rayon_pool(cx)?;
 
 	let buf = buffer.as_slice(cx);
 
@@ -49,8 +63,9 @@ fn jpeg_encode_impl<'a>(cx: &mut FunctionContext<'a>) -> JsResult<'a, JsPromise>
 		locked.copy_from_slice(buf);
 	}
 
-	// Spawn off a tokio blocking pool thread that will do the work for us
-	runtime.spawn_blocking(move || {
+	// Spawn a task on the rayon pool that encodes the JPEG and fufills the promise
+	// once it is done encoding.
+	pool.spawn_fifo(move || {
 		let clone = Arc::clone(&copy);
 		let locked = clone.lock().unwrap();
 
