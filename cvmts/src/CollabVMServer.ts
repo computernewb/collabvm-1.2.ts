@@ -93,6 +93,9 @@ export default class CollabVMServer {
 	// Ban manager
 	private banmgr: BanManager;
 
+	// queue of rects, reset every frame
+	private rectQueue: Rect[] = [];
+
 	private logger = pino({ name: 'CVMTS.Server' });
 
 	constructor(config: IConfig, vm: VM, banmgr: BanManager, auth: AuthManager | null, geoipReader: ReaderModel | null) {
@@ -131,6 +134,7 @@ export default class CollabVMServer {
 					// well aware this sucks but whatever
 					self.VM.GetDisplay().on('resize', (size: Size) => self.OnDisplayResized(size));
 					self.VM.GetDisplay().on('rect', (rect: Rect) => self.OnDisplayRectangle(rect));
+					self.VM.GetDisplay().on('frame', () => self.OnDisplayFrame());
 				}
 
 				if (newState == VMState.Stopped) {
@@ -144,6 +148,7 @@ export default class CollabVMServer {
 			// this sucks too fix this
 			self.VM.GetDisplay().on('resize', (size: Size) => self.OnDisplayResized(size));
 			self.VM.GetDisplay().on('rect', (rect: Rect) => self.OnDisplayRectangle(rect));
+			self.VM.GetDisplay().on('frame', () => self.OnDisplayFrame());
 		}
 
 		// authentication manager
@@ -838,29 +843,8 @@ export default class CollabVMServer {
 		}
 	}
 
-	private async OnDisplayRectangle(rect: Rect) {
-		let encoded = await this.MakeRectData(rect);
-		let encodedb64 = encoded.toString('base64');
-		let bmsg: CollabVMProtocolMessage = {
-			type: CollabVMProtocolMessageType.rect,
-			rect: {
-				x: rect.x,
-				y: rect.y,
-				data: encoded
-			}
-		};
-		var encodedbin = msgpack.encode(bmsg);
-		this.clients
-			.filter((c) => c.connectedToNode || c.viewMode == 1)
-			.forEach((c) => {
-				if (this.screenHidden && c.rank == Rank.Unregistered) return;
-				if (c.Capabilities.bin) {
-					c.socket.sendBinary(encodedbin);
-				} else {
-					c.sendMsg(cvm.guacEncode('png', '0', '0', rect.x.toString(), rect.y.toString(), encodedb64));
-					c.sendMsg(cvm.guacEncode('sync', Date.now().toString()));
-				}
-			});
+	private OnDisplayRectangle(rect: Rect) {
+		this.rectQueue.push(rect);
 	}
 
 	private OnDisplayResized(size: Size) {
@@ -870,6 +854,46 @@ export default class CollabVMServer {
 				if (this.screenHidden && c.rank == Rank.Unregistered) return;
 				c.sendMsg(cvm.guacEncode('size', '0', size.width.toString(), size.height.toString()));
 			});
+	}
+
+	private async OnDisplayFrame() {
+		let self = this;
+
+		let doRect = async (rect: Rect) => {
+			let encoded = await this.MakeRectData(rect);
+			let encodedb64 = encoded.toString('base64');
+			let bmsg: CollabVMProtocolMessage = {
+				type: CollabVMProtocolMessageType.rect,
+				rect: {
+					x: rect.x,
+					y: rect.y,
+					data: encoded
+				}
+			};
+
+			var encodedbin = msgpack.encode(bmsg);
+
+			self.clients
+				.filter((c) => c.connectedToNode || c.viewMode == 1)
+				.forEach((c) => {
+					if (self.screenHidden && c.rank == Rank.Unregistered) return;
+					if (c.Capabilities.bin) {
+						c.socket.sendBinary(encodedbin);
+					} else {
+						c.sendMsg(cvm.guacEncode('png', '0', '0', rect.x.toString(), rect.y.toString(), encodedb64));
+						c.sendMsg(cvm.guacEncode('sync', Date.now().toString()));
+					}
+				});
+		};
+
+		let promises: Promise<void>[] = [];
+
+		for(let rect of self.rectQueue)
+			promises.push(doRect(rect));
+
+		this.rectQueue = [];
+
+		await Promise.all(promises);
 	}
 
 	private async SendFullScreenWithSize(client: User) {
