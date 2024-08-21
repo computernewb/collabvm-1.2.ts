@@ -16,6 +16,8 @@ import pino from 'pino';
 import { Database } from './Database.js';
 import { BanManager } from './BanManager.js';
 import { QemuVMShim } from './vm/qemu.js';
+import { TheProtocolManager } from './Protocol.js';
+import { GuacamoleProtocol } from './GuacamoleProtocol.js';
 
 let logger = pino();
 
@@ -97,17 +99,20 @@ async function start() {
 	process.on('SIGINT', async () => await stop());
 	process.on('SIGTERM', async () => await stop());
 
+	// Register protocol(s)
+	TheProtocolManager.registerProtocol("guacamole", () => new GuacamoleProtocol);
+
 	await VM.Start();
 	// Start up the server
 	var CVM = new CollabVMServer(Config, VM, banmgr, auth, geoipReader);
 
 	var WS = new WSServer(Config, banmgr);
-	WS.on('connect', (client: User) => CVM.addUser(client));
+	WS.on('connect', (client: User) => CVM.connectionOpened(client));
 	WS.start();
 
 	if (Config.tcp.enabled) {
 		var TCP = new TCPServer(Config, banmgr);
-		TCP.on('connect', (client: User) => CVM.addUser(client));
+		TCP.on('connect', (client: User) => CVM.connectionOpened(client));
 		TCP.start();
 	}
 }

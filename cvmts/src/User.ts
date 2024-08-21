@@ -8,6 +8,7 @@ import NetworkClient from './NetworkClient.js';
 import { CollabVMCapabilities } from '@cvmts/collab-vm-1.2-binary-protocol';
 import pino from 'pino';
 import { BanManager } from './BanManager.js';
+import { IProtocol, TheProtocolManager } from './Protocol.js';
 
 export class User {
 	socket: NetworkClient;
@@ -22,6 +23,7 @@ export class User {
 	Config: IConfig;
 	IP: IPData;
 	Capabilities: CollabVMCapabilities;
+	protocol: IProtocol;
 	turnWhitelist: boolean = false;
 	// Hide flag. Only takes effect if the user is logged in.
 	noFlag: boolean = false;
@@ -44,6 +46,9 @@ export class User {
 		this.msgsSent = 0;
 		this.Capabilities = new CollabVMCapabilities();
 
+		// All clients default to the Guacamole protocol.
+		this.protocol = TheProtocolManager.createProtocol('guacamole', this);
+
 		this.socket.on('disconnect', () => {
 			// Unref the ip data for this connection
 			this.IP.Unref();
@@ -52,11 +57,6 @@ export class User {
 			clearInterval(this.msgRecieveInterval);
 		});
 
-		this.socket.on('msg', (e) => {
-			clearTimeout(this.nopRecieveTimeout);
-			clearInterval(this.msgRecieveInterval);
-			this.msgRecieveInterval = setInterval(() => this.onNoMsg(), 10000);
-		});
 
 		this.nopSendInterval = setInterval(() => this.sendNop(), 5000);
 		this.msgRecieveInterval = setInterval(() => this.onNoMsg(), 10000);
@@ -84,8 +84,14 @@ export class User {
 		return username;
 	}
 
+	onNop() {
+		clearTimeout(this.nopRecieveTimeout);
+		clearInterval(this.msgRecieveInterval);
+		this.msgRecieveInterval = setInterval(() => this.onNoMsg(), 10000);
+	}
+
 	sendNop() {
-		this.socket.send('3.nop;');
+		this.protocol.sendNop();
 	}
 
 	sendMsg(msg: string) {
@@ -107,7 +113,7 @@ export class User {
 		this.socket.close();
 	}
 
-	onMsgSent() {
+	onChatMsgSent() {
 		if (!this.Config.collabvm.automute.enabled) return;
 		// rate limit guest and unregistered chat messages, but not staff ones
 		switch (this.rank) {
@@ -153,5 +159,5 @@ export enum Rank {
 	// After all these years
 	Registered = 1,
 	Admin = 2,
-	Moderator = 3,
+	Moderator = 3
 }

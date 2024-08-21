@@ -14,12 +14,11 @@ import AuthManager from './AuthManager.js';
 import { JPEGEncoder } from './JPEGEncoder.js';
 import VM from './vm/interface.js';
 import { ReaderModel } from '@maxmind/geoip2-node';
-import * as msgpack from 'msgpackr';
-import { CollabVMProtocolMessage, CollabVMProtocolMessageType } from '@cvmts/collab-vm-1.2-binary-protocol';
 
 import { Size, Rect } from './Utilities.js';
 import pino from 'pino';
 import { BanManager } from './BanManager.js';
+import { IProtocolHandlers, ListEntry, ProtocolAddUser, TheProtocolManager } from './Protocol.js';
 
 // Instead of strange hacks we can just use nodejs provided
 // import.meta properties, which have existed since LTS if not before
@@ -39,7 +38,7 @@ type VoteTally = {
 	no: number;
 };
 
-export default class CollabVMServer {
+export default class CollabVMServer implements IProtocolHandlers {
 	private Config: IConfig;
 
 	private clients: User[];
@@ -76,8 +75,8 @@ export default class CollabVMServer {
 	private screenHidden: boolean;
 
 	// base64 image to show when the screen is hidden
-	private screenHiddenImg: string;
-	private screenHiddenThumb: string;
+	private screenHiddenImg: Buffer;
+	private screenHiddenThumb: Buffer;
 
 	// Indefinite turn
 	private indefiniteTurn: User | null;
@@ -109,8 +108,8 @@ export default class CollabVMServer {
 		this.voteCooldown = 0;
 		this.turnsAllowed = true;
 		this.screenHidden = false;
-		this.screenHiddenImg = readFileSync(path.join(kCVMTSAssetsRoot, 'screenhidden.jpeg')).toString('base64');
-		this.screenHiddenThumb = readFileSync(path.join(kCVMTSAssetsRoot, 'screenhiddenthumb.jpeg')).toString('base64');
+		this.screenHiddenImg = readFileSync(path.join(kCVMTSAssetsRoot, 'screenhidden.jpeg'));
+		this.screenHiddenThumb = readFileSync(path.join(kCVMTSAssetsRoot, 'screenhiddenthumb.jpeg'));
 
 		this.indefiniteTurn = null;
 		this.ModPerms = Utilities.MakeModPerms(this.Config.collabvm.moderatorPermissions);
@@ -158,7 +157,7 @@ export default class CollabVMServer {
 		this.banmgr = banmgr;
 	}
 
-	public addUser(user: User) {
+	public connectionOpened(user: User) {
 		let sameip = this.clients.filter((c) => c.IP.address === user.IP.address);
 		if (sameip.length >= this.Config.collabvm.maxConnections) {
 			// Kick the oldest client
@@ -166,6 +165,7 @@ export default class CollabVMServer {
 			sameip[0].kick();
 		}
 		this.clients.push(user);
+
 		if (this.Config.geoip.enabled) {
 			try {
 				user.countryCode = this.geoipReader!.country(user.IP.address).country!.isoCode;
@@ -173,12 +173,28 @@ export default class CollabVMServer {
 				this.logger.warn(`Failed to get country code for ${user.IP.address}: ${(error as Error).message}`);
 			}
 		}
-		user.socket.on('msg', (msg: string) => this.onMessage(user, msg));
+
+		// TODO: we should probably just make this a buffer arg lol..
+		user.socket.on('msg', (msg: string) => {
+			let buf = Buffer.from(msg);
+			try {
+				user.protocol.processMessage(buf);
+			} catch (err) {
+				user.kick();
+			}
+		});
+
 		user.socket.on('disconnect', () => this.connectionClosed(user));
+
+		// Set ourselves as the handler
+		user.protocol.setHandler(this as IProtocolHandlers);
+
 		if (this.Config.auth.enabled) {
-			user.sendMsg(cvm.guacEncode('auth', this.Config.auth.apiEndpoint));
+			user.protocol.sendAuth(this.Config.auth.apiEndpoint);
 		}
-		user.sendMsg(this.getAdduserMsg());
+
+		// convert these to proto
+		user.protocol.sendAddUser(this.getAdduserMsg());
 		if (this.Config.geoip.enabled) user.sendMsg(this.getFlagMsg());
 	}
 
@@ -203,440 +219,442 @@ export default class CollabVMServer {
 			if (hadturn) this.nextTurn();
 		}
 
-		this.clients.forEach((c) => c.sendMsg(cvm.guacEncode('remuser', '1', user.username!)));
+		this.clients.forEach((c) => c.protocol.sendRemUser([user.username!]));
 	}
 
-	private async onMessage(client: User, message: string) {
+	// IProtocolHandlers
+
+	// does auth check
+	private authCheck(user: User, guestPermission: boolean) {
+		if (!this.Config.auth.enabled) return true;
+
+		if (user.rank === Rank.Unregistered && !guestPermission) {
+			user.protocol.sendChatMessage('', 'You need to login to do that.');
+			return false;
+		}
+
+		return true;
+	}
+
+	onNop(user: User): void {
+		user.onNop();
+	}
+
+	async onLogin(user: User, token: string) {
+		if (!this.Config.auth.enabled) return;
+
+		if (!user.connectedToNode) {
+			user.sendMsg(cvm.guacEncode('login', '0', 'You must connect to the VM before logging in.'));
+			return;
+		}
+
 		try {
-			var msgArr = cvm.guacDecode(message);
-			if (msgArr.length < 1) return;
-			switch (msgArr[0]) {
-				case 'login':
-					if (msgArr.length !== 2 || !this.Config.auth.enabled) return;
-					if (!client.connectedToNode) {
-						client.sendMsg(cvm.guacEncode('login', '0', 'You must connect to the VM before logging in.'));
-						return;
-					}
-					try {
-						let res = await this.auth!.Authenticate(msgArr[1], client);
-						if (res.clientSuccess) {
-							this.logger.info(`${client.IP.address} logged in as ${res.username}`);
-							client.sendMsg(cvm.guacEncode('login', '1'));
-							let old = this.clients.find((c) => c.username === res.username);
-							if (old) {
-								// kick() doesnt wait until the user is actually removed from the list and itd be anal to make it do that
-								// so we call connectionClosed manually here. When it gets called on kick(), it will return because the user isn't in the list
-								this.connectionClosed(old);
-								await old.kick();
-							}
-							// Set username
-							if (client.countryCode !== null && client.noFlag) {
-								// privacy
-								for (let cl of this.clients.filter((c) => c !== client)) {
-									cl.sendMsg(cvm.guacEncode('remuser', '1', client.username!));
-								}
-								this.renameUser(client, res.username, false);
-							} else this.renameUser(client, res.username, true);
-							// Set rank
-							client.rank = res.rank;
-							if (client.rank === Rank.Admin) {
-								client.sendMsg(cvm.guacEncode('admin', '0', '1'));
-							} else if (client.rank === Rank.Moderator) {
-								client.sendMsg(cvm.guacEncode('admin', '0', '3', this.ModPerms.toString()));
-							}
-							this.clients.forEach((c) => c.sendMsg(cvm.guacEncode('adduser', '1', client.username!, client.rank.toString())));
-						} else {
-							client.sendMsg(cvm.guacEncode('login', '0', res.error!));
-							if (res.error === 'You are banned') {
-								client.kick();
-							}
-						}
-					} catch (err) {
-						this.logger.error(`Error authenticating client ${client.IP.address}: ${(err as Error).message}`);
-						// for now?
-						client.sendMsg(cvm.guacEncode('login', '0', 'There was an internal error while authenticating. Please let a staff member know as soon as possible'));
-					}
-					break;
-				case 'noflag': {
-					if (client.connectedToNode)
-						// too late
-						return;
-					client.noFlag = true;
+			let res = await this.auth!.Authenticate(token, user);
+
+			if (res.clientSuccess) {
+				this.logger.info(`${user.IP.address} logged in as ${res.username}`);
+				user.protocol.sendLoginResponse(true, '');
+
+				let old = this.clients.find((c) => c.username === res.username);
+				if (old) {
+					// kick() doesnt wait until the user is actually removed from the list and itd be anal to make it do that
+					// so we call connectionClosed manually here. When it gets called on kick(), it will return because the user isn't in the list
+					this.connectionClosed(old);
+					await old.kick();
 				}
-				case 'list':
-					if (this.VM.GetState() == VMState.Started) {
-						client.sendMsg(cvm.guacEncode('list', this.Config.collabvm.node, this.Config.collabvm.displayname, this.screenHidden ? this.screenHiddenThumb : await this.getThumbnail()));
+				// Set username
+				if (user.countryCode !== null && user.noFlag) {
+					// privacy
+					for (let cl of this.clients.filter((c) => c !== user)) {
+						cl.sendMsg(cvm.guacEncode('remuser', '1', user.username!));
 					}
-					break;
-				case 'connect':
-					if (!client.username || msgArr.length !== 2 || msgArr[1] !== this.Config.collabvm.node) {
-						client.sendMsg(cvm.guacEncode('connect', '0'));
-						return;
-					}
-
-					client.connectedToNode = true;
-					client.sendMsg(cvm.guacEncode('connect', '1', '1', this.VM.SnapshotsSupported() ? '1' : '0', '0'));
-					if (this.ChatHistory.size !== 0) client.sendMsg(this.getChatHistoryMsg());
-					if (this.Config.collabvm.motd) client.sendMsg(cvm.guacEncode('chat', '', this.Config.collabvm.motd));
-					if (this.screenHidden) {
-						client.sendMsg(cvm.guacEncode('size', '0', '1024', '768'));
-						client.sendMsg(cvm.guacEncode('png', '0', '0', '0', '0', this.screenHiddenImg));
-					} else {
-						await this.SendFullScreenWithSize(client);
-					}
-					client.sendMsg(cvm.guacEncode('sync', Date.now().toString()));
-					if (this.voteInProgress) this.sendVoteUpdate(client);
-					this.sendTurnUpdate(client);
-					break;
-				case 'view':
-					if (client.connectedToNode) return;
-					if (client.username || msgArr.length !== 3 || msgArr[1] !== this.Config.collabvm.node) {
-						// The use of connect here is intentional.
-						client.sendMsg(cvm.guacEncode('connect', '0'));
-						return;
-					}
-
-					switch (msgArr[2]) {
-						case '0':
-							client.viewMode = 0;
-							break;
-						case '1':
-							client.viewMode = 1;
-							break;
-						default:
-							client.sendMsg(cvm.guacEncode('connect', '0'));
-							return;
-					}
-
-					client.sendMsg(cvm.guacEncode('connect', '1', '1', this.VM.SnapshotsSupported() ? '1' : '0', '0'));
-					if (this.ChatHistory.size !== 0) client.sendMsg(this.getChatHistoryMsg());
-					if (this.Config.collabvm.motd) client.sendMsg(cvm.guacEncode('chat', '', this.Config.collabvm.motd));
-
-					if (client.viewMode == 1) {
-						if (this.screenHidden) {
-							client.sendMsg(cvm.guacEncode('size', '0', '1024', '768'));
-							client.sendMsg(cvm.guacEncode('png', '0', '0', '0', '0', this.screenHiddenImg));
-						} else {
-							await this.SendFullScreenWithSize(client);
-						}
-						client.sendMsg(cvm.guacEncode('sync', Date.now().toString()));
-					}
-
-					if (this.voteInProgress) this.sendVoteUpdate(client);
-					this.sendTurnUpdate(client);
-					break;
-				case 'rename':
-					if (!client.RenameRateLimit.request()) return;
-					if (client.connectedToNode && client.IP.muted) return;
-					if (this.Config.auth.enabled && client.rank !== Rank.Unregistered) {
-						client.sendMsg(cvm.guacEncode('chat', '', 'Go to your account settings to change your username.'));
-						return;
-					}
-					if (this.Config.auth.enabled && msgArr[1] !== undefined) {
-						// Don't send system message to a user without a username since it was likely an automated attempt by the webapp
-						if (client.username) client.sendMsg(cvm.guacEncode('chat', '', 'You need to log in to do that.'));
-						if (client.rank !== Rank.Unregistered) return;
-						this.renameUser(client, undefined);
-						return;
-					}
-					this.renameUser(client, msgArr[1]);
-					break;
-				case 'chat':
-					if (!client.username) return;
-					if (client.IP.muted) return;
-					if (msgArr.length !== 2) return;
-					if (this.Config.auth.enabled && client.rank === Rank.Unregistered && !this.Config.auth.guestPermissions.chat) {
-						client.sendMsg(cvm.guacEncode('chat', '', 'You need to login to do that.'));
-						return;
-					}
-					var msg = Utilities.HTMLSanitize(msgArr[1]);
-					// One of the things I hated most about the old server is it completely discarded your message if it was too long
-					if (msg.length > this.Config.collabvm.maxChatLength) msg = msg.substring(0, this.Config.collabvm.maxChatLength);
-					if (msg.trim().length < 1) return;
-
-					this.clients.forEach((c) => c.sendMsg(cvm.guacEncode('chat', client.username!, msg)));
-					this.ChatHistory.push({ user: client.username, msg: msg });
-					client.onMsgSent();
-					break;
-				case 'turn':
-					if ((!this.turnsAllowed || this.Config.collabvm.turnwhitelist) && client.rank !== Rank.Admin && client.rank !== Rank.Moderator && !client.turnWhitelist) return;
-					if (this.Config.auth.enabled && client.rank === Rank.Unregistered && !this.Config.auth.guestPermissions.turn) {
-						client.sendMsg(cvm.guacEncode('chat', '', 'You need to login to do that.'));
-						return;
-					}
-					if (!client.TurnRateLimit.request()) return;
-					if (!client.connectedToNode) return;
-					if (msgArr.length > 2) return;
-					var takingTurn: boolean;
-					if (msgArr.length === 1) takingTurn = true;
-					else
-						switch (msgArr[1]) {
-							case '0':
-								if (this.indefiniteTurn === client) {
-									this.indefiniteTurn = null;
-								}
-								takingTurn = false;
-								break;
-							case '1':
-								takingTurn = true;
-								break;
-							default:
-								return;
-								break;
-						}
-					if (takingTurn) {
-						var currentQueue = this.TurnQueue.toArray();
-						// If the user is already in the turn queue, ignore the turn request.
-						if (currentQueue.indexOf(client) !== -1) return;
-						// If they're muted, also ignore the turn request.
-						// Send them the turn queue to prevent client glitches
-						if (client.IP.muted) return;
-						if (this.Config.collabvm.turnlimit.enabled) {
-							// Get the amount of users in the turn queue with the same IP as the user requesting a turn.
-							let turns = currentQueue.filter((user) => user.IP.address == client.IP.address);
-							// If it exceeds the limit set in the config, ignore the turn request.
-							if (turns.length + 1 > this.Config.collabvm.turnlimit.maximum) return;
-						}
-						this.TurnQueue.enqueue(client);
-						if (this.TurnQueue.size === 1) this.nextTurn();
-					} else {
-						var hadturn = this.TurnQueue.peek() === client;
-						this.TurnQueue = Queue.from(this.TurnQueue.toArray().filter((u) => u !== client));
-						if (hadturn) this.nextTurn();
-					}
-					this.sendTurnUpdate();
-					break;
-				case 'mouse':
-					if (this.TurnQueue.peek() !== client && client.rank !== Rank.Admin) return;
-					var x = parseInt(msgArr[1]);
-					var y = parseInt(msgArr[2]);
-					var mask = parseInt(msgArr[3]);
-					if (x === undefined || y === undefined || mask === undefined) return;
-					this.VM.GetDisplay()?.MouseEvent(x, y, mask);
-					break;
-				case 'key':
-					if (this.TurnQueue.peek() !== client && client.rank !== Rank.Admin) return;
-					var keysym = parseInt(msgArr[1]);
-					var down = parseInt(msgArr[2]);
-					if (keysym === undefined || (down !== 0 && down !== 1)) return;
-					this.VM.GetDisplay()?.KeyboardEvent(keysym, down === 1 ? true : false);
-					break;
-				case 'vote':
-					if (!this.VM.SnapshotsSupported()) return;
-					if ((!this.turnsAllowed || this.Config.collabvm.turnwhitelist) && client.rank !== Rank.Admin && client.rank !== Rank.Moderator && !client.turnWhitelist) return;
-					if (!client.connectedToNode) return;
-					if (msgArr.length !== 2) return;
-					if (!client.VoteRateLimit.request()) return;
-					switch (msgArr[1]) {
-						case '1':
-							if (!this.voteInProgress) {
-								if (this.Config.auth.enabled && client.rank === Rank.Unregistered && !this.Config.auth.guestPermissions.callForReset) {
-									client.sendMsg(cvm.guacEncode('chat', '', 'You need to login to do that.'));
-									return;
-								}
-
-								if (this.voteCooldown !== 0) {
-									client.sendMsg(cvm.guacEncode('vote', '3', this.voteCooldown.toString()));
-									return;
-								}
-								this.startVote();
-								this.clients.forEach((c) => c.sendMsg(cvm.guacEncode('chat', '', `${client.username} has started a vote to reset the VM.`)));
-							}
-							if (this.Config.auth.enabled && client.rank === Rank.Unregistered && !this.Config.auth.guestPermissions.vote) {
-								client.sendMsg(cvm.guacEncode('chat', '', 'You need to login to do that.'));
-								return;
-							} else if (client.IP.vote !== true) {
-								this.clients.forEach((c) => c.sendMsg(cvm.guacEncode('chat', '', `${client.username} has voted yes.`)));
-							}
-							client.IP.vote = true;
-							break;
-						case '0':
-							if (!this.voteInProgress) return;
-							if (this.Config.auth.enabled && client.rank === Rank.Unregistered && !this.Config.auth.guestPermissions.vote) {
-								client.sendMsg(cvm.guacEncode('chat', '', 'You need to login to do that.'));
-								return;
-							}
-							if (client.IP.vote !== false) {
-								this.clients.forEach((c) => c.sendMsg(cvm.guacEncode('chat', '', `${client.username} has voted no.`)));
-							}
-							client.IP.vote = false;
-							break;
-					}
-					this.sendVoteUpdate();
-					break;
-				case 'cap': {
-					if (msgArr.length < 2) return;
-					// Capabilities can only be announced before connecting to the VM
-					if (client.connectedToNode) return;
-					var caps = [];
-					for (const cap of msgArr.slice(1))
-						switch (cap) {
-							case 'bin': {
-								if (caps.indexOf('bin') !== -1) break;
-								client.Capabilities.bin = true;
-								caps.push('bin');
-								break;
-							}
-						}
-					client.sendMsg(cvm.guacEncode('cap', ...caps));
+					this.renameUser(user, res.username, false);
+				} else this.renameUser(user, res.username, true);
+				// Set rank
+				user.rank = res.rank;
+				if (user.rank === Rank.Admin) {
+					user.sendMsg(cvm.guacEncode('admin', '0', '1'));
+				} else if (user.rank === Rank.Moderator) {
+					user.sendMsg(cvm.guacEncode('admin', '0', '3', this.ModPerms.toString()));
 				}
-				case 'admin':
-					if (msgArr.length < 2) return;
-					switch (msgArr[1]) {
-						case '2':
-							// Login
+				this.clients.forEach((c) => c.sendMsg(cvm.guacEncode('adduser', '1', user.username!, user.rank.toString())));
+			} else {
+				user.protocol.sendLoginResponse(false, res.error!);
+				if (res.error === 'You are banned') {
+					user.kick();
+				}
+			}
+		} catch (err) {
+			this.logger.error(`Error authenticating client ${user.IP.address}: ${(err as Error).message}`);
 
-							if (!client.LoginRateLimit.request() || !client.username) return;
-							if (msgArr.length !== 3) return;
-							var sha256 = createHash('sha256');
-							sha256.update(msgArr[2]);
-							var pwdHash = sha256.digest('hex');
-							sha256.destroy();
+			user.protocol.sendLoginResponse(false, 'There was an internal error while authenticating. Please let a staff member know as soon as possible');
+		}
+	}
 
-							if (this.Config.collabvm.turnwhitelist && pwdHash === this.Config.collabvm.turnpass) {
-								client.turnWhitelist = true;
-								client.sendMsg(cvm.guacEncode('chat', '', 'You may now take turns.'));
-								return;
-							}
+	onNoFlag(user: User) {
+		// Too late
+		if (user.connectedToNode) return;
+		user.noFlag = true;
+	}
 
-							if (this.Config.auth.enabled) {
-								client.sendMsg(cvm.guacEncode('chat', '', 'This server does not support staff passwords. Please log in to become staff.'));
-								return;
-							}
+	onCapabilityUpgrade(user: User, capability: String[]): boolean {
+		if (user.connectedToNode) return false;
 
-							if (pwdHash === this.Config.collabvm.adminpass) {
-								client.rank = Rank.Admin;
-								client.sendMsg(cvm.guacEncode('admin', '0', '1'));
-							} else if (this.Config.collabvm.moderatorEnabled && pwdHash === this.Config.collabvm.modpass) {
-								client.rank = Rank.Moderator;
-								client.sendMsg(cvm.guacEncode('admin', '0', '3', this.ModPerms.toString()));
-							} else {
-								client.sendMsg(cvm.guacEncode('admin', '0', '0'));
-								return;
-							}
-							if (this.screenHidden) {
-								await this.SendFullScreenWithSize(client);
+		for (let cap of capability) {
+			switch (cap) {
+				// binary 1.0 (msgpack rects)
+				// TODO: re-enable once binary1.0 is enabled
+				case 'bin':
+					this.logger.info('Binary 1.0 protocol is currently disabled for refactoring');
+					//user.Capabilities.bin = true;
+					//user.protocol = TheProtocolManager.createProtocol('binary1', user);
+					//user.protocol.setHandler(this as IProtocolHandlers);
+					break;
+				default:
+					break;
+			}
+		}
+		return true;
+	}
 
-								client.sendMsg(cvm.guacEncode('sync', Date.now().toString()));
-							}
+	onTurnRequest(user: User, forfeit: boolean): void {
+		if ((!this.turnsAllowed || this.Config.collabvm.turnwhitelist) && user.rank !== Rank.Admin && user.rank !== Rank.Moderator && !user.turnWhitelist) return;
 
-							this.clients.forEach((c) => c.sendMsg(cvm.guacEncode('adduser', '1', client.username!, client.rank.toString())));
-							break;
-						case '5':
-							// QEMU Monitor
-							if (client.rank !== Rank.Admin) return;
-							if (msgArr.length !== 4 || msgArr[2] !== this.Config.collabvm.node) return;
-							let output = await this.VM.MonitorCommand(msgArr[3]);
-							client.sendMsg(cvm.guacEncode('admin', '2', String(output)));
-							break;
-						case '8':
-							// Restore
-							if (client.rank !== Rank.Admin && (client.rank !== Rank.Moderator || !this.Config.collabvm.moderatorPermissions.restore)) return;
-							this.VM.Reset();
-							break;
-						case '10':
-							// Reboot
-							if (client.rank !== Rank.Admin && (client.rank !== Rank.Moderator || !this.Config.collabvm.moderatorPermissions.reboot)) return;
-							if (msgArr.length !== 3 || msgArr[2] !== this.Config.collabvm.node) return;
-							await this.VM.Reboot();
-							break;
-						case '12':
-							// Ban
-							if (client.rank !== Rank.Admin && (client.rank !== Rank.Moderator || !this.Config.collabvm.moderatorPermissions.ban)) return;
-							var user = this.clients.find((c) => c.username === msgArr[2]);
-							if (!user) return;
-							this.logger.info(`Banning ${user.username!} (${user.IP.address}) by request of ${client.username!}`);
-							user.ban(this.banmgr);
-						case '13':
-							// Force Vote
-							if (msgArr.length !== 3) return;
-							if (client.rank !== Rank.Admin && (client.rank !== Rank.Moderator || !this.Config.collabvm.moderatorPermissions.forcevote)) return;
-							if (!this.voteInProgress) return;
-							switch (msgArr[2]) {
-								case '1':
-									this.endVote(true);
-									break;
-								case '0':
-									this.endVote(false);
-									break;
-							}
-							break;
-						case '14':
-							// Mute
-							if (client.rank !== Rank.Admin && (client.rank !== Rank.Moderator || !this.Config.collabvm.moderatorPermissions.mute)) return;
-							if (msgArr.length !== 4) return;
-							var user = this.clients.find((c) => c.username === msgArr[2]);
-							if (!user) return;
-							var permamute;
-							switch (msgArr[3]) {
-								case '0':
-									permamute = false;
-									break;
-								case '1':
-									permamute = true;
-									break;
-								default:
-									return;
-							}
-							user.mute(permamute);
-							break;
-						case '15':
-							// Kick
-							if (client.rank !== Rank.Admin && (client.rank !== Rank.Moderator || !this.Config.collabvm.moderatorPermissions.kick)) return;
-							var user = this.clients.find((c) => c.username === msgArr[2]);
-							if (!user) return;
-							user.kick();
-							break;
-						case '16':
-							// End turn
-							if (client.rank !== Rank.Admin && (client.rank !== Rank.Moderator || !this.Config.collabvm.moderatorPermissions.bypassturn)) return;
-							if (msgArr.length !== 3) return;
-							var user = this.clients.find((c) => c.username === msgArr[2]);
-							if (!user) return;
-							this.endTurn(user);
-							break;
-						case '17':
-							// Clear turn queue
-							if (client.rank !== Rank.Admin && (client.rank !== Rank.Moderator || !this.Config.collabvm.moderatorPermissions.bypassturn)) return;
-							if (msgArr.length !== 3 || msgArr[2] !== this.Config.collabvm.node) return;
-							this.clearTurns();
-							break;
-						case '18':
-							// Rename user
-							if (client.rank !== Rank.Admin && (client.rank !== Rank.Moderator || !this.Config.collabvm.moderatorPermissions.rename)) return;
-							if (this.Config.auth.enabled) {
-								client.sendMsg(cvm.guacEncode('chat', '', 'Cannot rename users on a server that uses authentication.'));
-							}
-							if (msgArr.length !== 4) return;
-							var user = this.clients.find((c) => c.username === msgArr[2]);
-							if (!user) return;
-							this.renameUser(user, msgArr[3]);
-							break;
-						case '19':
-							// Get IP
-							if (client.rank !== Rank.Admin && (client.rank !== Rank.Moderator || !this.Config.collabvm.moderatorPermissions.grabip)) return;
-							if (msgArr.length !== 3) return;
-							var user = this.clients.find((c) => c.username === msgArr[2]);
-							if (!user) return;
-							client.sendMsg(cvm.guacEncode('admin', '19', msgArr[2], user.IP.address));
-							break;
-						case '20':
-							// Steal turn
-							if (client.rank !== Rank.Admin && (client.rank !== Rank.Moderator || !this.Config.collabvm.moderatorPermissions.bypassturn)) return;
-							this.bypassTurn(client);
-							break;
-						case '21':
-							// XSS
-							if (client.rank !== Rank.Admin && (client.rank !== Rank.Moderator || !this.Config.collabvm.moderatorPermissions.xss)) return;
-							if (msgArr.length !== 3) return;
-							switch (client.rank) {
-								case Rank.Admin:
-									this.clients.forEach((c) => c.sendMsg(cvm.guacEncode('chat', client.username!, msgArr[2])));
+		if (!this.authCheck(user, this.Config.auth.guestPermissions.turn)) return;
 
-									this.ChatHistory.push({ user: client.username!, msg: msgArr[2] });
-									break;
-								case Rank.Moderator:
-									this.clients.filter((c) => c.rank !== Rank.Admin).forEach((c) => c.sendMsg(cvm.guacEncode('chat', client.username!, msgArr[2])));
+		if (!user.TurnRateLimit.request()) return;
+		if (!user.connectedToNode) return;
+
+		if (forfeit == false) {
+			var currentQueue = this.TurnQueue.toArray();
+			// If the user is already in the turn queue, ignore the turn request.
+			if (currentQueue.indexOf(user) !== -1) return;
+			// If they're muted, also ignore the turn request.
+			// Send them the turn queue to prevent client glitches
+			if (user.IP.muted) return;
+			if (this.Config.collabvm.turnlimit.enabled) {
+				// Get the amount of users in the turn queue with the same IP as the user requesting a turn.
+				let turns = currentQueue.filter((otheruser) => otheruser.IP.address == user.IP.address);
+				// If it exceeds the limit set in the config, ignore the turn request.
+				if (turns.length + 1 > this.Config.collabvm.turnlimit.maximum) return;
+			}
+			this.TurnQueue.enqueue(user);
+			if (this.TurnQueue.size === 1) this.nextTurn();
+		} else {
+			var hadturn = this.TurnQueue.peek() === user;
+			this.TurnQueue = Queue.from(this.TurnQueue.toArray().filter((u) => u !== user));
+			if (hadturn) this.nextTurn();
+		}
+		this.sendTurnUpdate();
+	}
+
+	onVote(user: User, choice: number): void {
+		if (!this.VM.SnapshotsSupported()) return;
+		if ((!this.turnsAllowed || this.Config.collabvm.turnwhitelist) && user.rank !== Rank.Admin && user.rank !== Rank.Moderator && !user.turnWhitelist) return;
+		if (!user.connectedToNode) return;
+		if (!user.VoteRateLimit.request()) return;
+		switch (choice) {
+			case 1:
+				if (!this.voteInProgress) {
+					if (!this.authCheck(user, this.Config.auth.guestPermissions.callForReset)) return;
+
+					if (this.voteCooldown !== 0) {
+						user.sendMsg(cvm.guacEncode('vote', '3', this.voteCooldown.toString()));
+						return;
+					}
+					this.startVote();
+					this.clients.forEach((c) => c.protocol.sendChatMessage('', `${user.username} has started a vote to reset the VM.`));
+				}
+
+				if (!this.authCheck(user, this.Config.auth.guestPermissions.vote)) return;
+
+				if (user.IP.vote !== true) {
+					this.clients.forEach((c) => c.protocol.sendChatMessage('', `${user.username} has voted yes.`));
+				}
+				user.IP.vote = true;
+				break;
+			case 0:
+				if (!this.voteInProgress) return;
+
+				if (!this.authCheck(user, this.Config.auth.guestPermissions.vote)) return;
+
+				if (user.IP.vote !== false) {
+					this.clients.forEach((c) => c.protocol.sendChatMessage('', `${user.username} has voted no.`));
+				}
+				user.IP.vote = false;
+				break;
+			default:
+				break;
+		}
+		this.sendVoteUpdate();
+	}
+
+	async onList(user: User) {
+		let listEntry: ListEntry = {
+			id: this.Config.collabvm.node,
+			name: this.Config.collabvm.displayname,
+			thumbnail: this.screenHidden ? this.screenHiddenThumb : await this.getThumbnail()
+		};
+
+		if (this.VM.GetState() == VMState.Started) {
+			user.protocol.sendListResponse([listEntry]);
+		}
+	}
+
+	private async connectViewShared(user: User, node: string, viewMode: number | undefined) {
+		if (!user.username || node !== this.Config.collabvm.node) {
+			user.protocol.sendConnectFailResponse();
+			return;
+		}
+
+		user.connectedToNode = true;
+
+		if (viewMode !== undefined) {
+			if (viewMode !== 0 && viewMode !== 1) {
+				user.protocol.sendConnectFailResponse();
+				return;
+			}
+
+			user.viewMode = viewMode;
+		}
+
+		user.protocol.sendConnectOKResponse(this.VM.SnapshotsSupported());
+
+		if (this.ChatHistory.size !== 0) {
+			let history = this.ChatHistory.toArray() as ChatHistory[];
+			user.protocol.sendChatHistoryMessage(history);
+		}
+		if (this.Config.collabvm.motd) user.protocol.sendChatMessage('', this.Config.collabvm.motd);
+		if (this.screenHidden) {
+			user?.protocol.sendScreenResize(1024, 768);
+			user?.protocol.sendScreenUpdate({
+				x: 0,
+				y: 0,
+				data: this.screenHiddenImg
+			});
+		} else {
+			await this.SendFullScreenWithSize(user);
+		}
+
+		user.protocol.sendSync(Date.now());
+
+		if (this.voteInProgress) this.sendVoteUpdate(user);
+		this.sendTurnUpdate(user);
+	}
+
+	async onConnect(user: User, node: string) {
+		return this.connectViewShared(user, node, undefined);
+	}
+
+	async onView(user: User, node: string, viewMode: number) {
+		return this.connectViewShared(user, node, viewMode);
+	}
+
+	onRename(user: User, newName: string | undefined): void {
+		if (!user.RenameRateLimit.request()) return;
+		if (user.connectedToNode && user.IP.muted) return;
+		if (this.Config.auth.enabled && user.rank !== Rank.Unregistered) {
+			user.protocol.sendChatMessage('', 'Go to your account settings to change your username.');
+			return;
+		}
+		if (this.Config.auth.enabled && newName !== undefined) {
+			// Don't send system message to a user without a username since it was likely an automated attempt by the webapp
+			if (user.username) user.protocol.sendChatMessage('', 'You need to log in to do that.');
+			if (user.rank !== Rank.Unregistered) return;
+			this.renameUser(user, undefined);
+			return;
+		}
+		this.renameUser(user, newName!);
+	}
+
+	onChat(user: User, message: string): void {
+		if (!user.username) return;
+		if (user.IP.muted) return;
+		if (!this.authCheck(user, this.Config.auth.guestPermissions.chat)) return;
+
+		var msg = Utilities.HTMLSanitize(message);
+		// One of the things I hated most about the old server is it completely discarded your message if it was too long
+		if (msg.length > this.Config.collabvm.maxChatLength) msg = msg.substring(0, this.Config.collabvm.maxChatLength);
+		if (msg.trim().length < 1) return;
+
+		this.clients.forEach((c) => c.protocol.sendChatMessage(user.username!, msg));
+		this.ChatHistory.push({ user: user.username, msg: msg });
+		user.onChatMsgSent();
+	}
+
+	onKey(user: User, keysym: number, pressed: boolean): void {
+		if (this.TurnQueue.peek() !== user && user.rank !== Rank.Admin) return;
+		this.VM.GetDisplay()?.KeyboardEvent(keysym, pressed);
+	}
+
+	onMouse(user: User, x: number, y: number, buttonMask: number): void {
+		if (this.TurnQueue.peek() !== user && user.rank !== Rank.Admin) return;
+		this.VM.GetDisplay()?.MouseEvent(x, y, buttonMask);
+	}
+
+	async onAdminLogin(user: User, password: string) {
+		if (!user.LoginRateLimit.request() || !user.username) return;
+		var sha256 = createHash('sha256');
+		sha256.update(password, 'utf-8');
+		var pwdHash = sha256.digest('hex');
+		sha256.destroy();
+
+		if (this.Config.collabvm.turnwhitelist && pwdHash === this.Config.collabvm.turnpass) {
+			user.turnWhitelist = true;
+			user.protocol.sendChatMessage('', 'You may now take turns.');
+			return;
+		}
+
+		if (this.Config.auth.enabled) {
+			user.protocol.sendChatMessage('', 'This server does not support staff passwords. Please log in to become staff.');
+			return;
+		}
+
+		if (pwdHash === this.Config.collabvm.adminpass) {
+			user.rank = Rank.Admin;
+			user.sendMsg(cvm.guacEncode('admin', '0', '1'));
+		} else if (this.Config.collabvm.moderatorEnabled && pwdHash === this.Config.collabvm.modpass) {
+			user.rank = Rank.Moderator;
+			user.sendMsg(cvm.guacEncode('admin', '0', '3', this.ModPerms.toString()));
+		} else {
+			user.sendMsg(cvm.guacEncode('admin', '0', '0'));
+			return;
+		}
+
+		if (this.screenHidden) {
+			await this.SendFullScreenWithSize(user);
+		}
+
+		this.clients.forEach((c) => c.sendMsg(cvm.guacEncode('adduser', '1', user.username!, user.rank.toString())));
+	}
+
+	async onAdminMonitor(user: User, node: string, command: string) {
+		if (user.rank !== Rank.Admin) return;
+		if (node !== this.Config.collabvm.node) return;
+		let output = await this.VM.MonitorCommand(command);
+		user.sendMsg(cvm.guacEncode('admin', '2', String(output)));
+	}
+
+	private async onAdmin(user: User, msgArr: string[]) {
+		/*
+		switch (msgArr[0]) {
+			case '2':
+				// Login
+
+				
+				break;
+			case '5':
+				// QEMU Monitor
+				
+				break;
+			case '8':
+				// Restore
+				if (user.rank !== Rank.Admin && (user.rank !== Rank.Moderator || !this.Config.collabvm.moderatorPermissions.restore)) return;
+				this.VM.Reset();
+				break;
+			case '10':
+				// Reboot
+				if (user.rank !== Rank.Admin && (user.rank !== Rank.Moderator || !this.Config.collabvm.moderatorPermissions.reboot)) return;
+				if (msgArr.length !== 3 || msgArr[2] !== this.Config.collabvm.node) return;
+				await this.VM.Reboot();
+				break;
+			case '12':
+				// Ban
+				if (user.rank !== Rank.Admin && (user.rank !== Rank.Moderator || !this.Config.collabvm.moderatorPermissions.ban)) return;
+				var otherUser = this.clients.find((c) => c.username === msgArr[2]);
+				if (!otherUser) return;
+				this.logger.info(`Banning ${otherUser.username!} (${otherUser.IP.address}) by request of ${otherUser.username!}`);
+				user.ban(this.banmgr);
+			case '13':
+				// Force Vote
+				if (msgArr.length !== 3) return;
+				if (user.rank !== Rank.Admin && (user.rank !== Rank.Moderator || !this.Config.collabvm.moderatorPermissions.forcevote)) return;
+				if (!this.voteInProgress) return;
+				switch (msgArr[2]) {
+					case '1':
+						this.endVote(true);
+						break;
+					case '0':
+						this.endVote(false);
+						break;
+				}
+				break;
+			case '14':
+				// Mute
+				if (client.rank !== Rank.Admin && (client.rank !== Rank.Moderator || !this.Config.collabvm.moderatorPermissions.mute)) return;
+				if (msgArr.length !== 4) return;
+				var user = this.clients.find((c) => c.username === msgArr[2]);
+				if (!user) return;
+				var permamute;
+				switch (msgArr[3]) {
+					case '0':
+						permamute = false;
+						break;
+					case '1':
+						permamute = true;
+						break;
+					default:
+						return;
+				}
+				user.mute(permamute);
+				break;
+			case '15':
+				// Kick
+				if (client.rank !== Rank.Admin && (client.rank !== Rank.Moderator || !this.Config.collabvm.moderatorPermissions.kick)) return;
+				var user = this.clients.find((c) => c.username === msgArr[2]);
+				if (!user) return;
+				user.kick();
+				break;
+			case '16':
+				// End turn
+				if (client.rank !== Rank.Admin && (client.rank !== Rank.Moderator || !this.Config.collabvm.moderatorPermissions.bypassturn)) return;
+				if (msgArr.length !== 3) return;
+				var user = this.clients.find((c) => c.username === msgArr[2]);
+				if (!user) return;
+				this.endTurn(user);
+				break;
+			case '17':
+				// Clear turn queue
+				if (client.rank !== Rank.Admin && (client.rank !== Rank.Moderator || !this.Config.collabvm.moderatorPermissions.bypassturn)) return;
+				if (msgArr.length !== 3 || msgArr[2] !== this.Config.collabvm.node) return;
+				this.clearTurns();
+				break;
+			case '18':
+				// Rename user
+				if (client.rank !== Rank.Admin && (client.rank !== Rank.Moderator || !this.Config.collabvm.moderatorPermissions.rename)) return;
+				if (this.Config.auth.enabled) {
+					client.protocol.sendChatMessage('', 'Cannot rename users on a server that uses authentication.');
+				}
+				if (msgArr.length !== 4) return;
+				var user = this.clients.find((c) => c.username === msgArr[2]);
+				if (!user) return;
+				this.renameUser(user, msgArr[3]);
+				break;
+			case '19':
+				// Get IP
+				if (client.rank !== Rank.Admin && (client.rank !== Rank.Moderator || !this.Config.collabvm.moderatorPermissions.grabip)) return;
+				if (msgArr.length !== 3) return;
+				var user = this.clients.find((c) => c.username === msgArr[2]);
+				if (!user) return;
+				client.sendMsg(cvm.guacEncode('admin', '19', msgArr[2], user.IP.address));
+				break;
+			case '20':
+				// Steal turn
+				if (client.rank !== Rank.Admin && (client.rank !== Rank.Moderator || !this.Config.collabvm.moderatorPermissions.bypassturn)) return;
+				this.bypassTurn(client);
+				break;
+			case '21':
+				// XSS
+				if (client.rank !== Rank.Admin && (client.rank !== Rank.Moderator || !this.Config.collabvm.moderatorPermissions.xss)) return;
+				if (msgArr.length !== 3) return;
+				switch (client.rank) {
+					case Rank.Admin:
+						this.clients.forEach((c) => c.sendMsg(cvm.guacEncode('chat', client.username!, msgArr[2])));
+
+						this.ChatHistory.push({ user: client.username!, msg: msgArr[2] });
+						break;
+					case Rank.Moderator:
+						this.clients.filter((c) => c.rank !== Rank.Admin).forEach((c) => c.sendMsg(cvm.guacEncode('chat', client.username!, msgArr[2])));
 
 									this.clients.filter((c) => c.rank === Rank.Admin).forEach((c) => c.sendMsg(cvm.guacEncode('chat', client.username!, Utilities.HTMLSanitize(msgArr[2]))));
 									break;
@@ -680,33 +698,28 @@ export default class CollabVMServer {
 									break;
 								case '1':
 									this.screenHidden = false;
-									let displaySize = this.VM.GetDisplay()?.Size();
-									if (displaySize == undefined) return;
+									let displaySize = this.VM.GetDisplay().Size();
 
-									let encoded = await this.MakeRectData({
-										x: 0,
-										y: 0,
-										width: displaySize.width,
-										height: displaySize.height
-									});
+						let encoded = await this.MakeRectData({
+							x: 0,
+							y: 0,
+							width: displaySize.width,
+							height: displaySize.height
+						});
 
-									this.clients.forEach(async (client) => this.SendFullScreenWithSize(client));
-									break;
-							}
-							break;
-						case '25':
-							if (client.rank !== Rank.Admin || msgArr.length !== 3) return;
-							this.clients.forEach((c) => c.sendMsg(cvm.guacEncode('chat', '', msgArr[2])));
-							break;
-					}
-					break;
-			}
-		} catch (err) {
-			// No
-			this.logger.error(`User ${user?.IP.address} ${user?.username ? `with username ${user?.username}` : ''} sent broken Guacamole: ${err as Error}`);
-			user?.kick();
+						this.clients.forEach(async (client) => this.SendFullScreenWithSize(client));
+						break;
+				}
+				break;
+			case '25':
+				if (client.rank !== Rank.Admin || msgArr.length !== 3) return;
+				this.clients.forEach((c) => c.sendMsg(cvm.guacEncode('chat', '', msgArr[2])));
+				break;
 		}
+		*/
 	}
+
+	// end IProtocolHandlers
 
 	getUsernameList(): string[] {
 		var arr: string[] = [];
@@ -757,11 +770,15 @@ export default class CollabVMServer {
 		}
 	}
 
-	getAdduserMsg(): string {
-		var arr: string[] = ['adduser', this.clients.filter((c) => c.username).length.toString()];
-
-		this.clients.filter((c) => c.username).forEach((c) => arr.push(c.username!, c.rank.toString()));
-		return cvm.guacEncode(...arr);
+	getAdduserMsg(): ProtocolAddUser[] {
+		return this.clients
+			.filter((c) => c.username)
+			.map((c) => {
+				return {
+					username: c.username!,
+					rank: c.rank
+				};
+			});
 	}
 
 	getFlagMsg(): string {
@@ -769,12 +786,6 @@ export default class CollabVMServer {
 		for (let c of this.clients.filter((cl) => cl.countryCode !== null && cl.username && (!cl.noFlag || cl.rank === Rank.Unregistered))) {
 			arr.push(c.username!, c.countryCode!);
 		}
-		return cvm.guacEncode(...arr);
-	}
-
-	getChatHistoryMsg(): string {
-		var arr: string[] = ['chat'];
-		this.ChatHistory.forEach((c) => arr.push(c.user, c.msg));
 		return cvm.guacEncode(...arr);
 	}
 
@@ -852,7 +863,7 @@ export default class CollabVMServer {
 			.filter((c) => c.connectedToNode || c.viewMode == 1)
 			.forEach((c) => {
 				if (this.screenHidden && c.rank == Rank.Unregistered) return;
-				c.sendMsg(cvm.guacEncode('size', '0', size.width.toString(), size.height.toString()));
+				c.protocol.sendScreenResize(size.width, size.height);
 			});
 	}
 
@@ -861,28 +872,17 @@ export default class CollabVMServer {
 
 		let doRect = async (rect: Rect) => {
 			let encoded = await this.MakeRectData(rect);
-			let encodedb64 = encoded.toString('base64');
-			let bmsg: CollabVMProtocolMessage = {
-				type: CollabVMProtocolMessageType.rect,
-				rect: {
-					x: rect.x,
-					y: rect.y,
-					data: encoded
-				}
-			};
-
-			var encodedbin = msgpack.encode(bmsg);
 
 			self.clients
 				.filter((c) => c.connectedToNode || c.viewMode == 1)
 				.forEach((c) => {
 					if (self.screenHidden && c.rank == Rank.Unregistered) return;
-					if (c.Capabilities.bin) {
-						c.socket.sendBinary(encodedbin);
-					} else {
-						c.sendMsg(cvm.guacEncode('png', '0', '0', rect.x.toString(), rect.y.toString(), encodedb64));
-						c.sendMsg(cvm.guacEncode('sync', Date.now().toString()));
-					}
+
+					c.protocol.sendScreenUpdate({
+						x: rect.x,
+						y: rect.y,
+						data: encoded
+					});
 				});
 		};
 
@@ -908,21 +908,13 @@ export default class CollabVMServer {
 			height: displaySize.height
 		});
 
-		client.sendMsg(cvm.guacEncode('size', '0', displaySize.width.toString(), displaySize.height.toString()));
+		client.protocol.sendScreenResize(displaySize.width, displaySize.height);
 
-		if (client.Capabilities.bin) {
-			let msg: CollabVMProtocolMessage = {
-				type: CollabVMProtocolMessageType.rect,
-				rect: {
-					x: 0,
-					y: 0,
-					data: encoded
-				}
-			};
-			client.socket.sendBinary(msgpack.encode(msg));
-		} else {
-			client.sendMsg(cvm.guacEncode('png', '0', '0', '0', '0', encoded.toString('base64')));
-		}
+		client.protocol.sendScreenUpdate({
+			x: 0,
+			y: 0,
+			data: encoded
+		});
 	}
 
 	private async MakeRectData(rect: Rect) {
@@ -937,14 +929,13 @@ export default class CollabVMServer {
 		return encoded;
 	}
 
-	async getThumbnail(): Promise<string> {
+	async getThumbnail(): Promise<Buffer> {
 		let display = this.VM.GetDisplay();
 
 		// oh well
-		if (!display?.Connected()) return '';
+		if (!display?.Connected()) return Buffer.alloc(4);
 
-		let buf = await JPEGEncoder.EncodeThumbnail(display.Buffer(), display.Size());
-		return buf.toString('base64');
+		return JPEGEncoder.EncodeThumbnail(display.Buffer(), display.Size());
 	}
 
 	startVote() {
@@ -967,10 +958,10 @@ export default class CollabVMServer {
 		var count = this.getVoteCounts();
 		this.clients.forEach((c) => c.sendMsg(cvm.guacEncode('vote', '2')));
 		if (result === true || (result === undefined && count.yes >= count.no)) {
-			this.clients.forEach((c) => c.sendMsg(cvm.guacEncode('chat', '', 'The vote to reset the VM has won.')));
+			this.clients.forEach((c) => c.protocol.sendChatMessage('', 'The vote to reset the VM has won.'));
 			this.VM.Reset();
 		} else {
-			this.clients.forEach((c) => c.sendMsg(cvm.guacEncode('chat', '', 'The vote to reset the VM has lost.')));
+			this.clients.forEach((c) => c.protocol.sendChatMessage('', 'The vote to reset the VM has lost.'));
 		}
 		this.clients.forEach((c) => {
 			c.IP.vote = null;
