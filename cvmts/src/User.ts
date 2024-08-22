@@ -3,7 +3,6 @@ import * as cvm from '@cvmts/cvm-rs';
 import { IPData } from './IPData.js';
 import IConfig from './IConfig.js';
 import RateLimiter from './RateLimiter.js';
-import { execa, execaCommand, ExecaSyncError } from 'execa';
 import { NetworkClient } from './net/NetworkClient.js';
 import { CollabVMCapabilities } from '@cvmts/collab-vm-1.2-binary-protocol';
 import pino from 'pino';
