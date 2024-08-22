@@ -133,11 +133,11 @@ export interface IProtocol {
 
 	sendSelfRename(status: ProtocolRenameStatus, newUsername: string, rank: Rank): void;
 	sendRename(oldUsername: string, newUsername: string, rank: Rank): void;
-	
+
 	sendListResponse(list: ListEntry[]): void;
 
 	sendTurnQueue(turnTime: number, users: string[]): void;
-	sendTurnQueueWaiting(turnTime: number, users: string[], waitTime: number): void
+	sendTurnQueueWaiting(turnTime: number, users: string[], waitTime: number): void;
 
 	sendVoteStarted(): void;
 	sendVoteStats(msLeft: number, nrYes: number, nrNo: number): void;
