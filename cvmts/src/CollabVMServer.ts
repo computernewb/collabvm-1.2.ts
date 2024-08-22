@@ -173,9 +173,7 @@ export default class CollabVMServer implements IProtocolHandlers {
 			}
 		}
 
-		// TODO: we should probably just make this a buffer arg lol..
-		user.socket.on('msg', (msg: string) => {
-			let buf = Buffer.from(msg);
+		user.socket.on('msg', (buf: Buffer, binary: boolean) => {
 			try {
 				user.protocol.processMessage(buf);
 			} catch (err) {

@@ -1,23 +1,25 @@
 import { WebSocket } from 'ws';
-import NetworkClient from '../NetworkClient.js';
+import { NetworkClient } from '../NetworkClient.js';
 import EventEmitter from 'events';
 
 export default class WSClient extends EventEmitter implements NetworkClient {
 	socket: WebSocket;
 	ip: string;
+	enforceTextOnly = true
 
 	constructor(ws: WebSocket, ip: string) {
 		super();
 		this.socket = ws;
 		this.ip = ip;
 		this.socket.on('message', (buf: Buffer, isBinary: boolean) => {
-			// Close the user's connection if they send a non-string message
-			if (isBinary) {
+			// Close the user's connection if they send a binary message
+			// when we are not expecting them yet.
+			if (isBinary && this.enforceTextOnly) {
 				this.close();
 				return;
 			}
 
-			this.emit('msg', buf.toString('utf-8'));
+			this.emit('msg', buf, isBinary);
 		});
 
 		this.socket.on('close', () => {

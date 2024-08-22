@@ -1,5 +1,5 @@
 import * as http from 'http';
-import NetworkServer from '../NetworkServer.js';
+import { NetworkServer } from '../NetworkServer.js';
 import EventEmitter from 'events';
 import { WebSocketServer, WebSocket } from 'ws';
 import internal from 'stream';

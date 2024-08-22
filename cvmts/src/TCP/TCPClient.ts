@@ -1,5 +1,5 @@
 import EventEmitter from 'events';
-import NetworkClient from '../NetworkClient.js';
+import { NetworkClient } from '../NetworkClient.js';
 import { Socket } from 'net';
 
 const TextHeader = 0;

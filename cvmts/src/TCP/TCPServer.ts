@@ -2,7 +2,7 @@
 // struct msg { beu32 len; char data[len] }
 // (along with a length cap obviously)
 import EventEmitter from 'events';
-import NetworkServer from '../NetworkServer.js';
+import { NetworkServer } from '../NetworkServer.js';
 import { Server, Socket } from 'net';
 import IConfig from '../IConfig.js';
 import TCPClient from './TCPClient.js';
