@@ -582,12 +582,6 @@ export default class CollabVMServer implements IProtocolHandlers {
 
 		var target = this.clients.find((c) => c.username === username);
 		if (!target) return;
-
-		// don't let a mod end a infinite turn
-		if(user.rank == Rank.Moderator)
-			if(this.indefiniteTurn == target)
-				return;
-
 		this.endTurn(target);
 	}
 
