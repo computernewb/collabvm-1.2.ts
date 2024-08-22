@@ -18,7 +18,7 @@ import { ReaderModel } from '@maxmind/geoip2-node';
 import { Size, Rect } from './Utilities.js';
 import pino from 'pino';
 import { BanManager } from './BanManager.js';
-import { IProtocolHandlers, ListEntry, ProtocolAddUser, TheProtocolManager } from './Protocol.js';
+import { IProtocolHandlers, ListEntry, ProtocolAddUser, ProtocolFlag, ProtocolRenameStatus, ProtocolUpgradeCapability, TheProtocolManager } from './Protocol.js';
 
 // Instead of strange hacks we can just use nodejs provided
 // import.meta properties, which have existed since LTS if not before
@@ -193,9 +193,11 @@ export default class CollabVMServer implements IProtocolHandlers {
 			user.protocol.sendAuth(this.Config.auth.apiEndpoint);
 		}
 
-		// convert these to proto
-		user.protocol.sendAddUser(this.getAdduserMsg());
-		if (this.Config.geoip.enabled) user.sendMsg(this.getFlagMsg());
+		user.protocol.sendAddUser(this.getAddUser());
+		if (this.Config.geoip.enabled) {
+			let flags = this.getFlags();
+			user.protocol.sendFlag(flags);
+		}
 	}
 
 	private connectionClosed(user: User) {
@@ -246,7 +248,7 @@ export default class CollabVMServer implements IProtocolHandlers {
 		if (!this.Config.auth.enabled) return;
 
 		if (!user.connectedToNode) {
-			user.sendMsg(cvm.guacEncode('login', '0', 'You must connect to the VM before logging in.'));
+			user.protocol.sendLoginResponse(false, 'You must connect to the VM before logging in.');
 			return;
 		}
 
@@ -268,7 +270,7 @@ export default class CollabVMServer implements IProtocolHandlers {
 				if (user.countryCode !== null && user.noFlag) {
 					// privacy
 					for (let cl of this.clients.filter((c) => c !== user)) {
-						cl.sendMsg(cvm.guacEncode('remuser', '1', user.username!));
+						cl.protocol.sendRemUser([user.username!]);
 					}
 					this.renameUser(user, res.username, false);
 				} else this.renameUser(user, res.username, true);
@@ -279,7 +281,14 @@ export default class CollabVMServer implements IProtocolHandlers {
 				} else if (user.rank === Rank.Moderator) {
 					user.protocol.sendAdminLoginResponse(true, this.ModPerms);
 				}
-				this.clients.forEach((c) => c.sendMsg(cvm.guacEncode('adduser', '1', user.username!, user.rank.toString())));
+				this.clients.forEach((c) =>
+					c.protocol.sendAddUser([
+						{
+							username: user.username!,
+							rank: user.rank
+						}
+					])
+				);
 			} else {
 				user.protocol.sendLoginResponse(false, res.error!);
 				if (res.error === 'You are banned') {
@@ -302,10 +311,13 @@ export default class CollabVMServer implements IProtocolHandlers {
 	onCapabilityUpgrade(user: User, capability: String[]): boolean {
 		if (user.connectedToNode) return false;
 
+		let enabledCaps = [];
+
 		for (let cap of capability) {
 			switch (cap) {
 				// binary 1.0 (msgpack rects)
-				case 'bin':
+				case ProtocolUpgradeCapability.BinRects:
+					enabledCaps.push(cap as ProtocolUpgradeCapability);
 					user.Capabilities.bin = true;
 					user.protocol.dispose();
 					user.protocol = TheProtocolManager.createProtocol('binary1', user);
@@ -315,6 +327,8 @@ export default class CollabVMServer implements IProtocolHandlers {
 					break;
 			}
 		}
+
+		user.protocol.sendCapabilities(enabledCaps);
 		return true;
 	}
 
@@ -706,47 +720,64 @@ export default class CollabVMServer implements IProtocolHandlers {
 
 	renameUser(client: User, newName?: string, announce: boolean = true) {
 		// This shouldn't need a ternary but it does for some reason
-		var hadName: boolean = client.username ? true : false;
-		var oldname: any;
+		let hadName = client.username ? true : false;
+		let oldname: any;
 		if (hadName) oldname = client.username;
-		var status = '0';
+
 		if (!newName) {
 			client.assignGuestName(this.getUsernameList());
 		} else {
 			newName = newName.trim();
 			if (hadName && newName === oldname) {
-				client.sendMsg(cvm.guacEncode('rename', '0', '0', client.username!, client.rank.toString()));
+				client.protocol.sendSelfRename(ProtocolRenameStatus.Ok, client.username!, client.rank);
 				return;
 			}
+
+			let status = ProtocolRenameStatus.Ok;
+
 			if (this.getUsernameList().indexOf(newName) !== -1) {
 				client.assignGuestName(this.getUsernameList());
 				if (client.connectedToNode) {
-					status = '1';
+					status = ProtocolRenameStatus.UsernameTaken;
 				}
 			} else if (!/^[a-zA-Z0-9\ \-\_\.]+$/.test(newName) || newName.length > 20 || newName.length < 3) {
 				client.assignGuestName(this.getUsernameList());
-				status = '2';
+				status = ProtocolRenameStatus.UsernameInvalid;
 			} else if (this.Config.collabvm.usernameblacklist.indexOf(newName) !== -1) {
 				client.assignGuestName(this.getUsernameList());
-				status = '3';
+				status = ProtocolRenameStatus.UsernameNotAllowed;
 			} else client.username = newName;
+
+			client.protocol.sendSelfRename(status, client.username!, client.rank);
 		}
 
-		client.sendMsg(cvm.guacEncode('rename', '0', status, client.username!, client.rank.toString()));
 		if (hadName) {
 			this.logger.info(`Rename ${client.IP.address} from ${oldname} to ${client.username}`);
-			if (announce) this.clients.forEach((c) => c.sendMsg(cvm.guacEncode('rename', '1', oldname, client.username!, client.rank.toString())));
+			if (announce) this.clients.forEach((c) => c.protocol.sendRename(oldname, client.username!, client.rank));
 		} else {
 			this.logger.info(`Rename ${client.IP.address} to ${client.username}`);
 			if (announce)
 				this.clients.forEach((c) => {
-					c.sendMsg(cvm.guacEncode('adduser', '1', client.username!, client.rank.toString()));
-					if (client.countryCode !== null) c.sendMsg(cvm.guacEncode('flag', client.username!, client.countryCode));
+					c.protocol.sendAddUser([
+						{
+							username: client.username!,
+							rank: client.rank
+						}
+					]);
+
+					if (client.countryCode !== null) {
+						c.protocol.sendFlag([
+							{
+								username: client.username!,
+								countryCode: client.countryCode
+							}
+						]);
+					}
 				});
 		}
 	}
 
-	getAdduserMsg(): ProtocolAddUser[] {
+	private getAddUser(): ProtocolAddUser[] {
 		return this.clients
 			.filter((c) => c.username)
 			.map((c) => {
@@ -757,12 +788,15 @@ export default class CollabVMServer implements IProtocolHandlers {
 			});
 	}
 
-	getFlagMsg(): string {
-		var arr = ['flag'];
+	private getFlags(): ProtocolFlag[] {
+		let arr = [];
 		for (let c of this.clients.filter((cl) => cl.countryCode !== null && cl.username && (!cl.noFlag || cl.rank === Rank.Unregistered))) {
-			arr.push(c.username!, c.countryCode!);
+			arr.push({
+				username: c.username!,
+				countryCode: c.countryCode!
+			});
 		}
-		return cvm.guacEncode(...arr);
+		return arr;
 	}
 
 	private sendTurnUpdate(client?: User) {

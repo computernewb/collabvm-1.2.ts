@@ -1,6 +1,6 @@
 import pino from 'pino';
-import { IProtocol, IProtocolHandlers, ListEntry, ProtocolAddUser, ProtocolBase, ProtocolChatHistory, ScreenRect } from './Protocol.js';
-import { User } from './User';
+import { IProtocol, IProtocolHandlers, ListEntry, ProtocolAddUser, ProtocolBase, ProtocolChatHistory, ProtocolFlag, ProtocolRenameStatus, ProtocolUpgradeCapability, ScreenRect } from './Protocol.js';
+import { Rank, User } from './User';
 
 import * as cvm from '@cvmts/cvm-rs';
 
@@ -209,6 +209,11 @@ export class GuacamoleProtocol extends ProtocolBase implements IProtocol {
 		this.user?.sendMsg(cvm.guacEncode('sync', now.toString()));
 	}
 
+	sendCapabilities(caps: ProtocolUpgradeCapability[]): void {
+		let arr = ['cap', ...caps];
+		this?.user?.sendMsg(cvm.guacEncode(...arr));
+	}
+
 	sendConnectFailResponse(): void {
 		this.user?.sendMsg(cvm.guacEncode('connect', '0'));
 	}
@@ -253,8 +258,7 @@ export class GuacamoleProtocol extends ProtocolBase implements IProtocol {
 	sendChatHistoryMessage(history: ProtocolChatHistory[]): void {
 		let arr = ['chat'];
 		for (let a of history) {
-			arr.push(a.user);
-			arr.push(a.msg);
+			arr.push(a.user, a.msg);
 		}
 
 		this.user?.sendMsg(cvm.guacEncode(...arr));
@@ -278,6 +282,21 @@ export class GuacamoleProtocol extends ProtocolBase implements IProtocol {
 		}
 
 		this.user?.sendMsg(cvm.guacEncode(...arr));
+	}
+
+	sendFlag(flag: ProtocolFlag[]): void {
+		// Basically this does the same as the above manual for of things
+		// but in one line of code
+		let arr = ['flag', ...flag.flatMap((flag) => [flag.username, flag.countryCode])];
+		this.user?.sendMsg(cvm.guacEncode(...arr));
+	}
+
+	sendSelfRename(status: ProtocolRenameStatus, newUsername: string, rank: Rank): void {
+		this.user?.sendMsg(cvm.guacEncode('rename', '0', status.toString(), newUsername, rank.toString()));
+	}
+
+	sendRename(oldUsername: string, newUsername: string, rank: Rank): void {
+		this.user?.sendMsg(cvm.guacEncode('rename', '1', oldUsername, newUsername, rank.toString()));
 	}
 
 	sendListResponse(list: ListEntry[]): void {

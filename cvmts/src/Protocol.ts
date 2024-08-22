@@ -1,8 +1,15 @@
 import { Rank, User } from './User';
 
 // We should probably put this in the binproto repository or something
-enum UpgradeCapability {
-	Binary = 'bin'
+export enum ProtocolUpgradeCapability {
+	BinRects = 'bin'
+}
+
+export enum ProtocolRenameStatus {
+	Ok = 0,
+	UsernameTaken = 1,
+	UsernameInvalid = 2,
+	UsernameNotAllowed = 3
 }
 
 export interface ScreenRect {
@@ -25,6 +32,11 @@ export interface ProtocolChatHistory {
 export interface ProtocolAddUser {
 	username: string;
 	rank: Rank;
+}
+
+export interface ProtocolFlag {
+	username: string;
+	countryCode: string;
 }
 
 // Protocol handlers. This is implemented by a layer that wants to listen to CollabVM protocol messages.
@@ -74,7 +86,9 @@ export interface IProtocolHandlers {
 	onMouse(user: User, x: number, y: number, buttonMask: number): void;
 }
 
-// Abstracts away all of the CollabVM protocol details
+// Abstracts away all of the protocol details from the CollabVM server,
+// allowing it to be protocol-independent (as long as the client and server
+// are able to speak the same protocol.)
 export interface IProtocol {
 	// don't implement this yourself, extend from ProtocolBase
 	init(u: User): void;
@@ -85,9 +99,11 @@ export interface IProtocol {
 
 	// Protocol implementation stuff
 
-	// Parses a single CollabVM protocol message and fires the given handler.
+	// Parses a single message and fires the given handler with deserialized arguments.
 	// This function does not catch any thrown errors; it is the caller's responsibility
 	// to handle errors. It should, however, catch invalid parameters without failing.
+	//
+	// This function will perform conversion to text if it is required.
 	processMessage(buffer: Buffer): boolean;
 
 	// Senders
@@ -96,6 +112,8 @@ export interface IProtocol {
 	sendSync(now: number): void;
 
 	sendAuth(authServer: string): void;
+
+	sendCapabilities(caps: ProtocolUpgradeCapability[]): void;
 
 	sendConnectFailResponse(): void;
 	sendConnectOKResponse(votes: boolean): void;
@@ -111,7 +129,11 @@ export interface IProtocol {
 
 	sendAddUser(users: ProtocolAddUser[]): void;
 	sendRemUser(users: string[]): void;
+	sendFlag(flag: ProtocolFlag[]): void;
 
+	sendSelfRename(status: ProtocolRenameStatus, newUsername: string, rank: Rank): void;
+	sendRename(oldUsername: string, newUsername: string, rank: Rank): void;
+	
 	sendListResponse(list: ListEntry[]): void;
 
 	sendVoteStarted(): void;
@@ -125,7 +147,7 @@ export interface IProtocol {
 	sendScreenUpdate(rect: ScreenRect): void;
 }
 
-// base mixin for all protocols to use
+// Base mixin for all concrete protocols to use. Inherit from this!
 export class ProtocolBase {
 	protected handlers: IProtocolHandlers | null = null;
 	protected user: User | null = null;
@@ -144,7 +166,9 @@ export class ProtocolBase {
 	}
 }
 
-// Holds protocol factories.
+// The protocol manager. Holds protocol factories, and provides the ability
+// to create a protocol by name. Avoids direct dependency on a given list of protocols,
+// and allows (relatively simple) expansion.
 export class ProtocolManager {
 	private protocols = new Map<String, () => IProtocol>();
 
