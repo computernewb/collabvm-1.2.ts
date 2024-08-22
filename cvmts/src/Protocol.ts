@@ -76,11 +76,14 @@ export interface IProtocolHandlers {
 
 // Abstracts away all of the CollabVM protocol details
 export interface IProtocol {
+	// don't implement this yourself, extend from ProtocolBase
 	init(u: User): void;
 	dispose(): void;
 
 	// Sets handler object.
 	setHandler(handlers: IProtocolHandlers): void;
+
+	// Protocol implementation stuff
 
 	// Parses a single CollabVM protocol message and fires the given handler.
 	// This function does not catch any thrown errors; it is the caller's responsibility
@@ -115,6 +118,25 @@ export interface IProtocol {
 
 	// Sends a rectangle update to the user.
 	sendScreenUpdate(rect: ScreenRect): void;
+}
+
+// base mixin for all protocols to use
+export class ProtocolBase {
+	protected handlers: IProtocolHandlers | null = null;
+	protected user: User | null = null;
+
+	init(u: User): void {
+		this.user = u;
+	}
+
+	dispose(): void {
+		this.user = null;
+		this.handlers = null;
+	}
+
+	setHandler(handlers: IProtocolHandlers): void {
+		this.handlers = handlers;
+	}
 }
 
 // Holds protocol factories.

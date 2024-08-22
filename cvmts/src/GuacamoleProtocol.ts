@@ -1,30 +1,14 @@
 import pino from 'pino';
-import { IProtocol, IProtocolHandlers, ListEntry, ProtocolAddUser, ProtocolChatHistory, ScreenRect } from './Protocol';
+import { IProtocol, IProtocolHandlers, ListEntry, ProtocolAddUser, ProtocolBase, ProtocolChatHistory, ScreenRect } from './Protocol';
 import { User } from './User';
 
 import * as cvm from '@cvmts/cvm-rs';
 
 // CollabVM protocol implementation for Guacamole.
-export class GuacamoleProtocol implements IProtocol {
-	private handlers: IProtocolHandlers | null = null;
+export class GuacamoleProtocol extends ProtocolBase implements IProtocol {
 	private logger = pino({
 		name: 'CVMTS.GuacamoleProtocol'
 	});
-
-	protected user: User | null = null;
-
-	init(u: User): void {
-		this.user = u;
-	}
-
-	dispose(): void {
-		this.user = null;
-		this.handlers = null;
-	}
-
-	setHandler(handlers: IProtocolHandlers): void {
-		this.handlers = handlers;
-	}
 
 	private __processMessage_admin(decodedElements: string[]): boolean {
 		switch (decodedElements[1]) {
