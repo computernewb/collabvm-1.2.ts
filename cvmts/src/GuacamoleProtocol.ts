@@ -326,6 +326,20 @@ export class GuacamoleProtocol extends ProtocolBase implements IProtocol {
 		this.user?.sendMsg(cvm.guacEncode('vote', '3', ms.toString()));
 	}
 
+	private getTurnQueueBase(turnTime: number, users: string[]): string[] {
+		return ['turn', turnTime.toString(), users.length.toString(), ...users];
+	}
+
+	sendTurnQueue(turnTime: number, users: string[]): void {
+		this.user?.sendMsg(cvm.guacEncode(...this.getTurnQueueBase(turnTime, users)));
+	}
+
+	sendTurnQueueWaiting(turnTime: number, users: string[], waitTime: number): void {
+		let queue = this.getTurnQueueBase(turnTime, users);
+		queue.push(waitTime.toString());
+		this.user?.sendMsg(cvm.guacEncode(...queue));
+	}
+
 	sendScreenResize(width: number, height: number): void {
 		this.user?.sendMsg(cvm.guacEncode('size', '0', width.toString(), height.toString()));
 	}

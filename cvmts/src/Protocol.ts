@@ -136,6 +136,9 @@ export interface IProtocol {
 	
 	sendListResponse(list: ListEntry[]): void;
 
+	sendTurnQueue(turnTime: number, users: string[]): void;
+	sendTurnQueueWaiting(turnTime: number, users: string[], waitTime: number): void
+
 	sendVoteStarted(): void;
 	sendVoteStats(msLeft: number, nrYes: number, nrNo: number): void;
 	sendVoteEnded(): void;

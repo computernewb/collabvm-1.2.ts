@@ -1,7 +1,6 @@
 import IConfig from './IConfig.js';
 import * as Utilities from './Utilities.js';
 import { User, Rank } from './User.js';
-import * as cvm from '@cvmts/cvm-rs';
 // I hate that you have to do it like this
 import CircularBuffer from 'mnemonist/circular-buffer.js';
 import Queue from 'mnemonist/queue.js';
@@ -801,17 +800,20 @@ export default class CollabVMServer implements IProtocolHandlers {
 
 	private sendTurnUpdate(client?: User) {
 		var turnQueueArr = this.TurnQueue.toArray();
-		var turntime;
+		var turntime: number;
 		if (this.indefiniteTurn === null) turntime = this.TurnTime * 1000;
 		else turntime = 9999999999;
-		var arr = ['turn', turntime.toString(), this.TurnQueue.size.toString()];
-		// @ts-ignore
-		this.TurnQueue.forEach((c) => arr.push(c.username));
+		var users: string[] = [];
+
+		this.TurnQueue.forEach((c) => users.push(c.username!));
+
 		var currentTurningUser = this.TurnQueue.peek();
+
 		if (client) {
-			client.sendMsg(cvm.guacEncode(...arr));
+			client.protocol.sendTurnQueue(turntime, users);
 			return;
 		}
+
 		this.clients
 			.filter((c) => c !== currentTurningUser && c.connectedToNode)
 			.forEach((c) => {
@@ -819,12 +821,12 @@ export default class CollabVMServer implements IProtocolHandlers {
 					var time;
 					if (this.indefiniteTurn === null) time = this.TurnTime * 1000 + (turnQueueArr.indexOf(c) - 1) * this.Config.collabvm.turnTime * 1000;
 					else time = 9999999999;
-					c.sendMsg(cvm.guacEncode(...arr, time.toString()));
+					c.protocol.sendTurnQueueWaiting(turntime, users, time);
 				} else {
-					c.sendMsg(cvm.guacEncode(...arr));
+					c.protocol.sendTurnQueue(turntime, users);
 				}
 			});
-		if (currentTurningUser) currentTurningUser.sendMsg(cvm.guacEncode(...arr));
+		if (currentTurningUser) currentTurningUser.protocol.sendTurnQueue(turntime, users);
 	}
 	private nextTurn() {
 		clearInterval(this.TurnInterval);
