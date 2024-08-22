@@ -1,5 +1,5 @@
 import pino from 'pino';
-import { IProtocol, IProtocolHandlers, ListEntry, ProtocolAddUser, ProtocolBase, ProtocolChatHistory, ScreenRect } from './Protocol';
+import { IProtocol, IProtocolHandlers, ListEntry, ProtocolAddUser, ProtocolBase, ProtocolChatHistory, ScreenRect } from './Protocol.js';
 import { User } from './User';
 
 import * as cvm from '@cvmts/cvm-rs';
@@ -290,7 +290,7 @@ export class GuacamoleProtocol extends ProtocolBase implements IProtocol {
 
 		this.user?.sendMsg(cvm.guacEncode(...arr));
 	}
-	
+
 	sendVoteStarted(): void {
 		this.user?.sendMsg(cvm.guacEncode('vote', '0'));
 	}
