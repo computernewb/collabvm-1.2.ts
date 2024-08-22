@@ -18,6 +18,7 @@ import { BanManager } from './BanManager.js';
 import { QemuVMShim } from './vm/qemu.js';
 import { TheProtocolManager } from './Protocol.js';
 import { GuacamoleProtocol } from './GuacamoleProtocol.js';
+import { BinRectsProtocol } from './BinRectsProtocol.js';
 
 let logger = pino();
 
@@ -99,8 +100,9 @@ async function start() {
 	process.on('SIGINT', async () => await stop());
 	process.on('SIGTERM', async () => await stop());
 
-	// Register protocol(s)
+	// Register protocol(s) that the server supports
 	TheProtocolManager.registerProtocol("guacamole", () => new GuacamoleProtocol);
+	TheProtocolManager.registerProtocol("binary1", () => new BinRectsProtocol);
 
 	await VM.Start();
 	// Start up the server

@@ -11,10 +11,15 @@ export class GuacamoleProtocol implements IProtocol {
 		name: 'CVMTS.GuacamoleProtocol'
 	});
 
-	private user: User | null = null;
+	protected user: User | null = null;
 
 	init(u: User): void {
 		this.user = u;
+	}
+
+	dispose(): void {
+		this.user = null;
+		this.handlers = null;
 	}
 
 	setHandler(handlers: IProtocolHandlers): void {
@@ -235,6 +240,26 @@ export class GuacamoleProtocol implements IProtocol {
 		} else {
 			this.user?.sendMsg(cvm.guacEncode('login', '0', message!));
 		}
+	}
+
+	sendAdminLoginResponse(ok: boolean, modPerms: number | undefined): void {
+		if (ok) {
+			if (modPerms == undefined) {
+				this.user?.sendMsg(cvm.guacEncode('admin', '0', '1'));
+			} else {
+				this.user?.sendMsg(cvm.guacEncode('admin', '0', '3', modPerms.toString()));
+			}
+		} else {
+			this.user?.sendMsg(cvm.guacEncode('admin', '0', '0'));
+		}
+	}
+
+	sendAdminMonitorResponse(output: string): void {
+		this.user?.sendMsg(cvm.guacEncode('admin', '2', output));
+	}
+
+	sendAdminIPResponse(username: string, ip: string): void {
+		this.user?.sendMsg(cvm.guacEncode('admin', '19', username, ip));
 	}
 
 	sendChatMessage(username: string, message: string): void {

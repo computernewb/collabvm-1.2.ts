@@ -211,6 +211,8 @@ export default class CollabVMServer implements IProtocolHandlers {
 
 		this.clients.splice(clientIndex, 1);
 
+		user.protocol.dispose();
+
 		this.logger.info(`Disconnect From ${user.IP.address}${user.username ? ` with username ${user.username}` : ''}`);
 		if (!user.username) return;
 		if (this.TurnQueue.toArray().indexOf(user) !== -1) {
@@ -273,9 +275,9 @@ export default class CollabVMServer implements IProtocolHandlers {
 				// Set rank
 				user.rank = res.rank;
 				if (user.rank === Rank.Admin) {
-					user.sendMsg(cvm.guacEncode('admin', '0', '1'));
+					user.protocol.sendAdminLoginResponse(true, undefined);
 				} else if (user.rank === Rank.Moderator) {
-					user.sendMsg(cvm.guacEncode('admin', '0', '3', this.ModPerms.toString()));
+					user.protocol.sendAdminLoginResponse(true, this.ModPerms);
 				}
 				this.clients.forEach((c) => c.sendMsg(cvm.guacEncode('adduser', '1', user.username!, user.rank.toString())));
 			} else {
@@ -303,12 +305,11 @@ export default class CollabVMServer implements IProtocolHandlers {
 		for (let cap of capability) {
 			switch (cap) {
 				// binary 1.0 (msgpack rects)
-				// TODO: re-enable once binary1.0 is enabled
 				case 'bin':
-					this.logger.info('Binary 1.0 protocol is currently disabled for refactoring');
-					//user.Capabilities.bin = true;
-					//user.protocol = TheProtocolManager.createProtocol('binary1', user);
-					//user.protocol.setHandler(this as IProtocolHandlers);
+					user.Capabilities.bin = true;
+					user.protocol.dispose();
+					user.protocol = TheProtocolManager.createProtocol('binary1', user);
+					user.protocol.setHandler(this as IProtocolHandlers);
 					break;
 				default:
 					break;
@@ -513,12 +514,12 @@ export default class CollabVMServer implements IProtocolHandlers {
 
 		if (pwdHash === this.Config.collabvm.adminpass) {
 			user.rank = Rank.Admin;
-			user.sendMsg(cvm.guacEncode('admin', '0', '1'));
+			user.protocol.sendAdminLoginResponse(true, undefined);
 		} else if (this.Config.collabvm.moderatorEnabled && pwdHash === this.Config.collabvm.modpass) {
 			user.rank = Rank.Moderator;
-			user.sendMsg(cvm.guacEncode('admin', '0', '3', this.ModPerms.toString()));
+			user.protocol.sendAdminLoginResponse(true, this.ModPerms);
 		} else {
-			user.sendMsg(cvm.guacEncode('admin', '0', '0'));
+			user.protocol.sendAdminLoginResponse(false, undefined);
 			return;
 		}
 
@@ -526,14 +527,22 @@ export default class CollabVMServer implements IProtocolHandlers {
 			await this.SendFullScreenWithSize(user);
 		}
 
-		this.clients.forEach((c) => c.sendMsg(cvm.guacEncode('adduser', '1', user.username!, user.rank.toString())));
+		// Update rank
+		this.clients.forEach((c) =>
+			c.protocol.sendAddUser([
+				{
+					username: user.username!,
+					rank: user.rank
+				}
+			])
+		);
 	}
 
 	async onAdminMonitor(user: User, node: string, command: string) {
 		if (user.rank !== Rank.Admin) return;
 		if (node !== this.Config.collabvm.node) return;
 		let output = await this.VM.MonitorCommand(command);
-		user.sendMsg(cvm.guacEncode('admin', '2', String(output)));
+		user.protocol.sendAdminMonitorResponse(String(output));
 	}
 
 	onAdminRestore(user: User, node: string): void {
@@ -605,7 +614,7 @@ export default class CollabVMServer implements IProtocolHandlers {
 		if (user.rank !== Rank.Admin && (user.rank !== Rank.Moderator || !this.Config.collabvm.moderatorPermissions.grabip)) return;
 		let target = this.clients.find((c) => c.username === username);
 		if (!target) return;
-		user.sendMsg(cvm.guacEncode('admin', '19', username, target.IP.address));
+		user.protocol.sendAdminIPResponse(username, target.IP.address);
 	}
 
 	onAdminBypassTurn(user: User): void {

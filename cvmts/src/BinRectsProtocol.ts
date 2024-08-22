@@ -1,6 +1,16 @@
 import * as msgpack from 'msgpackr';
 import { CollabVMProtocolMessage, CollabVMProtocolMessageType } from '@cvmts/collab-vm-1.2-binary-protocol';
+import { GuacamoleProtocol } from './GuacamoleProtocol.js';
 
-// TODO: reimplement binrects protocol
-// we can just create/proxy a GuacamoleProtocol manually,
-// and for the rects do our own thing
+import { ScreenRect } from './Protocol';
+
+export class BinRectsProtocol extends GuacamoleProtocol {
+	sendScreenUpdate(rect: ScreenRect): void {
+		let bmsg: CollabVMProtocolMessage = {
+			type: CollabVMProtocolMessageType.rect,
+			rect: rect
+		};
+
+		this.user?.socket.sendBinary(msgpack.encode(bmsg));
+	}
+}

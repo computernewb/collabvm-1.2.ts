@@ -77,6 +77,7 @@ export interface IProtocolHandlers {
 // Abstracts away all of the CollabVM protocol details
 export interface IProtocol {
 	init(u: User): void;
+	dispose(): void;
 
 	// Sets handler object.
 	setHandler(handlers: IProtocolHandlers): void;
@@ -97,6 +98,10 @@ export interface IProtocol {
 	sendConnectOKResponse(votes: boolean): void;
 
 	sendLoginResponse(ok: boolean, message: string | undefined): void;
+
+	sendAdminLoginResponse(ok: boolean, modPerms: number | undefined): void;
+	sendAdminMonitorResponse(output: string): void;
+	sendAdminIPResponse(username: string, ip: string): void;
 
 	sendChatMessage(username: '' | string, message: string): void;
 	sendChatHistoryMessage(history: ProtocolChatHistory[]): void;
