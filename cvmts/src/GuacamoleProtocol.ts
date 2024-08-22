@@ -24,85 +24,96 @@ export class GuacamoleProtocol implements IProtocol {
 	private __processMessage_admin(decodedElements: string[]): boolean {
 		switch (decodedElements[1]) {
 			case '2':
-				// Login
 				if (decodedElements.length !== 3) return false;
 				this.handlers?.onAdminLogin(this.user!, decodedElements[2]);
 				break;
 			case '5':
-				// QEMU Monitor
 				if (decodedElements.length !== 4) return false;
-				// [2] node
-				// [3] cmd
+				this.handlers?.onAdminMonitor(this.user!, decodedElements[2], decodedElements[3]);
 				break;
 			case '8':
-				// Restore
+				if (decodedElements.length !== 3) return false;
+				this.handlers?.onAdminRestore(this.user!, decodedElements[2]);
 				break;
 			case '10':
-				// Reboot
 				if (decodedElements.length !== 3) return false;
-				// [2] - node
+				this.handlers?.onAdminReboot(this.user!, decodedElements[2]);
 				break;
 			case '12':
-			// Ban
-
+				if (decodedElements.length < 3) return false;
+				this.handlers?.onAdminBanUser(this.user!, decodedElements[2]);
 			case '13':
-				// Force Vote
-				if (decodedElements.length !== 3) return false;
-
+				{
+					if (decodedElements.length !== 3) return false;
+					let choice = parseInt(decodedElements[2]);
+					if (choice == undefined) return false;
+					this.handlers?.onAdminForceVote(this.user!, choice);
+				}
 				break;
 			case '14':
-				// Mute
-				if (decodedElements.length !== 4) return false;
+				{
+					if (decodedElements.length !== 4) return false;
+					let temporary = true;
+					if (decodedElements[3] == '0') temporary = true;
+					else if (decodedElements[3] == '1') temporary = false;
+					else return false;
+					this.handlers?.onAdminMuteUser(this.user!, decodedElements[2], temporary);
+				}
 				break;
 			case '15':
-			// Kick
-			case '16':
-				// End turn
 				if (decodedElements.length !== 3) return false;
+				this.handlers?.onAdminKickUser(this.user!, decodedElements[2]);
+				break;
+			case '16':
+				if (decodedElements.length !== 3) return false;
+				this.handlers?.onAdminEndTurn(this.user!, decodedElements[2]);
 				break;
 			case '17':
-				// Clear turn queue
 				if (decodedElements.length !== 3) return false;
-				// [2] - node
+				this.handlers?.onAdminClearQueue(this.user!, decodedElements[2]);
 				break;
 			case '18':
-				// Rename user
 				if (decodedElements.length !== 4) return false;
-
-				// [2] - username
-				// [3] - new username
+				this.handlers?.onAdminRename(this.user!, decodedElements[2], decodedElements[3]);
 				break;
 			case '19':
-				// Get IP
 				if (decodedElements.length !== 3) return false;
+				this.handlers?.onAdminGetIP(this.user!, decodedElements[2]);
 				break;
 			case '20':
-				// Steal turn
+				this.handlers?.onAdminBypassTurn(this.user!);
 				break;
 			case '21':
-				// XSS
 				if (decodedElements.length !== 3) return false;
-				// [2] message
+				this.handlers?.onAdminRawMessage(this.user!, decodedElements[2]);
 				break;
 			case '22':
-				// Toggle turns
-				if (decodedElements.length !== 3) return false;
-				// [2] 0 == disable 1 == enable
+				{
+					// Toggle turns
+					if (decodedElements.length !== 3) return false;
+					let enabled = true;
+					if (decodedElements[2] == '0') enabled = false;
+					else if (decodedElements[2] == '1') enabled = true;
+					else return false;
+					this.handlers?.onAdminToggleTurns(this.user!, enabled);
+				}
 				break;
 			case '23':
-				// Indefinite turn
+				this.handlers?.onAdminIndefiniteTurn(this.user!);
 				break;
 			case '24':
-				// Hide screen
-
-				if (decodedElements.length !== 3) return false;
-				// 0 - hide
-				// 1 - unhide
-
+				{
+					if (decodedElements.length !== 3) return false;
+					let show = true;
+					if (decodedElements[2] == '0') show = false;
+					else if (decodedElements[2] == '1') show = true;
+					else return false;
+					this.handlers?.onAdminHideScreen(this.user!, show);
+				}
 				break;
 			case '25':
 				if (decodedElements.length !== 3) return false;
-				// [2]
+				this.handlers?.onAdminSystemMessage(this.user!, decodedElements[2]);
 				break;
 		}
 		return true;
@@ -155,7 +166,7 @@ export class GuacamoleProtocol implements IProtocol {
 				let forfeit = false;
 				if (decodedElements.length > 2) return false;
 				if (decodedElements.length == 1) {
-					 forfeit = false;
+					forfeit = false;
 				} else {
 					if (decodedElements[1] == '0') forfeit = true;
 					else if (decodedElements[1] == '1') forfeit = false;

@@ -47,10 +47,27 @@ export interface IProtocolHandlers {
 	onConnect(user: User, node: string): void;
 	onView(user: User, node: string, viewMode: number): void;
 
+	// Admin handlers
 	onAdminLogin(user: User, password: string): void;
 	onAdminMonitor(user: User, node: string, command: string): void;
+	onAdminRestore(user: User, node: string): void;
+	onAdminReboot(user: User, node: string): void;
+	onAdminBanUser(user: User, username: string): void;
+	onAdminForceVote(user: User, choice: number): void;
+	onAdminMuteUser(user: User, username: string, temporary: boolean): void;
+	onAdminKickUser(user: User, username: string): void;
+	onAdminEndTurn(user: User, username: string): void;
+	onAdminClearQueue(user: User, node: string): void;
+	onAdminRename(user: User, target: string, newName: string): void;
+	onAdminGetIP(user: User, username: string): void;
+	onAdminBypassTurn(user: User): void;
+	onAdminRawMessage(user: User, message: string): void;
+	onAdminToggleTurns(user: User, enabled: boolean): void;
+	onAdminIndefiniteTurn(user: User): void;
+	onAdminHideScreen(user: User, show: boolean): void;
+	onAdminSystemMessage(user: User, message: string): void;
 
-	onRename(user: User, newName: string|undefined): void;
+	onRename(user: User, newName: string | undefined): void;
 	onChat(user: User, message: string): void;
 
 	onKey(user: User, keysym: number, pressed: boolean): void;
