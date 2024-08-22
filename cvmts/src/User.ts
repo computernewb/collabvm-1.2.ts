@@ -8,7 +8,8 @@ import { NetworkClient } from './net/NetworkClient.js';
 import { CollabVMCapabilities } from '@cvmts/collab-vm-1.2-binary-protocol';
 import pino from 'pino';
 import { BanManager } from './BanManager.js';
-import { IProtocol, TheProtocolManager } from './protocol/Protocol.js';
+import { IProtocol } from './protocol/Protocol.js';
+import { TheProtocolManager } from './protocol/Manager.js';
 
 export class User {
 	socket: NetworkClient;

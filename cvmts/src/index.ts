@@ -16,7 +16,7 @@ import pino from 'pino';
 import { Database } from './Database.js';
 import { BanManager } from './BanManager.js';
 import { QemuVMShim } from './vm/qemu.js';
-import { TheProtocolManager } from './protocol/Protocol.js';
+import { TheProtocolManager } from './protocol/Manager.js';
 import { GuacamoleProtocol } from './protocol/GuacamoleProtocol.js';
 import { BinRectsProtocol } from './protocol/BinRectsProtocol.js';
 

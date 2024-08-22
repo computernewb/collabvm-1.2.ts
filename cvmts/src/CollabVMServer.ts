@@ -17,7 +17,8 @@ import { ReaderModel } from '@maxmind/geoip2-node';
 import { Size, Rect } from './Utilities.js';
 import pino from 'pino';
 import { BanManager } from './BanManager.js';
-import { IProtocolHandlers, ListEntry, ProtocolAddUser, ProtocolFlag, ProtocolRenameStatus, ProtocolUpgradeCapability, TheProtocolManager } from './protocol/Protocol.js';
+import { IProtocolMessageHandler, ListEntry, ProtocolAddUser, ProtocolFlag, ProtocolRenameStatus, ProtocolUpgradeCapability } from './protocol/Protocol.js';
+import { TheProtocolManager } from './protocol/Manager.js';
 
 // Instead of strange hacks we can just use nodejs provided
 // import.meta properties, which have existed since LTS if not before
@@ -37,7 +38,7 @@ type VoteTally = {
 	no: number;
 };
 
-export default class CollabVMServer implements IProtocolHandlers {
+export default class CollabVMServer implements IProtocolMessageHandler {
 	private Config: IConfig;
 
 	private clients: User[];
@@ -184,7 +185,7 @@ export default class CollabVMServer implements IProtocolHandlers {
 		user.socket.on('disconnect', () => this.connectionClosed(user));
 
 		// Set ourselves as the handler
-		user.protocol.setHandler(this as IProtocolHandlers);
+		user.protocol.setHandler(this as IProtocolMessageHandler);
 
 		if (this.Config.auth.enabled) {
 			user.protocol.sendAuth(this.Config.auth.apiEndpoint);
@@ -223,7 +224,7 @@ export default class CollabVMServer implements IProtocolHandlers {
 		this.clients.forEach((c) => c.protocol.sendRemUser([user.username!]));
 	}
 
-	// IProtocolHandlers
+	// Protocol message handlers
 
 	// does auth check
 	private authCheck(user: User, guestPermission: boolean) {
@@ -318,7 +319,7 @@ export default class CollabVMServer implements IProtocolHandlers {
 					user.Capabilities.bin = true;
 					user.protocol.dispose();
 					user.protocol = TheProtocolManager.createProtocol('binary1', user);
-					user.protocol.setHandler(this as IProtocolHandlers);
+					user.protocol.setHandler(this as IProtocolMessageHandler);
 					break;
 				default:
 					break;
@@ -706,11 +707,10 @@ export default class CollabVMServer implements IProtocolHandlers {
 		this.clients.forEach((c) => c.protocol.sendChatMessage('', message));
 	}
 
-	// end IProtocolHandlers
+	// end protocol message handlers
 
 	getUsernameList(): string[] {
 		var arr: string[] = [];
-
 		this.clients.filter((c) => c.username).forEach((c) => arr.push(c.username!));
 		return arr;
 	}
