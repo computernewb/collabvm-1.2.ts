@@ -3,13 +3,13 @@ import { NetworkServer } from '../NetworkServer.js';
 import EventEmitter from 'events';
 import { WebSocketServer, WebSocket } from 'ws';
 import internal from 'stream';
-import IConfig from '../IConfig.js';
+import IConfig from '../../IConfig.js';
 import { isIP } from 'net';
-import { IPDataManager } from '../IPData.js';
+import { IPDataManager } from '../../IPData.js';
 import WSClient from './WSClient.js';
-import { User } from '../User.js';
+import { User } from '../../User.js';
 import pino from 'pino';
-import { BanManager } from '../BanManager.js';
+import { BanManager } from '../../BanManager.js';
 
 export default class WSServer extends EventEmitter implements NetworkServer {
 	private httpServer: http.Server;

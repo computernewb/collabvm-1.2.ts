@@ -4,12 +4,12 @@
 import EventEmitter from 'events';
 import { NetworkServer } from '../NetworkServer.js';
 import { Server, Socket } from 'net';
-import IConfig from '../IConfig.js';
+import IConfig from '../../IConfig.js';
 import TCPClient from './TCPClient.js';
-import { IPDataManager } from '../IPData.js';
-import { User } from '../User.js';
+import { IPDataManager } from '../../IPData.js';
+import { User } from '../../User.js';
 import pino from 'pino';
-import { BanManager } from '../BanManager.js';
+import { BanManager } from '../../BanManager.js';
 
 export default class TCPServer extends EventEmitter implements NetworkServer {
 	listener: Server;

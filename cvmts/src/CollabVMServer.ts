@@ -17,7 +17,7 @@ import { ReaderModel } from '@maxmind/geoip2-node';
 import { Size, Rect } from './Utilities.js';
 import pino from 'pino';
 import { BanManager } from './BanManager.js';
-import { IProtocolHandlers, ListEntry, ProtocolAddUser, ProtocolFlag, ProtocolRenameStatus, ProtocolUpgradeCapability, TheProtocolManager } from './Protocol.js';
+import { IProtocolHandlers, ListEntry, ProtocolAddUser, ProtocolFlag, ProtocolRenameStatus, ProtocolUpgradeCapability, TheProtocolManager } from './protocol/Protocol.js';
 
 // Instead of strange hacks we can just use nodejs provided
 // import.meta properties, which have existed since LTS if not before

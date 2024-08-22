@@ -1,6 +1,6 @@
 import pino from 'pino';
 import { IProtocol, IProtocolHandlers, ListEntry, ProtocolAddUser, ProtocolBase, ProtocolChatHistory, ProtocolFlag, ProtocolRenameStatus, ProtocolUpgradeCapability, ScreenRect } from './Protocol.js';
-import { Rank, User } from './User';
+import { Rank, User } from '../User.js';
 
 import * as cvm from '@cvmts/cvm-rs';
 
