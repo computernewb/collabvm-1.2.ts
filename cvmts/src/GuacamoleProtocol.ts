@@ -290,6 +290,22 @@ export class GuacamoleProtocol extends ProtocolBase implements IProtocol {
 
 		this.user?.sendMsg(cvm.guacEncode(...arr));
 	}
+	
+	sendVoteStarted(): void {
+		this.user?.sendMsg(cvm.guacEncode('vote', '0'));
+	}
+
+	sendVoteStats(msLeft: number, nrYes: number, nrNo: number): void {
+		this.user?.sendMsg(cvm.guacEncode('vote', '1', msLeft.toString(), nrYes.toString(), nrNo.toString()));
+	}
+
+	sendVoteEnded(): void {
+		this.user?.sendMsg(cvm.guacEncode('vote', '2'));
+	}
+
+	sendVoteCooldown(ms: number): void {
+		this.user?.sendMsg(cvm.guacEncode('vote', '3', ms.toString()));
+	}
 
 	sendScreenResize(width: number, height: number): void {
 		this.user?.sendMsg(cvm.guacEncode('size', '0', width.toString(), height.toString()));

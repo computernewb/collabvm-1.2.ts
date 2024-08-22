@@ -359,9 +359,10 @@ export default class CollabVMServer implements IProtocolHandlers {
 					if (!this.authCheck(user, this.Config.auth.guestPermissions.callForReset)) return;
 
 					if (this.voteCooldown !== 0) {
-						user.sendMsg(cvm.guacEncode('vote', '3', this.voteCooldown.toString()));
+						user.protocol.sendVoteCooldown(this.voteCooldown);
 						return;
 					}
+
 					this.startVote();
 					this.clients.forEach((c) => c.protocol.sendChatMessage('', `${user.username} has started a vote to reset the VM.`));
 				}
@@ -918,7 +919,7 @@ export default class CollabVMServer implements IProtocolHandlers {
 	startVote() {
 		if (this.voteInProgress) return;
 		this.voteInProgress = true;
-		this.clients.forEach((c) => c.sendMsg(cvm.guacEncode('vote', '0')));
+		this.clients.forEach((c) => c.protocol.sendVoteStarted());
 		this.voteTime = this.Config.collabvm.voteTime;
 		this.voteInterval = setInterval(() => {
 			this.voteTime--;
@@ -933,7 +934,7 @@ export default class CollabVMServer implements IProtocolHandlers {
 		this.voteInProgress = false;
 		clearInterval(this.voteInterval);
 		var count = this.getVoteCounts();
-		this.clients.forEach((c) => c.sendMsg(cvm.guacEncode('vote', '2')));
+		this.clients.forEach((c) => c.protocol.sendVoteEnded());
 		if (result === true || (result === undefined && count.yes >= count.no)) {
 			this.clients.forEach((c) => c.protocol.sendChatMessage('', 'The vote to reset the VM has won.'));
 			this.VM.Reset();
@@ -953,9 +954,9 @@ export default class CollabVMServer implements IProtocolHandlers {
 	sendVoteUpdate(client?: User) {
 		if (!this.voteInProgress) return;
 		var count = this.getVoteCounts();
-		var msg = cvm.guacEncode('vote', '1', (this.voteTime * 1000).toString(), count.yes.toString(), count.no.toString());
-		if (client) client.sendMsg(msg);
-		else this.clients.forEach((c) => c.sendMsg(msg));
+
+		if (client) client.protocol.sendVoteStats(this.voteTime * 1000, count.yes, count.no);
+		else this.clients.forEach((c) => c.protocol.sendVoteStats(this.voteTime * 1000, count.yes, count.no));
 	}
 
 	getVoteCounts(): VoteTally {

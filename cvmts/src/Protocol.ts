@@ -114,6 +114,11 @@ export interface IProtocol {
 
 	sendListResponse(list: ListEntry[]): void;
 
+	sendVoteStarted(): void;
+	sendVoteStats(msLeft: number, nrYes: number, nrNo: number): void;
+	sendVoteEnded(): void;
+	sendVoteCooldown(ms: number): void;
+
 	sendScreenResize(width: number, height: number): void;
 
 	// Sends a rectangle update to the user.
