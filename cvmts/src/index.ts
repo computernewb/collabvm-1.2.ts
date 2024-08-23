@@ -3,18 +3,19 @@ import IConfig from './IConfig.js';
 import * as fs from 'fs';
 import CollabVMServer from './CollabVMServer.js';
 
-import { QemuVM, QemuVmDefinition } from '@computernewb/superqemu';
+import { QemuVmDefinition } from '@computernewb/superqemu';
 
 import AuthManager from './AuthManager.js';
 import WSServer from './WebSocket/WSServer.js';
 import { User } from './User.js';
 import TCPServer from './TCP/TCPServer.js';
-import VM from './VM.js';
-import VNCVM from './VNCVM/VNCVM.js';
+import VM from './vm/interface.js';
+import VNCVM from './vm/vnc/VNCVM.js';
 import GeoIPDownloader from './GeoIPDownloader.js';
 import pino from 'pino';
 import { Database } from './Database.js';
 import { BanManager } from './BanManager.js';
+import { QemuVMShim } from './vm/qemu.js';
 
 let logger = pino();
 
@@ -80,7 +81,7 @@ async function start() {
 				vncPort: Config.qemu.vncPort,
 			};
 
-			VM = new QemuVM(def);
+			VM = new QemuVMShim(def);
 			break;
 		}
 		case 'vncvm': {

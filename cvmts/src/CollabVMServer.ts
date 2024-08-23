@@ -12,12 +12,12 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import AuthManager from './AuthManager.js';
 import { JPEGEncoder } from './JPEGEncoder.js';
-import VM from './VM.js';
+import VM from './vm/interface.js';
 import { ReaderModel } from '@maxmind/geoip2-node';
 import * as msgpack from 'msgpackr';
 import { CollabVMProtocolMessage, CollabVMProtocolMessageType } from '@cvmts/collab-vm-1.2-binary-protocol';
 
-import { Size, Rect } from './VMDisplay.js';
+import { Size, Rect } from './Utilities.js';
 import pino from 'pino';
 import { BanManager } from './BanManager.js';
 
@@ -123,33 +123,32 @@ export default class CollabVMServer {
 
 		this.VM = vm;
 
-		// this probably should be made general at some point,
-		// and the VM interface allowed to return a nullable display
-		// but i cba
 		let self = this;
-		if (config.vm.type == 'qemu') {
-			(vm as QemuVM).on('statechange', (newState: VMState) => {
-				if (newState == VMState.Started) {
-					self.logger.info('VM started');
-					// well aware this sucks but whatever
-					self.VM.GetDisplay().on('resize', (size: Size) => self.OnDisplayResized(size));
-					self.VM.GetDisplay().on('rect', (rect: Rect) => self.OnDisplayRectangle(rect));
-					self.VM.GetDisplay().on('frame', () => self.OnDisplayFrame());
+
+		vm.Events().on('statechange', (newState: VMState) => {
+			if (newState == VMState.Started) {
+				self.logger.info('VM started');
+
+				// start the display
+				if (self.VM.GetDisplay() == null) {
+					self.VM.StartDisplay();
 				}
 
-				if (newState == VMState.Stopped) {
-					setTimeout(async () => {
-						self.logger.info('restarting VM');
-						await self.VM.Start();
-					}, kRestartTimeout);
-				}
-			});
-		} else {
-			// this sucks too fix this
-			self.VM.GetDisplay().on('resize', (size: Size) => self.OnDisplayResized(size));
-			self.VM.GetDisplay().on('rect', (rect: Rect) => self.OnDisplayRectangle(rect));
-			self.VM.GetDisplay().on('frame', () => self.OnDisplayFrame());
-		}
+				self.VM.GetDisplay()?.on('connected', () => {
+					// well aware this sucks but whatever
+					self.VM.GetDisplay()?.on('resize', (size: Size) => self.OnDisplayResized(size));
+					self.VM.GetDisplay()?.on('rect', (rect: Rect) => self.OnDisplayRectangle(rect));
+					self.VM.GetDisplay()?.on('frame', () => self.OnDisplayFrame());
+				});
+			}
+
+			if (newState == VMState.Stopped) {
+				setTimeout(async () => {
+					self.logger.info('restarting VM');
+					await self.VM.Start();
+				}, kRestartTimeout);
+			}
+		});
 
 		// authentication manager
 		this.auth = auth;
@@ -681,7 +680,8 @@ export default class CollabVMServer {
 									break;
 								case '1':
 									this.screenHidden = false;
-									let displaySize = this.VM.GetDisplay().Size();
+									let displaySize = this.VM.GetDisplay()?.Size();
+									if (displaySize == undefined) return;
 
 									let encoded = await this.MakeRectData({
 										x: 0,
@@ -888,8 +888,7 @@ export default class CollabVMServer {
 
 		let promises: Promise<void>[] = [];
 
-		for(let rect of self.rectQueue)
-			promises.push(doRect(rect));
+		for (let rect of self.rectQueue) promises.push(doRect(rect));
 
 		this.rectQueue = [];
 
@@ -942,7 +941,7 @@ export default class CollabVMServer {
 		let display = this.VM.GetDisplay();
 
 		// oh well
-		if (!display.Connected()) return '';
+		if (!display?.Connected()) return '';
 
 		let buf = await JPEGEncoder.EncodeThumbnail(display.Buffer(), display.Size());
 		return buf.toString('base64');

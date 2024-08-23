@@ -1,18 +1,13 @@
 import EventEmitter from 'node:events';
+import { Size, Rect } from '../Utilities';
 
-// not great but whatever
-// nodejs-rfb COULD probably export them though.
-export type Size = {
-	width: number;
-	height: number;
-};
 
-export type Rect = {
-	x: number;
-	y: number;
-	width: number;
-	height: number;
-};
+// events:
+//
+// 'connected' -> () -> on successful connection
+// 'resize' -> (w, h) -> done when resize occurs
+// 'rect' -> (x, y, Buffer) -> framebuffer rect (RGBA)
+// 'frame' -> () -> done at end of frame
 
 export interface VMDisplay extends EventEmitter {
 	Connect(): void;
