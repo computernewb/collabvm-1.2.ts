@@ -1,4 +1,4 @@
-import VNCVMDef from './VNCVM/VNCVMDef';
+import VNCVMDef from './vm/vnc/VNCVMDef';
 
 export default interface IConfig {
 	http: {

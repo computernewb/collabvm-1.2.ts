@@ -1,18 +1,5 @@
 import EventEmitter from 'node:events';
-
-// not great but whatever
-// nodejs-rfb COULD probably export them though.
-export type Size = {
-	width: number;
-	height: number;
-};
-
-export type Rect = {
-	x: number;
-	y: number;
-	width: number;
-	height: number;
-};
+import { Size, Rect } from '../Utilities';
 
 export interface VMDisplay extends EventEmitter {
 	Connect(): void;

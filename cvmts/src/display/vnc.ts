@@ -1,35 +1,49 @@
-import EventEmitter from 'events';
-import VNCVMDef from './VNCVMDef';
-import VM from '../VM';
-import { Size, Rect, VMDisplay } from '../VMDisplay';
 import { VncClient } from '@computernewb/nodejs-rfb';
-import { BatchRects, VMState } from '@computernewb/superqemu';
-import { execaCommand } from 'execa';
-import pino from 'pino';
+import { EventEmitter } from 'node:events';
+import { Clamp } from '../Utilities.js';
+import { BatchRects } from './batch.js';
+import { VMDisplay } from './interface.js';
 
-function Clamp(input: number, min: number, max: number) {
-	return Math.min(Math.max(input, min), max);
-}
+import { Size, Rect } from '../Utilities.js';
 
-async function Sleep(ms: number) {
-	return new Promise((resolve) => setTimeout(resolve, ms));
-}
+const kQemuFps = 60;
 
-export default class VNCVM extends EventEmitter implements VM, VMDisplay {
-	def: VNCVMDef;
-	logger;
+export type VncRect = {
+	x: number;
+	y: number;
+	width: number;
+	height: number;
+};
+
+// events:
+//
+// 'resize' -> (w, h) -> done when resize occurs
+// 'rect' -> (x, y, ImageData) -> framebuffer
+// 'frame' -> () -> done at end of frame
+
+// TODO: replace with a non-asshole VNC client
+export class VncDisplay extends EventEmitter implements VMDisplay {
 	private displayVnc = new VncClient({
 		debug: false,
-		fps: 60,
-		encodings: [VncClient.consts.encodings.raw, VncClient.consts.encodings.pseudoDesktopSize]
-	});
-	private vncShouldReconnect: boolean = false;
+		fps: kQemuFps,
 
-	constructor(def: VNCVMDef) {
+		encodings: [
+			VncClient.consts.encodings.raw,
+
+			//VncClient.consts.encodings.pseudoQemuAudio,
+			VncClient.consts.encodings.pseudoDesktopSize
+			// For now?
+			//VncClient.consts.encodings.pseudoCursor
+		]
+	});
+
+	private vncShouldReconnect: boolean = false;
+	private vncConnectOpts: any;
+
+	constructor(vncConnectOpts: any) {
 		super();
-		this.def = def;
-		// TODO: Now that we're using an actual structured logger can we please
-		this.logger = pino({ name: `CVMTS.VNCVM/${this.def.vncHost}:${this.def.vncPort}` });
+
+		this.vncConnectOpts = vncConnectOpts;
 
 		this.displayVnc.on('connectTimeout', () => {
 			this.Reconnect();
@@ -40,7 +54,6 @@ export default class VNCVM extends EventEmitter implements VM, VMDisplay {
 		});
 
 		this.displayVnc.on('disconnect', () => {
-			this.logger.info('Disconnected');
 			this.Reconnect();
 		});
 
@@ -49,10 +62,9 @@ export default class VNCVM extends EventEmitter implements VM, VMDisplay {
 		});
 
 		this.displayVnc.on('firstFrameUpdate', () => {
-			this.logger.info('Connected');
 			// apparently this library is this good.
 			// at least it's better than the two others which exist.
-			this.displayVnc.changeFps(60);
+			this.displayVnc.changeFps(kQemuFps);
 			this.emit('connected');
 
 			this.emit('resize', { width: this.displayVnc.clientWidth, height: this.displayVnc.clientHeight });
@@ -85,15 +97,6 @@ export default class VNCVM extends EventEmitter implements VM, VMDisplay {
 		});
 	}
 
-	async Reset(): Promise<void> {
-		if (this.def.restoreCmd) await execaCommand(this.def.restoreCmd, { shell: true });
-		else {
-			await this.Stop();
-			await Sleep(1000);
-			await this.Start();
-		}
-	}
-
 	private Reconnect() {
 		if (this.displayVnc.connected) return;
 
@@ -102,58 +105,24 @@ export default class VNCVM extends EventEmitter implements VM, VMDisplay {
 		// TODO: this should also give up after a max tries count
 		// if we fail after max tries, emit a event
 
-		this.displayVnc.connect({
-			host: this.def.vncHost,
-			port: this.def.vncPort,
-			path: null
-		});
+		this.displayVnc.connect(this.vncConnectOpts);
 	}
 
-	async Start(): Promise<void> {
-		this.logger.info('Connecting');
-		if (this.def.startCmd) await execaCommand(this.def.startCmd, { shell: true });
-		this.Connect();
-	}
-
-	async Stop(): Promise<void> {
-		this.logger.info('Disconnecting');
-		this.Disconnect();
-		if (this.def.stopCmd) await execaCommand(this.def.stopCmd, { shell: true });
-	}
-
-	async Reboot(): Promise<void> {
-		if (this.def.rebootCmd) await execaCommand(this.def.rebootCmd, { shell: true });
-	}
-
-	async MonitorCommand(command: string): Promise<any> {
-		// TODO: This can maybe run a specified command?
-		return 'This VM does not support monitor commands.';
-	}
-
-	GetDisplay(): VMDisplay {
-		return this;
-	}
-
-	GetState(): VMState {
-		// for now!
-		return VMState.Started;
-	}
-
-	SnapshotsSupported(): boolean {
-		return true;
-	}
-
-	Connect(): void {
+	Connect() {
 		this.vncShouldReconnect = true;
 		this.Reconnect();
 	}
 
-	Disconnect(): void {
+	Disconnect() {
 		this.vncShouldReconnect = false;
 		this.displayVnc.disconnect();
+
+		// bye bye!
+		this.displayVnc.removeAllListeners();
+		this.removeAllListeners();
 	}
 
-	Connected(): boolean {
+	Connected() {
 		return this.displayVnc.connected;
 	}
 
@@ -174,11 +143,11 @@ export default class VNCVM extends EventEmitter implements VM, VMDisplay {
 		};
 	}
 
-	MouseEvent(x: number, y: number, buttons: number): void {
+	MouseEvent(x: number, y: number, buttons: number) {
 		if (this.displayVnc.connected) this.displayVnc.sendPointerEvent(Clamp(x, 0, this.displayVnc.clientWidth), Clamp(y, 0, this.displayVnc.clientHeight), buttons);
 	}
 
-	KeyboardEvent(keysym: number, pressed: boolean): void {
+	KeyboardEvent(keysym: number, pressed: boolean) {
 		if (this.displayVnc.connected) this.displayVnc.sendKeyEvent(keysym, pressed);
 	}
 }

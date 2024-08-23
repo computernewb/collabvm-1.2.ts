@@ -1,5 +1,21 @@
 import { Permissions } from './IConfig';
 
+export type Size = {
+	width: number;
+	height: number;
+};
+
+export type Rect = {
+	x: number;
+	y: number;
+	width: number;
+	height: number;
+};
+
+export function Clamp(input: number, min: number, max: number) {
+	return Math.min(Math.max(input, min), max);
+}
+
 export function Randint(min: number, max: number) {
 	return Math.floor(Math.random() * (max - min) + min);
 }
