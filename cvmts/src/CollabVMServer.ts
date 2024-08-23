@@ -505,8 +505,6 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 		this.VM.GetDisplay()?.MouseEvent(x, y, buttonMask);
 	}
 
-	// TODO: make senders for admin things
-
 	async onAdminLogin(user: User, password: string) {
 		if (!user.LoginRateLimit.request() || !user.username) return;
 		var sha256 = createHash('sha256');
