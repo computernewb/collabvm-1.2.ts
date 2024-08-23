@@ -6,9 +6,9 @@ import CollabVMServer from './CollabVMServer.js';
 import { QemuVmDefinition } from '@computernewb/superqemu';
 
 import AuthManager from './AuthManager.js';
-import WSServer from './WebSocket/WSServer.js';
+import WSServer from './net/ws/WSServer.js';
 import { User } from './User.js';
-import TCPServer from './TCP/TCPServer.js';
+import TCPServer from './net/tcp/TCPServer.js';
 import VM from './vm/interface.js';
 import VNCVM from './vm/vnc/VNCVM.js';
 import GeoIPDownloader from './GeoIPDownloader.js';
@@ -16,6 +16,9 @@ import pino from 'pino';
 import { Database } from './Database.js';
 import { BanManager } from './BanManager.js';
 import { QemuVMShim } from './vm/qemu.js';
+import { TheProtocolManager } from './protocol/Manager.js';
+import { GuacamoleProtocol } from './protocol/GuacamoleProtocol.js';
+import { BinRectsProtocol } from './protocol/BinRectsProtocol.js';
 
 let logger = pino();
 
@@ -97,17 +100,21 @@ async function start() {
 	process.on('SIGINT', async () => await stop());
 	process.on('SIGTERM', async () => await stop());
 
+	// Register protocol(s) that the server supports
+	TheProtocolManager.registerProtocol("guacamole", () => new GuacamoleProtocol);
+	TheProtocolManager.registerProtocol("binary1", () => new BinRectsProtocol);
+
 	await VM.Start();
 	// Start up the server
 	var CVM = new CollabVMServer(Config, VM, banmgr, auth, geoipReader);
 
 	var WS = new WSServer(Config, banmgr);
-	WS.on('connect', (client: User) => CVM.addUser(client));
+	WS.on('connect', (client: User) => CVM.connectionOpened(client));
 	WS.start();
 
 	if (Config.tcp.enabled) {
 		var TCP = new TCPServer(Config, banmgr);
-		TCP.on('connect', (client: User) => CVM.addUser(client));
+		TCP.on('connect', (client: User) => CVM.connectionOpened(client));
 		TCP.start();
 	}
 }
