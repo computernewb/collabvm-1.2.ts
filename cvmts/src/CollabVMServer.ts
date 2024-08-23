@@ -123,8 +123,6 @@ export default class CollabVMServer {
 
 		this.VM = vm;
 
-		// the VM interface should probably be allowed to return a nullable display
-		// but i cba
 		let self = this;
 
 		vm.Events().on('statechange', (newState: VMState) => {
