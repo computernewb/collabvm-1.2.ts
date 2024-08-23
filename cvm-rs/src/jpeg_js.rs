@@ -46,8 +46,8 @@ pub struct JpegInputArgs {
 #[napi(js_name = "jpegEncode")]
 #[allow(unused)]
 pub fn jpeg_encode(env: Env, input: JpegInputArgs) -> napi::Result<napi::JsObject> {
-	let (deferred_resolver, promise) = env.create_deferred::<napi::JsUnknown, _>()?;
-	let buf = input.buffer.into_ref()?;
+	let (deferred_resolver, promise) = env.create_deferred::<napi::JsBuffer, _>()?;
+	let mut buf = input.buffer.into_ref()?;
 
 	// Spawn a task on the rayon pool that encodes the JPEG and fufills the promise
 	// once it is done encoding.
@@ -72,7 +72,9 @@ pub fn jpeg_encode(env: Env, input: JpegInputArgs) -> napi::Result<napi::JsObjec
 			let buffer = env
 				.create_buffer_with_data(vec)
 				.expect("Couldn't create node Buffer, things are probably very broken by this point");
-			Ok(buffer.into_unknown())
+			// no longer need the input buffer
+			buf.unref(env)?;
+			Ok(buffer.into_raw())
 		});
 	});
 
