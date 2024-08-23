@@ -13,7 +13,7 @@
 	"license": "GPL-3.0",
 	"dependencies": {
 		"@computernewb/nodejs-rfb": "^0.3.0",
-		"@computernewb/superqemu": "0.2.4-alpha0",
+		"@computernewb/superqemu": "0.2.4",
 		"@cvmts/cvm-rs": "*",
 		"@maxmind/geoip2-node": "^5.0.0",
 		"execa": "^8.0.1",

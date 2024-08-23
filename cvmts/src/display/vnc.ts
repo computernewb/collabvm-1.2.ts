@@ -6,7 +6,11 @@ import { VMDisplay } from './interface.js';
 
 import { Size, Rect } from '../Utilities.js';
 
-const kQemuFps = 60;
+// the FPS to run the VNC client at
+// This only affects internal polling,
+// if the VNC itself is sending updates at a slower rate
+// the display will be at that slower rate
+const kVncBaseFramerate = 60;
 
 export type VncRect = {
 	x: number;
@@ -15,17 +19,13 @@ export type VncRect = {
 	height: number;
 };
 
-// events:
-//
-// 'resize' -> (w, h) -> done when resize occurs
-// 'rect' -> (x, y, ImageData) -> framebuffer
-// 'frame' -> () -> done at end of frame
 
-// TODO: replace with a non-asshole VNC client
+// TODO: replace with a non-asshole VNC client (prefably one implemented
+// as a part of cvm-rs)
 export class VncDisplay extends EventEmitter implements VMDisplay {
 	private displayVnc = new VncClient({
 		debug: false,
-		fps: kQemuFps,
+		fps: kVncBaseFramerate,
 
 		encodings: [
 			VncClient.consts.encodings.raw,
@@ -64,12 +64,9 @@ export class VncDisplay extends EventEmitter implements VMDisplay {
 		this.displayVnc.on('firstFrameUpdate', () => {
 			// apparently this library is this good.
 			// at least it's better than the two others which exist.
-			this.displayVnc.changeFps(kQemuFps);
+			this.displayVnc.changeFps(kVncBaseFramerate);
 			this.emit('connected');
-
 			this.emit('resize', { width: this.displayVnc.clientWidth, height: this.displayVnc.clientHeight });
-			//this.emit('rect', { x: 0, y: 0, width: this.displayVnc.clientWidth, height: this.displayVnc.clientHeight });
-			this.emit('frame');
 		});
 
 		this.displayVnc.on('desktopSizeChanged', (size: Size) => {
