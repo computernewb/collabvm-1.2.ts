@@ -23,7 +23,7 @@ logger.info('CollabVM Server starting up');
 
 // Parse the config file
 
-let confFile = process.argv[2] ?? 'config.toml';
+let confFile = process.argv[2] || 'config.toml';
 let Config: IConfig;
 
 if (!fs.existsSync(confFile)) {
