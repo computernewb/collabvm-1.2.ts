@@ -58,7 +58,7 @@ pub fn jpeg_encode(env: Env, input: JpegInputArgs) -> napi::Result<napi::JsObjec
 			height: input.height as u32,
 
 			stride: (input.stride as u64 * 4u64) as u32,
-			format: turbojpeg_sys::TJPF_TJPF_RGBA,
+			format: turbojpeg_sys::TJPF_TJPF_BGRA,
 		};
 
 		let vec = COMPRESSOR.with(|lazy| {
