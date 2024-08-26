@@ -1,3 +1,5 @@
+mod vnc; // internal vnc client
+
 mod guac;
 mod guac_js;
 

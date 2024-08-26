@@ -21,5 +21,9 @@ napi =  { version = "2.16.9", features = [ "async", "napi8", "error_anyhow" ] }
 napi-derive = "2.16.11"
 anyhow = "1.0.86"
 
+# vnc
+libvnc-sys = "0.1.4"
+tokio = { version = "1.39.3", features = ["full"] }
+
 [build-dependencies]
 napi-build = "2.1.3"
