@@ -19,6 +19,7 @@ pub enum Address {
 /// Output message
 #[derive(Debug)]
 pub enum VncThreadMessageOutput {
+	Connect,
 	Disconnect,
 	FramebufferUpdate(Vec<Rect>),
 	FramebufferResized(Size),
@@ -195,6 +196,11 @@ impl Client {
 				return false;
 			}
 
+
+
+			let _ = self
+				.out_tx
+				.blocking_send(VncThreadMessageOutput::Connect);
 			return true;
 		}
 	}
@@ -223,6 +229,7 @@ impl Client {
 
 				// Close the connection
 				Err(TryRecvError::Disconnected) => {
+					println!("disconnected from rx");
 					self.cleanup();
 					done = true;
 					break;
