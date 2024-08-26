@@ -135,6 +135,8 @@ impl Client {
 			(*self.vnc).width = (*self.vnc).si.framebufferWidth as i32;
 			(*self.vnc).height = (*self.vnc).si.framebufferHeight as i32;
 
+			println!("ServerInit {:#?}", (*self.vnc).si);
+
 			// N.B: This should always be set by either libvncclient or user code so it is Fine
 			// to expect it to always be a Some
 			//
@@ -284,6 +286,7 @@ impl Client {
 			}
 		};
 
+
 		let mut surf = self.surf.lock().expect("failed to lock");
 
 		surf.resize(size.clone());
@@ -291,6 +294,8 @@ impl Client {
 		unsafe {
 			(*self.vnc).frameBuffer = surf.get_buffer().as_mut_ptr() as *mut u8;
 		}
+
+		println!("new size {:?}", size);
 
 		let _ = self
 			.out_tx
@@ -307,6 +312,9 @@ impl Client {
 	fn rfb_create_client() -> *mut vnc::rfbClient {
 		unsafe {
 			let client = vnc::rfbGetClient(8, 3, 4);
+
+			(*client).appData.shareDesktop = RfbBool::True as i8;
+			//(*client).appData.encodingsString = b"raw\0".as_ptr() as *const i8;
 
 			(*client).MallocFrameBuffer = Some(Self::rfb_malloc_frame_buffer_cb);
 			(*client).canHandleNewFBSize = RfbBool::True as i32;

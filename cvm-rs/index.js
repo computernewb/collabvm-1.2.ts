@@ -2,7 +2,7 @@
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 
-let {guacDecode, guacEncodeImpl, jpegEncode} = require('./index.node');
+let { guacDecode, guacEncodeImpl, jpegEncode } = require('./index.node');
 
 export { guacDecode, jpegEncode };
 
@@ -10,3 +10,5 @@ export { guacDecode, jpegEncode };
 export function guacEncode(...args) {
 	return guacEncodeImpl(args);
 }
+
+export * from './vnc.js';
