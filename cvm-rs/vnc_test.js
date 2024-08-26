@@ -1,6 +1,11 @@
 // *sigh*
+
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
+
+import EventEmitter from 'events';
+
+import * as fs from 'node:fs/promises';
 
 // we don't need that much calm the fuck down
 process.env.TOKIO_WORKER_THREADS = 4;
@@ -10,9 +15,6 @@ let native = require('./index.node');
 // test the new rust vnc engine that have
 // Unlock Performace Now and cmake installed
 
-let client = new native.ClientInnerImpl();
-
-let done = false;
 function sleep(ms) {
 	return {
 		then: (cb) => {
@@ -21,75 +23,116 @@ function sleep(ms) {
 	};
 }
 
-// makes connection async by polling at a slower rate
-// this is techinically probably bad or something but /shrug
-async function clientConnectAsync(client, addr) {
-	client.connect(addr);
+class VncClient extends EventEmitter {
+	#client = new native.ClientInnerImpl();
+	#size = null;
+	#disc = false;
 
-	while (true) {
-		let ev = client.pollEvent();
-		if (ev.event == 'connect') return true;
-		else if (ev.event == 'disconnect') return false;
+	async ConnectAsync(addr) {
+		this.#client.connect(addr);
 
-		await sleep(66);
+		while (true) {
+			let ev = this.#client.pollEvent();
+			if (ev.event == 'connect') {
+				this.#Spawn();
+				return true;
+			} else if (ev.event == 'disconnect') return false;
+
+			if (ev.event == 'resize') {
+				this.#size = ev.size;
+				this.emit('resize', this.#size);
+			}
+
+			await sleep(66);
+		}
+	}
+
+	async #Spawn() {
+		(async () => {
+			// engine loop on JS side
+			while (!this.#disc) {
+				let event = this.#client.pollEvent();
+
+				// empty object means there was no event observed
+				if (event.event !== undefined) {
+					//console.log(event);
+					if (event.event == 'disconnect') {
+						break;
+					}
+
+					if (event.event == 'resize') {
+						this.#size = ev.size;
+						this.emit('resize', this.#size);
+					}
+
+					if (event.event == 'rects') {
+						this.emit('rects', event.rects);
+					}
+				}
+
+				await sleep(16);
+			}
+
+			this.#disc = false;
+		}).call(this);
+	}
+
+	async SendMouse(x, y, buttons) {
+		await this.#client.sendMouse(x, y, buttons);
+	}
+
+	Size() {
+		return this.#size;
+	}
+
+	Buffer() {
+		return this.#client.getSurfaceBuffer();
+	}
+
+	Disconnect() {
+		this.#disc = true;
+		client.disconnect();
+		this.emit('disconnect');
 	}
 }
 
+let client = new VncClient();
+
 (async () => {
-	(async () => {
-		/*
-		//127.0.0.1:6930
-		client.connectAndRunEngine("10.16.0.1:5930");
-		*/
+	console.log('piss');
+	let once = false;
 
-		if (!(await clientConnectAsync(client, '10.16.0.1:5930'))) {
-			done = true;
-			return;
+	client.on('rects', async (rects) => {
+		//console.log('Rects:', rects);
+
+		if(once == false) {
+			let b = client.Buffer();
+
+			let buf = await native.jpegEncode({
+				width: client.Size().width,
+				height: client.Size().height,
+				stride: client.Size().width,
+				buffer: b
+			});
+
+			await fs.writeFile("./pissing.jpg", buf);
 		}
+	});
 
-		// engine loop on JS side
-		while (!done) {
-			let event = client.pollEvent();
+	client.on('resize', (size) => {
+		console.log('New size:', size);
+	});
 
-			if (event.event !== undefined) {
-				console.log(event);
-				if (event.event == 'disconnect') {
-					done = true;
-					break;
-				}
-			}
-
-			await sleep(16);
-		}
-
-		console.log('piss');
-	})();
-
-	if (0) {
-		let a;
-
-		a = setInterval(async () => {
-			let rand = () => Math.floor(Math.random() * 0x102249);
-			if (done) {
-				clearInterval(a);
-				return;
-			}
-
-			await client.sendMouse(rand() % 320, rand() % 240, 0);
-		}, 10);
+	// 127.0.0.1:6930
+	//10.16.0.1:5930
+	if (!(await client.ConnectAsync('127.0.0.1:6930'))) {
+		return;
 	}
 
-	if (1) {
-		// after some time disconnect
-		setTimeout(() => {
-			console.log('bye bye');
-			client.disconnect();
-
-			
-
-			setTimeout(() => {
-				console.log('done');
-			}, 10000);
-		}, 2000);
+	// .kit on
+	while (true) {
+		let rand = () => Math.floor(Math.random() * 0x102249);
+		await client.SendMouse(rand() % client.Size().width, rand() % client.Size().height, (rand() >>> 0) & 0x04);
+		await sleep(100);
 	}
 })();
