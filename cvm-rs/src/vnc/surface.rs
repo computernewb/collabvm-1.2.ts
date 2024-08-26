@@ -4,7 +4,6 @@
 //! that the implicit thread-safety surfaces used previously just wouldn't
 //! be very well with.
 
-use napi::Env;
 use napi_derive::napi;
 
 // These types should be in another shared module :(
@@ -74,7 +73,7 @@ impl Surface {
 	pub fn get_buffer(&mut self) -> &mut Vec<u32> {
 		&mut self.buffer
 	}
-	/* 
+	/*
 
 	/// Blits a buffer to this surface.
 	pub fn blit_buffer(&mut self, src_at: Rect, data: &[u32]) {
