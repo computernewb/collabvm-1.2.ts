@@ -2,20 +2,10 @@ use super::{
 	client::{self, *},
 	surface::{Point, Rect, Surface},
 };
-use napi::{
-	noop_finalize,
-	threadsafe_function::{
-		ErrorStrategy::{self, CalleeHandled},
-		ThreadSafeCallContext, ThreadsafeFunction, ThreadsafeFunctionCallMode,
-	},
-	Env, JsBuffer, JsObject,
-};
+use napi::{Env, JsBuffer, JsObject};
 use napi_derive::napi;
 
-use std::{
-	sync::{Arc, Mutex},
-	thread::Thread,
-};
+use std::sync::{Arc, Mutex};
 
 use tokio::sync::mpsc::{channel, error::TryRecvError, Receiver, Sender};
 
@@ -138,8 +128,9 @@ impl JsClient {
 		let (engine_output_tx, engine_output_rx) = channel(32);
 		let (engine_input_tx, engine_input_rx) = channel(32);
 
+		// It is used but I guess something is mad
+		#[allow(unused_assignments)]
 		let mut address: Option<client::Address> = None;
-
 
 		self.event_tx = Some(engine_input_tx);
 		self.event_rx = Some(engine_output_rx);
@@ -164,7 +155,6 @@ impl JsClient {
 					Client::new(engine_output_tx, engine_input_rx, surf_client_thread_clone);
 
 				// connect first. if this doesn't work we end the thread early and send a disconnect message to make that clear
-				// to the async thread
 				if client.connect(address.unwrap()) == false {
 					let _ = tx_clone.blocking_send(VncThreadMessageOutput::Disconnect);
 					return ();
@@ -179,7 +169,6 @@ impl JsClient {
 
 				let _ = tx_clone.blocking_send(VncThreadMessageOutput::Disconnect);
 			});
-
 
 		return Ok(());
 	}

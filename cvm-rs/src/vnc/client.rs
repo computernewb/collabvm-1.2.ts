@@ -2,12 +2,9 @@
 
 use super::surface::{Point, Rect, Size, Surface};
 
-use std::{
-	ops::Add,
-	sync::{Arc, Mutex},
-};
+use std::sync::{Arc, Mutex};
 
-use tokio::sync::mpsc::{channel, error::TryRecvError, Receiver, Sender};
+use tokio::sync::mpsc::{error::TryRecvError, Receiver, Sender};
 
 use libvnc_sys::rfb::bindings as vnc;
 
@@ -99,44 +96,22 @@ impl Client {
 
 	// TODO result
 	pub fn connect(&mut self, address: Address) -> bool {
-		// fake argv
-		const FAKE_ARGC: usize = 1;
-
-		let mut argc = FAKE_ARGC as i32;
-		let mut argv: [*const std::ffi::c_char; FAKE_ARGC] =
-			[b"CvmRsRFBClient\0".as_ptr() as *const i8];
-
 		// do the thing!
 		unsafe {
 			// set the program name, mostly for vanity
 			(*self.vnc).programName = b"CvmRsRFBClient\0".as_ptr() as *const i8;
 
-			/*
-			if vnc::rfbInitClient(self.vnc, &mut argc, std::mem::transmute(&mut argv))
-				== RfbBool::False as i8
-			{
-				return false;
-			}
-			*/
 			match address {
 				Address::Tcp(addr) => {
 					let str = std::ffi::CString::new(addr.ip().to_string()).expect("penis");
 					return self.connect_impl(&str, Some(addr.port() as i32));
-					/*
-					if vnc::ConnectToRFBServer(self.vnc, str.as_ptr(), addr.port() as i32)
-						== RfbBool::False as i8
-					{
-						return false;
-					}
-					*/
 				}
 				Address::Unix(uds) => {
-					panic!("FUCKS YOU VNC NOT SUPORT UNX YET");
+					let str = std::ffi::CString::new(uds.to_str().unwrap()).expect("penis");
+					return self.connect_impl(&str, None);
 				}
 			}
 		}
-
-		true
 	}
 
 	fn connect_impl(&mut self, addr: &std::ffi::CString, port: Option<i32>) -> bool {
@@ -196,11 +171,7 @@ impl Client {
 				return false;
 			}
 
-
-
-			let _ = self
-				.out_tx
-				.blocking_send(VncThreadMessageOutput::Connect);
+			let _ = self.out_tx.blocking_send(VncThreadMessageOutput::Connect);
 			return true;
 		}
 	}
