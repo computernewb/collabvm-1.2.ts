@@ -8,7 +8,7 @@ use napi::{
 		ErrorStrategy::{self, CalleeHandled},
 		ThreadSafeCallContext, ThreadsafeFunction, ThreadsafeFunctionCallMode,
 	},
-	Env, JsBuffer,
+	Env, JsBuffer, JsObject,
 };
 use napi_derive::napi;
 
@@ -17,13 +17,13 @@ use std::{
 	thread::Thread,
 };
 
-use tokio::sync::mpsc::{channel, Receiver, Sender};
+use tokio::sync::mpsc::{channel, error::TryRecvError, Receiver, Sender};
 
 #[napi(js_name = "ClientInnerImpl")]
 pub struct JsClient {
 	surf: Arc<Mutex<Surface>>,
 	event_tx: Option<Sender<VncThreadMessageInput>>,
-	//js_event_cb: napi::JsFunction,
+	event_rx: Option<Receiver<VncThreadMessageOutput>>, //js_event_cb: napi::JsFunction,
 }
 
 // hack
@@ -42,6 +42,7 @@ impl JsClient {
 		Self {
 			surf: Arc::new(Mutex::new(Surface::new())),
 			event_tx: None,
+			event_rx: None,
 		}
 	}
 
@@ -81,18 +82,67 @@ impl JsClient {
 		// This will drop the tx side of the VNC engine input,
 		// which will make it close the connection
 		self.event_tx = None;
+		self.event_rx = None;
 		Ok(())
 	}
 
 	#[napi]
-	pub async unsafe fn connect_and_run_engine(
-		&mut self,
-		addr: String,
-	) -> napi::Result<()> {
-		let (engine_output_tx, mut engine_output_rx) = channel(32);
+	pub fn poll_event(&mut self, env: Env) -> napi::Result<JsObject> {
+		let mut obj = env.create_object()?;
+
+		if let Some(rx) = self.event_rx.as_mut() {
+			match rx.try_recv() {
+				Ok(val) => match val {
+					VncThreadMessageOutput::Connect => {
+						obj.set("event", "connect")?;
+
+						return Ok(obj);
+					}
+
+					VncThreadMessageOutput::Disconnect => {
+						obj.set("event", "disconnect")?;
+
+						return Ok(obj);
+					}
+
+					VncThreadMessageOutput::FramebufferResized(size) => {
+						obj.set("event", "resize")?;
+						obj.set("size", size)?;
+
+						return Ok(obj);
+					}
+
+					VncThreadMessageOutput::FramebufferUpdate(rects) => {
+						obj.set("event", "rects")?;
+						obj.set("rects", rects)?;
+
+						return Ok(obj);
+					}
+				},
+
+				Err(TryRecvError::Empty) => {
+					return Ok(obj);
+				}
+
+				Err(TryRecvError::Disconnected) => {
+					return Err(anyhow::anyhow!("disconnected..").into());
+				}
+			}
+		} else {
+			Err(anyhow::anyhow!("????").into())
+		}
+	}
+
+	#[napi]
+	pub fn connect(&mut self, addr: String) -> napi::Result<()> {
+		let (engine_output_tx, engine_output_rx) = channel(32);
 		let (engine_input_tx, engine_input_rx) = channel(32);
 
 		let mut address: Option<client::Address> = None;
+
+
+		self.event_tx = Some(engine_input_tx);
+		self.event_rx = Some(engine_output_rx);
 
 		// address parsing bullfuckery
 		if addr.as_str().starts_with('/') {
@@ -130,54 +180,6 @@ impl JsClient {
 				let _ = tx_clone.blocking_send(VncThreadMessageOutput::Disconnect);
 			});
 
-		self.event_tx = Some(engine_input_tx);
-
-		/* 
-		let tsfn: ThreadsafeFunction<VncThreadMessageOutput> = nenv.create_threadsafe_function(
-			&self.js_event_cb,
-			0,
-			|ctx: ThreadSafeCallContext<VncThreadMessageOutput>| {
-				let mut obj = ctx.env.create_object()?;
-
-				match ctx.value {
-					VncThreadMessageOutput::Disconnect => {
-						obj.set("event", "disconnect");
-
-						return Ok(vec![obj]);
-					}
-
-					VncThreadMessageOutput::FramebufferResized(size) => {
-						obj.set("event", "resize");
-						obj.set("size", size);
-
-						return Ok(vec![obj]);
-					}
-
-					VncThreadMessageOutput::FramebufferUpdate(rects) => {
-						obj.set("event", "rects");
-						obj.set("rects", rects);
-
-						return Ok(vec![obj]);
-					}
-				}
-			},
-		)?;
-		*/
-
-		// On the tokio thread pump output
-		loop {
-			match engine_output_rx.recv().await {
-				Some(message) => {
-					//println!("{:?}", message);
-					//tsfn.call(Ok(message), ThreadsafeFunctionCallMode::Blocking);
-				}
-				None => break,
-			}
-		}
-
-		if self.event_tx.is_some() {
-			self.event_tx = None;
-		}
 
 		return Ok(());
 	}
