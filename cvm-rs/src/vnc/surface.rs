@@ -126,7 +126,8 @@ impl Surface {
 	pub fn resize(&mut self, size: Size) {
 		println!("Surface::resize() : {:?}", size);
 		self.size = size;
-		self.buffer.resize(self.size.linear().expect("never fails"), 0);
+		self.buffer
+			.resize(self.size.linear().expect("never fails"), 0);
 	}
 
 	pub fn get_buffer(&mut self) -> &mut Vec<u32> {
@@ -145,23 +146,19 @@ impl Surface {
 		}
 		 */
 
-		
 		for y in src_at.y..src_at.y + src_at.height {
-			//for x in src_at.x..src_at.x + src_at.width {
-				let src = &data[off..off + src_at.width as usize];
-				let dest_start_offset = (y as usize * self.size.width as usize) + src_at.x as usize;
+			let src = &data[off..off + src_at.width as usize];
+			let dest_start_offset = (y as usize * self.size.width as usize) + src_at.x as usize;
 
-				let dest =
-					&mut self.buffer[dest_start_offset..dest_start_offset + src_at.width as usize];
+			let dest =
+				&mut self.buffer[dest_start_offset..dest_start_offset + src_at.width as usize];
 
-				dest.copy_from_slice(src);
+			dest.copy_from_slice(src);
 
-				off += (src_at.width as usize);
-			//}
+			off += (src_at.width as usize);
 		}
-		 
 
-		 /* 
+		/*
 		let start = ((src_at.y * self.size.width) + src_at.x);
 		let end = (src_at.y + src_at.height) * self.size.width;
 

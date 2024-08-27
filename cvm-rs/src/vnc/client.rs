@@ -35,7 +35,6 @@ pub enum VncThreadMessageOutput {
 #[derive(Debug)]
 pub enum VncThreadMessageInput {
 	KeyEvent { keysym: u32, pressed: bool },
-
 	MouseEvent { pt: Point, buttons: u8 },
 }
 
@@ -92,7 +91,7 @@ impl Client {
 			.add_encoding(vnc::VncEncoding::DesktopSizePseudo)
 			.add_encoding(vnc::VncEncoding::Raw)
 			.allow_shared(true)
-			.set_pixel_format(PixelFormat::rgba())
+			.set_pixel_format(PixelFormat::bgra())
 			.build()?
 			.try_start()
 			.await?

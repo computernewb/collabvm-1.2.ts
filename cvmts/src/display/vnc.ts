@@ -71,14 +71,12 @@ export class VncDisplay extends EventEmitter implements VMDisplay {
 	}
 
 	private Reconnect() {
-		if (this.connected != State.Inactive) return;
-
-		if (!this.vncShouldReconnect) return;
+		if (this.connected != State.Inactive && !this.vncShouldReconnect) return;
 
 		// TODO: this should also give up after a max tries count
 		// if we fail after max tries, emit a event
 
-		console.log(this.vncConnectOpts);
+		console.log('VNC connect', this.vncConnectOpts);
 
 		if (this.vncConnectOpts.host) this.displayVnc.ConnectAsync(`${this.vncConnectOpts.host}:${this.vncConnectOpts.port}`).then(() => {});
 		else if (this.vncConnectOpts.path) this.displayVnc.ConnectAsync(`${this.vncConnectOpts.path}`).then(() => {});
@@ -94,8 +92,8 @@ export class VncDisplay extends EventEmitter implements VMDisplay {
 		this.displayVnc.Disconnect();
 
 		// bye bye!
-		//this.displayVnc.removeAllListeners();
-		//this.removeAllListeners();
+		this.displayVnc.removeAllListeners();
+		this.removeAllListeners();
 	}
 
 	Connected() {
