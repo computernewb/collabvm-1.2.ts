@@ -1,6 +1,7 @@
 //! this hacky pile of hacks is brought to you by lily
 
-use super::surface::{Point, Rect, Size, Surface};
+use super::surface::Surface;
+use super::types::*;
 
 use std::{
 	sync::{Arc, Mutex},
@@ -13,10 +14,7 @@ use tokio::{
 	sync::mpsc::{error::TryRecvError, Receiver, Sender},
 };
 
-use vnc::{
-	ClientKeyEvent, ClientMouseEvent, PixelFormat, Rect as VncRect, VncConnector, VncEvent,
-	X11Event,
-};
+use vnc::{ClientKeyEvent, ClientMouseEvent, PixelFormat, VncConnector, VncEvent, X11Event};
 
 pub enum Address {
 	Tcp(std::net::SocketAddr),
@@ -128,23 +126,20 @@ impl Client {
 
 				Err(TryRecvError::Empty) => {}
 
-				// Close the connection
+				// On disconnection from the client input channel
+				// we just give up
 				Err(TryRecvError::Disconnected) => {
-					println!("disconnected from rx");
 					break;
 				}
 			}
 
 			// pull events until there is no more event to pull
-
 			match vnc.poll_event().await {
 				Ok(Some(e)) => {
-					// ...
-
 					match e {
 						VncEvent::SetResolution(res) => {
 							{
-								let mut lk = self.surf.lock().expect("FUCKer Gogle");
+								let mut lk = self.surf.lock().expect("couldn't lock Surface");
 								lk.resize(Size {
 									width: res.width as u32,
 									height: res.height as u32,
@@ -159,15 +154,18 @@ impl Client {
 								.await?;
 						}
 
-						VncEvent::Copy(dest_rect, src_rect) => {
-							// TODO copy rect
-						}
+						// TODO: implement copyrect support in Surface
+						//VncEvent::Copy(dest_rect, src_rect) => {
+						// TODO copy rect
+						//}
 
+						// TODO: make this not thunder herd and send like a boatload of image messages,
+						// and batch it into one (which I suspect is what sometime is casing lag)
 						VncEvent::RawImage(dest_rect, data) => {
 							self.rects_in_frame.push(Rect::from(dest_rect));
 
 							{
-								let mut lk = self.surf.lock().expect("NO CHEESE");
+								let mut lk = self.surf.lock().expect("couldn't lock Surface");
 
 								// blit onto the surface
 								lk.blit_buffer(Rect::from(dest_rect), unsafe {
@@ -199,7 +197,8 @@ impl Client {
 					}
 				}
 
-				Err(e) => {
+				// TODO: we might want to pass this to js at some point
+				Err(_e) => {
 					break;
 				}
 			}
