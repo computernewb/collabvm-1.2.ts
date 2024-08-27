@@ -22,8 +22,9 @@ napi-derive = "2.16.11"
 anyhow = "1.0.86"
 
 # vnc
-libvnc-sys = "0.1.4"
+vnc-rs = "0.5.1"
 tokio = { version = "1.39.3", features = ["full"] }
+napi_ext = "0.4.0"
 
 [build-dependencies]
 napi-build = "2.1.3"

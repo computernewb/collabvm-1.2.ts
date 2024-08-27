@@ -11,7 +11,6 @@ process.env.TOKIO_WORKER_THREADS = 4;
 
 let client = new VncClient();
 
-
 function sleep(ms) {
 	return {
 		then: (cb) => {
@@ -27,18 +26,18 @@ function sleep(ms) {
 	client.on('rects', async (rects) => {
 		//console.log('Rects:', rects);
 
-		if (once == false) {
-			let b = client.Buffer();
+		//if (once == false) {
+		let b = client.Buffer();
 
-			let buf = await native.jpegEncode({
-				width: client.Size().width,
-				height: client.Size().height,
-				stride: client.Size().width,
-				buffer: b
-			});
+		let buf = await native.jpegEncode({
+			width: client.Size().width,
+			height: client.Size().height,
+			stride: client.Size().width,
+			buffer: b
+		});
 
-			await fs.writeFile('./pissing.jpg', buf);
-		}
+		await fs.writeFile('./pissing.jpg', buf);
+		//}
 	});
 
 	client.on('resize', (size) => {
@@ -47,14 +46,16 @@ function sleep(ms) {
 
 	// 127.0.0.1:6930
 	//10.16.0.1:5930
-	if (!(await client.ConnectAsync('10.16.0.1:5930'))) {
+	if (!(await client.ConnectAsync('127.0.0.1:6930'))) {
 		return;
 	}
 
-	// .kit on
-	while (true) {
-		let rand = () => Math.floor(Math.random() * 0x102249);
-		await client.SendMouse(rand() % client.Size().width, rand() % client.Size().height, (rand() >>> 0) & 0x04);
-		await sleep(100);
+	if (0) {
+		// .kit on
+		while (true) {
+			let rand = () => Math.floor(Math.random() * 0x102249);
+			await client.SendMouse(rand() % client.Size().width, rand() % client.Size().height, (rand() >>> 0) & 0x04);
+			await sleep(10);
+		}
 	}
 })();

@@ -5,7 +5,6 @@ const require = createRequire(import.meta.url);
 
 import EventEmitter from 'events';
 
-
 let native = require('./index.node');
 
 function sleep(ms) {
@@ -16,15 +15,18 @@ function sleep(ms) {
 	};
 }
 
+// Wrapper over the cvm-rs native VNC client inner
+// to make it more node-matic
 export class VncClient extends EventEmitter {
 	#client = new native.ClientInnerImpl();
 	#size = null;
 	#disc = false;
 
 	async ConnectAsync(addr) {
-		console.log('connect ', addr);
+		console.log('VncClient.connectAsync()', addr);
 		this.#client.connect(addr);
 
+		// run a reduced speed poll until we get a connect or disconnect event
 		while (true) {
 			let ev = this.#client.pollEvent();
 
@@ -33,11 +35,6 @@ export class VncClient extends EventEmitter {
 				this.#Spawn();
 				return true;
 			} else if (ev.event == 'disconnect') return false;
-
-			if (ev.event == 'resize') {
-				this.#size = ev.size;
-				this.emit('resize', this.#size);
-			}
 
 			await sleep(66);
 		}
@@ -57,7 +54,8 @@ export class VncClient extends EventEmitter {
 					}
 
 					if (event.event == 'resize') {
-						this.#size = ev.size;
+						console.log('resize event');
+						this.#size = event.size;
 						this.emit('resize', this.#size);
 					}
 
@@ -66,7 +64,7 @@ export class VncClient extends EventEmitter {
 					}
 				}
 
-				await sleep(16);
+				await sleep(8);
 			}
 
 			this.#disc = false;
@@ -95,4 +93,3 @@ export class VncClient extends EventEmitter {
 		this.emit('disconnect');
 	}
 }
-

@@ -1,4 +1,4 @@
-import { VncClient } from '@computernewb/nodejs-rfb';
+import { VncClient } from '@cvmts/cvm-rs';
 import { EventEmitter } from 'node:events';
 import { Clamp } from '../Utilities.js';
 import { BatchRects } from './batch.js';
@@ -19,67 +19,45 @@ export type VncRect = {
 	height: number;
 };
 
+enum State {
+	Inactive,
+	Connecting,
+	Connected
+}
 
-// TODO: replace with a non-asshole VNC client (prefably one implemented
-// as a part of cvm-rs)
 export class VncDisplay extends EventEmitter implements VMDisplay {
-	private displayVnc = new VncClient({
-		debug: false,
-		fps: kVncBaseFramerate,
-
-		encodings: [
-			VncClient.consts.encodings.raw,
-
-			//VncClient.consts.encodings.pseudoQemuAudio,
-			VncClient.consts.encodings.pseudoDesktopSize
-			// For now?
-			//VncClient.consts.encodings.pseudoCursor
-		]
-	});
+	private displayVnc = new VncClient();
 
 	private vncShouldReconnect: boolean = false;
 	private vncConnectOpts: any;
+	private buffer: Buffer | null = null;
+	private connected = State.Inactive;
 
 	constructor(vncConnectOpts: any) {
 		super();
 
+		console.log('VncDisplay constructor', vncConnectOpts);
+
 		this.vncConnectOpts = vncConnectOpts;
 
-		this.displayVnc.on('connectTimeout', () => {
-			this.Reconnect();
-		});
+		let self = this;
 
-		this.displayVnc.on('authError', () => {
-			this.Reconnect();
+		this.displayVnc.on('connect', () => {
+			self.connected = State.Connected;
+			self.emit('connected');
 		});
 
 		this.displayVnc.on('disconnect', () => {
+			self.connected = State.Inactive;
 			this.Reconnect();
 		});
 
-		this.displayVnc.on('closed', () => {
-			this.Reconnect();
-		});
-
-		this.displayVnc.on('firstFrameUpdate', () => {
-			// apparently this library is this good.
-			// at least it's better than the two others which exist.
-			this.displayVnc.changeFps(kVncBaseFramerate);
-			this.emit('connected');
-			this.emit('resize', { width: this.displayVnc.clientWidth, height: this.displayVnc.clientHeight });
-		});
-
-		this.displayVnc.on('desktopSizeChanged', (size: Size) => {
+		this.displayVnc.on('resize', (size: Size) => {
+			self.buffer = self.displayVnc.Buffer();
 			this.emit('resize', size);
 		});
 
-		let rects: Rect[] = [];
-
-		this.displayVnc.on('rectUpdateProcessed', (rect: Rect) => {
-			rects.push(rect);
-		});
-
-		this.displayVnc.on('frameUpdated', (fb: Buffer) => {
+		this.displayVnc.on('rects', (rects: Rect[]) => {
 			// use the cvmts batcher
 			let batched = BatchRects(this.Size(), rects);
 			this.emit('rect', batched);
@@ -88,21 +66,26 @@ export class VncDisplay extends EventEmitter implements VMDisplay {
 			//for(let rect of rects)
 			//	this.emit('rect', rect);
 
-			rects = [];
-
 			this.emit('frame');
 		});
+
+		// emulate nodejs-rfb behaviour of
+		// automatically connecting to the target
+		this.Connect();
 	}
 
 	private Reconnect() {
-		if (this.displayVnc.connected) return;
+		if (this.connected != State.Inactive) return;
 
 		if (!this.vncShouldReconnect) return;
 
 		// TODO: this should also give up after a max tries count
 		// if we fail after max tries, emit a event
 
-		this.displayVnc.connect(this.vncConnectOpts);
+		console.log(this.vncConnectOpts);
+
+		if (this.vncConnectOpts.host) this.displayVnc.ConnectAsync(`${this.vncConnectOpts.host}:${this.vncConnectOpts.port}`).then(() => {});
+		else if (this.vncConnectOpts.path) this.displayVnc.ConnectAsync(`${this.vncConnectOpts.path}`).then(() => {});
 	}
 
 	Connect() {
@@ -112,39 +95,39 @@ export class VncDisplay extends EventEmitter implements VMDisplay {
 
 	Disconnect() {
 		this.vncShouldReconnect = false;
-		this.displayVnc.disconnect();
+		this.displayVnc.Disconnect();
 
 		// bye bye!
-		this.displayVnc.removeAllListeners();
-		this.removeAllListeners();
+		//this.displayVnc.removeAllListeners();
+		//this.removeAllListeners();
 	}
 
 	Connected() {
-		return this.displayVnc.connected;
+		return this.connected == State.Connected;
 	}
 
 	Buffer(): Buffer {
-		return this.displayVnc.fb;
+		return this.buffer!;
 	}
 
 	Size(): Size {
-		if (!this.displayVnc.connected)
+		if (!this.connected)
 			return {
 				width: 0,
 				height: 0
 			};
 
-		return {
-			width: this.displayVnc.clientWidth,
-			height: this.displayVnc.clientHeight
-		};
+		return this.displayVnc.Size();
 	}
 
 	MouseEvent(x: number, y: number, buttons: number) {
-		if (this.displayVnc.connected) this.displayVnc.sendPointerEvent(Clamp(x, 0, this.displayVnc.clientWidth), Clamp(y, 0, this.displayVnc.clientHeight), buttons);
+		if (this.Connected()) {
+			let size = this.displayVnc.Size() as Size;
+			this.displayVnc.SendMouse(Clamp(x, 0, size.width), Clamp(y, 0, size.height), buttons);
+		}
 	}
 
 	KeyboardEvent(keysym: number, pressed: boolean) {
-		if (this.displayVnc.connected) this.displayVnc.sendKeyEvent(keysym, pressed);
+		if (this.Connected()) this.displayVnc.SendKey(keysym, pressed);
 	}
 }

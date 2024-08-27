@@ -64,7 +64,13 @@ export default class VNCVM extends EventEmitter implements VM {
 
 	private SetState(newState: VMState) {
 		this.state = newState;
-		this.emit('statechange', newState);
+
+		// I'm not entirely sure why this needs to be 
+		// queued into the next-tick queue, but
+		// doing so makes it work so idk
+		process.nextTick(() => {
+			this.emit('statechange', newState);
+		});
 	}
 
 	StartDisplay(): void {

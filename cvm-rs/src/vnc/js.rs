@@ -39,6 +39,7 @@ impl JsClient {
 	/// call once on resize and discard on a new resize
 	#[napi]
 	pub fn get_surface_buffer(&self, nenv: Env) -> napi::Result<JsBuffer> {
+		// todo need to lock buffer in a better way
 		let mut surf = self.surf.lock().expect("fuck");
 		let buffer = unsafe {
 			let b = surf.get_buffer();
@@ -96,6 +97,7 @@ impl JsClient {
 					}
 
 					VncThreadMessageOutput::FramebufferResized(size) => {
+						println!("RESIZE GET");
 						obj.set("event", "resize")?;
 						obj.set("size", size)?;
 
@@ -126,7 +128,7 @@ impl JsClient {
 	#[napi]
 	pub fn connect(&mut self, addr: String) -> napi::Result<()> {
 		let (engine_output_tx, engine_output_rx) = channel(32);
-		let (engine_input_tx, engine_input_rx) = channel(32);
+		let (engine_input_tx, engine_input_rx) = channel(16);
 
 		// It is used but I guess something is mad
 		#[allow(unused_assignments)]
@@ -150,24 +152,35 @@ impl JsClient {
 		let _ = std::thread::Builder::new()
 			.name("vnc-engine".into())
 			.spawn(move || {
+				// Create a single-thread tokio runtime specifically for the VNC engine
+				let rt = tokio::runtime::Builder::new_current_thread()
+					.enable_all()
+					.build()
+					.unwrap();
+
+				// Create the VNC engine itself
 				let tx_clone = engine_output_tx.clone();
 				let mut client =
 					Client::new(engine_output_tx, engine_input_rx, surf_client_thread_clone);
 
-				// connect first. if this doesn't work we end the thread early and send a disconnect message to make that clear
-				if client.connect(address.unwrap()) == false {
-					let _ = tx_clone.blocking_send(VncThreadMessageOutput::Disconnect);
-					return ();
-				}
-
-				loop {
-					if client.run_one() == false {
-						break;
+				// run the VNC engine on the Tokio runtime
+				let _ = rt.block_on(async {
+					// connect first. if this doesn't work we end the thread early and send a disconnect message to make that clear
+					match client.connect_and_run(address.unwrap()).await {
+						Ok(_) => {
+							println!("conn");
+						}
+						Err(e) => {
+							println!("FUCK {:?}", e);
+							tx_clone.send(VncThreadMessageOutput::Disconnect).await?;
+							return Err(e);
+						}
 					}
-					// TODO: sleep here for an extended duration?
-				}
 
-				let _ = tx_clone.blocking_send(VncThreadMessageOutput::Disconnect);
+					tx_clone.send(VncThreadMessageOutput::Disconnect).await?;
+
+					Ok(())
+				});
 			});
 
 		return Ok(());
