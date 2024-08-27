@@ -69,6 +69,16 @@ impl JsClient {
 	}
 
 	#[napi]
+	pub async fn send_key(&self, keysym: u32, pressed: bool) -> napi::Result<()> {
+		if let Some(tx) = self.event_tx.as_ref() {
+			let _ = tx
+				.send(VncThreadMessageInput::KeyEvent { keysym, pressed })
+				.await;
+		}
+		Ok(())
+	}
+
+	#[napi]
 	pub fn disconnect(&mut self) -> napi::Result<()> {
 		// This will drop the tx side of the VNC engine input,
 		// which will make it close the connection
