@@ -44,10 +44,12 @@ export class QemuVMShim implements VM {
 	}
 
 	async Stop(): Promise<void> {
-		await this.vm.Stop();
+		if (this.display) {
+			this.display?.Disconnect();
+			this.display = null;
+		}
 
-		this.display?.Disconnect();
-		this.display = null;
+		await this.vm.Stop();
 	}
 
 	Reboot(): Promise<void> {
@@ -84,35 +86,44 @@ export class QemuVMShim implements VM {
 	}
 
 	StartDisplay(): void {
+		console.log('entering StartDisplay');
+
+
+		let self = this;
+
 		// boot it up
 		let info = this.vm.GetDisplayInfo();
 
 		if (info == null) throw new Error('its dead jim');
 
-		switch (info.type) {
-			case 'vnc-tcp':
-				this.display = new VncDisplay({
-					host: info.host || '127.0.0.1',
-					port: info.port || 5900,
-					path: null
-				});
-				break;
-			case 'vnc-uds':
-				this.display = new VncDisplay({
-					path: info.path
-				});
-				break;
+		if (this.display == null) {
+			switch (info.type) {
+				case 'vnc-tcp':
+					this.display = new VncDisplay({
+						host: info.host || '127.0.0.1',
+						port: info.port || 5900,
+						path: null
+					});
+					break;
+				case 'vnc-uds':
+					this.display = new VncDisplay({
+						path: info.path
+					});
+					break;
+			}
+
+
+			this.display?.on('connected', () => {
+				// The VM can now be considered started
+				self.logger.info('Display connected');
+			});
 		}
 
-		let self = this;
-
-		this.display?.on('connected', () => {
-			// The VM can now be considered started
-			self.logger.info('Display connected');
+		process.nextTick(() => {
+			console.log('trying to connect to display');
+			// now that QMP has connected, connect to the display
+			self.display?.Connect();
 		});
-
-		// now that QMP has connected, connect to the display
-		self.display?.Connect();
 	}
 
 	GetDisplay(): VMDisplay | null {
