@@ -2,11 +2,21 @@
 
 use super::surface::{Point, Rect, Size, Surface};
 
-use std::sync::{Arc, Mutex};
+use std::{
+	sync::{Arc, Mutex},
+	time::Duration,
+};
 
-use tokio::sync::mpsc::{error::TryRecvError, Receiver, Sender};
+use tokio::{
+	io::{AsyncRead, AsyncWrite},
+	net::{TcpStream, UnixStream},
+	sync::mpsc::{error::TryRecvError, Receiver, Sender},
+};
 
-use libvnc_sys::rfb::bindings as vnc;
+use vnc::{
+	ClientKeyEvent, ClientMouseEvent, PixelFormat, Rect as VncRect, VncConnector, VncEvent,
+	X11Event,
+};
 
 pub enum Address {
 	Tcp(std::net::SocketAddr),
@@ -31,35 +41,10 @@ pub enum VncThreadMessageInput {
 
 pub struct Client {
 	surf: Arc<Mutex<Surface>>,
-	vnc: *mut vnc::rfbClient,
+
 	out_tx: Sender<VncThreadMessageOutput>,
 	in_rx: Receiver<VncThreadMessageInput>,
 	rects_in_frame: Vec<Rect>,
-}
-
-/// Our userdata tag. Try and guess what this says as a fourcc :)
-const VNC_TAG: u32 = 0x796C694C;
-
-#[repr(i8)]
-enum RfbBool {
-	False = vnc::FALSE as i8,
-	True = vnc::TRUE as i8,
-}
-
-/// Initializes a RFB pixel format for CVM surfaces
-fn init_rfb_pixel_format(pf: &mut vnc::rfbPixelFormat) {
-	pf.bigEndian = 0;
-	pf.bitsPerPixel = 32;
-	pf.depth = 24;
-
-	// Shift
-	pf.redShift = 16;
-	pf.greenShift = 8;
-	pf.blueShift = 0;
-
-	pf.redMax = 255;
-	pf.greenMax = 255;
-	pf.blueMax = 255;
 }
 
 impl Client {
@@ -69,132 +54,74 @@ impl Client {
 		in_rx: Receiver<VncThreadMessageInput>,
 		surface: Arc<Mutex<Surface>>,
 	) -> Box<Self> {
-		let vnc = Self::rfb_create_client();
-
-		assert!(!vnc.is_null(), "client shouldn't be null!");
-
-		let mut client_obj = Box::new(Self {
+		let client_obj = Box::new(Self {
 			surf: surface,
-			vnc: vnc,
 			out_tx,
 			in_rx,
 			rects_in_frame: Vec::new(),
 		});
 
-		// set client userdata ptr
-		unsafe {
-			let ptr: *mut Client = client_obj.as_mut();
-			vnc::rfbClientSetClientData(
-				vnc,
-				VNC_TAG as *mut std::ffi::c_void,
-				ptr as *mut std::ffi::c_void,
-			);
-		}
-
 		client_obj
 	}
 
-	// TODO result
-	pub fn connect(&mut self, address: Address) -> bool {
-		// do the thing!
-		unsafe {
-			// set the program name, mostly for vanity
-			(*self.vnc).programName = b"CvmRsRFBClient\0".as_ptr() as *const i8;
-
-			match address {
-				Address::Tcp(addr) => {
-					let str = std::ffi::CString::new(addr.ip().to_string()).expect("penis");
-					return self.connect_impl(&str, Some(addr.port() as i32));
-				}
-				Address::Unix(uds) => {
-					let str = std::ffi::CString::new(uds.to_str().unwrap()).expect("penis");
-					return self.connect_impl(&str, None);
-				}
+	pub async fn connect_and_run(&mut self, address: Address) -> anyhow::Result<()> {
+		match address {
+			Address::Tcp(addr) => {
+				let stream = TcpStream::connect(addr).await?;
+				self.connect_and_run_impl(stream).await?
+			}
+			Address::Unix(uds) => {
+				let stream = UnixStream::connect(uds).await?;
+				self.connect_and_run_impl(stream).await?
 			}
 		}
+
+		Ok(())
 	}
 
-	fn connect_impl(&mut self, addr: &std::ffi::CString, port: Option<i32>) -> bool {
-		// Inspired by rfbInitConnection, however with some caveats
-		// - repeater support is removed
-		// - scale is removed
-		//
-		// I mostly wrote this because I don't want to deal with libvncclients world's most
-		// shakiest ownership, and doing it the Real Way with rfbInitClient() makes you do exactly that
-		unsafe {
-			if vnc::ConnectToRFBServer(self.vnc, addr.as_ptr(), port.unwrap_or(0))
-				== RfbBool::False as i8
-			{
-				return false;
-			}
+	async fn connect_and_run_impl<S>(&mut self, stream: S) -> anyhow::Result<()>
+	where
+		S: AsyncRead + AsyncWrite + Unpin + Send + Sync + 'static,
+	{
+		// the builder pattern should have stayed in java
+		let vnc = VncConnector::new(stream)
+			.set_auth_method(async move { Ok("".into()) })
+			//.add_encoding(vnc::VncEncoding::Tight)
+			//.add_encoding(vnc::VncEncoding::Zrle)
+			//.add_encoding(vnc::VncEncoding::CopyRect)
+			.add_encoding(vnc::VncEncoding::DesktopSizePseudo)
+			.add_encoding(vnc::VncEncoding::Raw)
+			.allow_shared(true)
+			.set_pixel_format(PixelFormat::rgba())
+			.build()?
+			.try_start()
+			.await?
+			.finish()?;
 
-			if vnc::InitialiseRFBConnection(self.vnc) == RfbBool::False as i8 {
-				return false;
-			}
-
-			(*self.vnc).width = (*self.vnc).si.framebufferWidth as i32;
-			(*self.vnc).height = (*self.vnc).si.framebufferHeight as i32;
-
-			println!("ServerInit {:#?}", (*self.vnc).si);
-
-			// N.B: This should always be set by either libvncclient or user code so it is Fine
-			// to expect it to always be a Some
-			//
-			// If it ever is *not* set, that more than likely indicates there is a bug in
-			// either my code (the more likely option) or libvncclient.
-			let malloc_frame_buffer = (*self.vnc).MallocFrameBuffer.unwrap();
-			if malloc_frame_buffer(self.vnc) == RfbBool::False as i8 {
-				return false;
-			}
-
-			let update_rect = &mut (*self.vnc).updateRect;
-
-			if (*self.vnc).updateRect.x < 0 {
-				update_rect.x = 0;
-				update_rect.y = 0;
-				update_rect.w = (*self.vnc).width;
-				update_rect.h = (*self.vnc).height;
-				(*self.vnc).isUpdateRectManagedByLib = RfbBool::True as i8;
-			}
-
-			if vnc::SetFormatAndEncodings(self.vnc) == RfbBool::False as i8 {
-				return false;
-			}
-
-			if vnc::SendFramebufferUpdateRequest(
-				self.vnc,
-				update_rect.x,
-				update_rect.y,
-				update_rect.w,
-				update_rect.h,
-				RfbBool::False as i8,
-			) == RfbBool::False as i8
-			{
-				return false;
-			}
-
-			let _ = self.out_tx.blocking_send(VncThreadMessageOutput::Connect);
-			return true;
-		}
-	}
-
-	// Runs one loop.
-	pub fn run_one(&mut self) -> bool {
-		let mut done = false;
+		self.out_tx.send(VncThreadMessageOutput::Connect).await?;
 
 		loop {
 			// Pull a event and act on it. If none are there, it's fine and we can just move on to
 			// advancing the vnc client, but if the channel is closed, that means we are to disconnect
 			//
-			// Note that we do not timeout because the libvnc loop implicitly will sleep for us due
-			// to calling select/poll.
+			// Note that we do not timeout because we will eventually wait for a event later
+			// either way.
 			match self.in_rx.try_recv() {
 				Ok(val) => match val {
 					VncThreadMessageInput::KeyEvent { keysym, pressed } => {
-						self.keyboard_event(keysym, pressed);
+						vnc.input(X11Event::KeyEvent(ClientKeyEvent {
+							keycode: keysym,
+							down: pressed,
+						}))
+						.await?;
 					}
 					VncThreadMessageInput::MouseEvent { pt, buttons } => {
-						self.mouse_event(pt, buttons);
+						vnc.input(X11Event::PointerEvent(ClientMouseEvent {
+							position_x: pt.x as u16,
+							position_y: pt.y as u16,
+							bottons: buttons,
+						}))
+						.await?;
 					}
 				},
 
@@ -203,176 +130,92 @@ impl Client {
 				// Close the connection
 				Err(TryRecvError::Disconnected) => {
 					println!("disconnected from rx");
-					self.cleanup();
-					done = true;
+					vnc.close().await?;
 					break;
 				}
 			}
 
-			// Run the VNC client until there are no more messages
-			unsafe {
-				let res = vnc::WaitForMessage(self.vnc, 500);
+			// pull events until there is no more event to pull
 
-				// TODO: return a Error and cleanup
-				if res.is_negative() {
-					done = true;
-					break;
+			match vnc.poll_event().await {
+				Ok(Some(e)) => {
+					// ...
+
+					match e {
+						VncEvent::SetResolution(res) => {
+							{
+								let mut lk = self.surf.lock().expect("FUCKer Gogle");
+								lk.resize(Size {
+									width: res.width as u32,
+									height: res.height as u32,
+								});
+							}
+
+							self.out_tx
+								.send(VncThreadMessageOutput::FramebufferResized(Size {
+									width: res.width as u32,
+									height: res.height as u32,
+								}))
+								.await?;
+						}
+
+						VncEvent::Copy(dest_rect, src_rect) => {
+							// TODO copy rect
+						}
+
+						VncEvent::RawImage(dest_rect, data) => {
+							self.rects_in_frame.push(Rect::from(dest_rect));
+
+							{
+								let mut lk = self.surf.lock().expect("NO CHEESE");
+
+								// blit onto
+								lk.blit_buffer(Rect::from(dest_rect), unsafe {
+									std::slice::from_raw_parts(
+										data.as_ptr() as *const u32,
+										data.len() / core::mem::size_of::<u32>(),
+									)
+								});
+							}
+						}
+
+						_ => {}
+					}
 				}
 
-				// No message in this time frame, break out
-				// (WaitForMessage simply returns the result of select/poll,
-				//	so we can reasonably assume that 0 means there was no activity yet)
-				if res == 0 {
-					break;
+				// No events, so let's request some more and push what we got in the meantime
+				Ok(None) => {
+					vnc.input(X11Event::Refresh).await?;
+
+					// send current update state
+					if !self.rects_in_frame.is_empty() {
+						self.out_tx
+							.send(VncThreadMessageOutput::FramebufferUpdate(
+								self.rects_in_frame.clone(),
+							))
+							.await?;
+
+						self.rects_in_frame.clear();
+					}
 				}
 
-				// 0/rfbBool false == failure to handle a message
-				if vnc::HandleRFBServerMessage(self.vnc) == RfbBool::False as i8 {
-					done = true;
+				Err(e) => {
 					break;
 				}
 			}
+
+			// Sleep to give CPU time
+			tokio::time::sleep(Duration::from_millis(2)).await;
 		}
 
-		if done {
-			let _ = self
-				.out_tx
-				.blocking_send(VncThreadMessageOutput::Disconnect);
-			return false;
-		} else {
-			// send current update state
-			if !self.rects_in_frame.is_empty() {
-				let _ = self
-					.out_tx
-					.blocking_send(VncThreadMessageOutput::FramebufferUpdate(
-						self.rects_in_frame.clone(),
-					));
+		self.out_tx.send(VncThreadMessageOutput::Disconnect).await?;
 
-				self.rects_in_frame.clear();
-			}
-		}
-
-		true
-	}
-
-	// higher level stuff
-
-	fn keyboard_event(&mut self, keysym: u32, pressed: bool) {
-		unsafe {
-			vnc::SendKeyEvent(
-				self.vnc,
-				keysym,
-				if pressed {
-					RfbBool::True as i8
-				} else {
-					RfbBool::False as i8
-				},
-			);
-		}
-	}
-
-	fn mouse_event(&mut self, pt: Point, buttons: u8) {
-		unsafe {
-			vnc::SendPointerEvent(self.vnc, pt.x as i32, pt.y as i32, buttons as i32);
-		}
-	}
-
-	fn malloc_frame_buffer(&mut self) {
-		let size: Size = unsafe {
-			let ptr = self.vnc;
-			Size {
-				width: (*ptr).width as u32,
-				height: (*ptr).height as u32,
-			}
-		};
-
-
-		let mut surf = self.surf.lock().expect("failed to lock");
-
-		surf.resize(size.clone());
-
-		unsafe {
-			(*self.vnc).frameBuffer = surf.get_buffer().as_mut_ptr() as *mut u8;
-		}
-
-		println!("new size {:?}", size);
-
-		let _ = self
-			.out_tx
-			.blocking_send(VncThreadMessageOutput::FramebufferResized(size));
-	}
-
-	fn framebuffer_update(&mut self, rect: Rect) {
-		self.rects_in_frame.push(rect);
-	}
-
-	// libvnc hellscape
-
-	/// creates a rfb client
-	fn rfb_create_client() -> *mut vnc::rfbClient {
-		unsafe {
-			let client = vnc::rfbGetClient(8, 3, 4);
-
-			(*client).appData.shareDesktop = RfbBool::True as i8;
-			//(*client).appData.encodingsString = b"raw\0".as_ptr() as *const i8;
-
-			(*client).MallocFrameBuffer = Some(Self::rfb_malloc_frame_buffer_cb);
-			(*client).canHandleNewFBSize = RfbBool::True as i32;
-			(*client).GotFrameBufferUpdate = Some(Self::rfb_framebuffer_update_cb);
-
-			init_rfb_pixel_format(&mut (*client).format);
-
-			client
-		}
-	}
-
-	/// grabs the client pointer from libvnc client
-	/// SAFETY: the client must have been initalized with [Self::rfb_create_client]
-	unsafe fn rfb_get_client_ptr_from_libvnc(client_ptr: *mut vnc::rfbClient) -> *mut Client {
-		vnc::rfbClientGetClientData(client_ptr, VNC_TAG as *mut std::ffi::c_void) as *mut Client
-	}
-
-	unsafe extern "C" fn rfb_framebuffer_update_cb(
-		client_ptr: *mut vnc::rfbClient,
-		x: i32,
-		y: i32,
-		w: i32,
-		h: i32,
-	) {
-		let client = Self::rfb_get_client_ptr_from_libvnc(client_ptr);
-		(*client).framebuffer_update(Rect {
-			x: x as u32,
-			y: y as u32,
-			width: w as u32,
-			height: h as u32,
-		});
-	}
-
-	unsafe extern "C" fn rfb_malloc_frame_buffer_cb(
-		client_ptr: *mut vnc::rfbClient,
-	) -> vnc::rfbBool {
-		unsafe {
-			let client = Self::rfb_get_client_ptr_from_libvnc(client_ptr);
-			(*client).malloc_frame_buffer();
-			RfbBool::True as vnc::rfbBool
-		}
-	}
-
-	pub fn cleanup(&mut self) {
-		unsafe {
-			println!("Client::cleanup() called");
-			if self.vnc != std::ptr::null_mut() {
-				// clean up the client
-				vnc::rfbClientCleanup(self.vnc);
-				self.vnc = std::ptr::null_mut();
-			}
-		}
+		Ok(())
 	}
 }
 
 impl Drop for Client {
 	fn drop(&mut self) {
 		println!("Client drop()ed");
-		self.cleanup();
 	}
 }
