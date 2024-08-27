@@ -7,35 +7,36 @@ import EventEmitter from 'events';
 
 let native = require('./index.node');
 
-function sleep(ms) {
-	return {
-		then: (cb) => {
-			setTimeout(() => cb(), ms);
-		}
-	};
-}
-
 // Wrapper over the cvm-rs native VNC client inner
-// to make it more node-matic
+// to make it more idiomatic node.js
 export class VncClient extends EventEmitter {
 	#client = new native.ClientInnerImpl();
 	#size = null;
 	#disc = false;
+	#buffer = null;
 
-	async ConnectAsync(addr) {
+	Connect(addr) {
 		this.#client.connect(addr);
 
-		// run a reduced speed poll until we get a connect or disconnect event
-		while (true) {
+		// run a reduced speed poll to wait until we get a connect or disconnect event
+		let poll = () => {
 			let ev = this.#client.pollEvent();
 
 			if (ev.event == 'connect') {
 				this.#Spawn();
-				return true;
-			} else if (ev.event == 'disconnect') return false;
+				return;
+			} else if (ev.event == 'disconnect') {
+				this.#client.disconnect();
+				this.emit('disconnect');
+				return;
+			}
 
-			await sleep(66);
-		}
+			setTimeout(() => {
+				process.nextTick(poll);
+			}, 66);
+		};
+
+		process.nextTick(poll);
 	}
 
 	#Spawn() {
@@ -58,12 +59,12 @@ export class VncClient extends EventEmitter {
 			// empty object means there was no event observed
 			if (event.event !== undefined) {
 				if (event.event == 'disconnect') {
-					console.log('recv disconnect event');
 					this.emit('disconnect');
 					return;
 				}
 
 				if (event.event == 'resize') {
+					self.#buffer = self.#client.getSurfaceBuffer();
 					self.#size = event.size;
 					self.emit('resize', self.#size);
 				}
@@ -94,12 +95,11 @@ export class VncClient extends EventEmitter {
 	}
 
 	Buffer() {
-		return this.#client.getSurfaceBuffer();
+		return this.#buffer;
 	}
 
 	Disconnect() {
 		process.nextTick(() => {
-			console.log('disconnecting');
 			this.#disc = true;
 		});
 	}

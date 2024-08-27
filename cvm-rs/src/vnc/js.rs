@@ -80,11 +80,16 @@ impl JsClient {
 
 	#[napi]
 	pub fn disconnect(&mut self) -> napi::Result<()> {
-		// This will drop the tx side of the VNC engine input,
-		// which will make it close the connection
+		if let Some(tx) = self.event_tx.as_ref() {
+			let _ = tx.blocking_send(VncThreadMessageInput::Disconnect);
+		}
+		Ok(())
+	}
+
+	fn reset_channels(&mut self) {
+		// Destroy the channels after we recieve this
 		self.event_tx = None;
 		self.event_rx = None;
-		Ok(())
 	}
 
 	#[napi]
@@ -102,6 +107,8 @@ impl JsClient {
 
 					VncThreadMessageOutput::Disconnect => {
 						obj.set("event", "disconnect")?;
+
+						self.reset_channels();
 
 						return Ok(obj);
 					}
@@ -142,6 +149,8 @@ impl JsClient {
 		// It is used but I guess something is mad
 		#[allow(unused_assignments)]
 		let mut address: Option<client::Address> = None;
+
+		self.reset_channels();
 
 		self.event_tx = Some(engine_input_tx);
 		self.event_rx = Some(engine_output_rx);

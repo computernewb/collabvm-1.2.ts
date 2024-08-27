@@ -36,6 +36,7 @@ pub enum VncThreadMessageOutput {
 pub enum VncThreadMessageInput {
 	KeyEvent { keysym: u32, pressed: bool },
 	MouseEvent { pt: Point, buttons: u8 },
+	Disconnect,
 }
 
 pub struct Client {
@@ -122,6 +123,7 @@ impl Client {
 						}))
 						.await?;
 					}
+					VncThreadMessageInput::Disconnect => break,
 				},
 
 				Err(TryRecvError::Empty) => {}
@@ -129,7 +131,6 @@ impl Client {
 				// Close the connection
 				Err(TryRecvError::Disconnected) => {
 					println!("disconnected from rx");
-					vnc.close().await?;
 					break;
 				}
 			}
@@ -168,7 +169,7 @@ impl Client {
 							{
 								let mut lk = self.surf.lock().expect("NO CHEESE");
 
-								// blit onto
+								// blit onto the surface
 								lk.blit_buffer(Rect::from(dest_rect), unsafe {
 									std::slice::from_raw_parts(
 										data.as_ptr() as *const u32,
@@ -207,6 +208,8 @@ impl Client {
 			tokio::time::sleep(Duration::from_millis(2)).await;
 		}
 
+		// Disconnect if we exit. We don't care about errors in this path
+		let _ = vnc.close().await;
 		self.out_tx.send(VncThreadMessageOutput::Disconnect).await?;
 
 		Ok(())
