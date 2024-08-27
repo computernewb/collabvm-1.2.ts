@@ -177,16 +177,15 @@ impl JsClient {
 					// connect first. if this doesn't work we end the thread early and send a disconnect message to make that clear
 					match client.connect_and_run(address.unwrap()).await {
 						Ok(_) => {
-							println!("conn");
+							println!("connection broke out");
 						}
 						Err(e) => {
 							println!("FUCK {:?}", e);
-							tx_clone.send(VncThreadMessageOutput::Disconnect).await?;
+
+							let _ = tx_clone.send(VncThreadMessageOutput::Disconnect).await?;
 							return Err(e);
 						}
 					}
-
-					tx_clone.send(VncThreadMessageOutput::Disconnect).await?;
 
 					Ok(())
 				});

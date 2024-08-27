@@ -30,7 +30,6 @@ export class VncClient extends EventEmitter {
 			let ev = this.#client.pollEvent();
 
 			if (ev.event == 'connect') {
-				this.emit('connect');
 				this.#Spawn();
 				return true;
 			} else if (ev.event == 'disconnect') return false;
@@ -39,33 +38,47 @@ export class VncClient extends EventEmitter {
 		}
 	}
 
-	async #Spawn() {
-		(async () => {
-			// engine loop on JS side
-			while (!this.#disc) {
-				let event = this.#client.pollEvent();
+	#Spawn() {
+		let self = this;
 
-				// empty object means there was no event observed
-				if (event.event !== undefined) {
-					if (event.event == 'disconnect') {
-						break;
-					}
+		this.emit('connect');
 
-					if (event.event == 'resize') {
-						this.#size = event.size;
-						this.emit('resize', this.#size);
-					}
+		let loop = () => {
+			if (self.#disc) {
+				self.#disc = false;
 
-					if (event.event == 'rects') {
-						this.emit('rects', event.rects);
-					}
-				}
-
-				await sleep(8);
+				console.log('disconnecting in loop');
+				self.#client.disconnect();
+				this.emit('disconnect');
+				return;
 			}
 
-			this.#disc = false;
-		}).call(this);
+			let event = self.#client.pollEvent();
+
+			// empty object means there was no event observed
+			if (event.event !== undefined) {
+				if (event.event == 'disconnect') {
+					console.log('recv disconnect event');
+					this.emit('disconnect');
+					return;
+				}
+
+				if (event.event == 'resize') {
+					self.#size = event.size;
+					self.emit('resize', self.#size);
+				}
+
+				if (event.event == 'rects') {
+					self.emit('rects', event.rects);
+				}
+			}
+
+			setTimeout(() => {
+				process.nextTick(loop);
+			}, 8);
+		};
+
+		process.nextTick(loop);
 	}
 
 	async SendMouse(x, y, buttons) {
@@ -85,8 +98,9 @@ export class VncClient extends EventEmitter {
 	}
 
 	Disconnect() {
-		this.#disc = true;
-		this.#client.disconnect();
-		this.emit('disconnect');
+		process.nextTick(() => {
+			console.log('disconnecting');
+			this.#disc = true;
+		});
 	}
 }
