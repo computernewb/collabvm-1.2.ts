@@ -22,7 +22,7 @@ export function jpegEncode(input: JpegInputArgs): Promise<Buffer>;
 // TODO: Version that can downscale?
 
 export class VncClient extends EventEmitter {
-	ConnectAsync(addr: string): Promise<void>;
+	Connect(addr: string): void;
 
 	SendMouse(x: number, y: number, buttons: number): Promise<void>;
 

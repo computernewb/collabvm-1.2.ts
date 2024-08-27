@@ -40,18 +40,19 @@ export default class VNCVM extends EventEmitter implements VM {
 	private Connect() {
 		if (this.vnc) {
 			this.Disconnect();
+		} else {
+			// initalize a new display
+			this.vnc = new VncDisplay({
+				host: this.def.vncHost,
+				port: this.def.vncPort
+			});
+
+			let self = this;
+			this.vnc.on('connected', () => {
+				self.logger.info('Connected');
+				self.SetState(VMState.Started);
+			});
 		}
-
-		this.vnc = new VncDisplay({
-			host: this.def.vncHost,
-			port: this.def.vncPort
-		});
-
-		let self = this;
-		this.vnc.on('connected', () => {
-			self.logger.info('Connected');
-			self.SetState(VMState.Started);
-		});
 
 		this.vnc.Connect();
 	}
@@ -59,15 +60,14 @@ export default class VNCVM extends EventEmitter implements VM {
 	private Disconnect() {
 		if (this.vnc) {
 			this.vnc.Disconnect();
-			this.vnc.removeAllListeners();
-			this.vnc = null;
+			//this.vnc.removeAllListeners();
 		}
 	}
 
 	private SetState(newState: VMState) {
 		this.state = newState;
 
-		// I'm not entirely sure why this needs to be 
+		// I'm not entirely sure why this needs to be
 		// queued into the next-tick queue, but
 		// doing so makes it work so idk
 		process.nextTick(() => {

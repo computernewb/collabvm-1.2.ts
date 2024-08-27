@@ -124,7 +124,6 @@ impl Surface {
 	}
 
 	pub fn resize(&mut self, size: Size) {
-		println!("Surface::resize() : {:?}", size);
 		self.size = size;
 		self.buffer
 			.resize(self.size.linear().expect("never fails"), 0);
