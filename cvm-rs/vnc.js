@@ -23,7 +23,6 @@ export class VncClient extends EventEmitter {
 	#disc = false;
 
 	async ConnectAsync(addr) {
-		console.log('VncClient.connectAsync()', addr);
 		this.#client.connect(addr);
 
 		// run a reduced speed poll until we get a connect or disconnect event
@@ -48,13 +47,11 @@ export class VncClient extends EventEmitter {
 
 				// empty object means there was no event observed
 				if (event.event !== undefined) {
-					//console.log(event);
 					if (event.event == 'disconnect') {
 						break;
 					}
 
 					if (event.event == 'resize') {
-						console.log('resize event');
 						this.#size = event.size;
 						this.emit('resize', this.#size);
 					}
