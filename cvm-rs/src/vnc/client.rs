@@ -1,4 +1,4 @@
-//! this hacky pile of hacks is brought to you by lily
+//! Native-side VNC client. This is usually run in another OS thread.
 
 use super::surface::Surface;
 use super::types::*;
@@ -127,7 +127,7 @@ impl Client {
 				Err(TryRecvError::Empty) => {}
 
 				// On disconnection from the client input channel
-				// we just give up
+				// we just give up and disconnect early.
 				Err(TryRecvError::Disconnected) => {
 					break;
 				}
