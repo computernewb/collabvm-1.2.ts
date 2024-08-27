@@ -52,6 +52,8 @@ export default class VNCVM extends EventEmitter implements VM {
 			self.logger.info('Connected');
 			self.SetState(VMState.Started);
 		});
+
+		this.vnc.Connect();
 	}
 
 	private Disconnect() {

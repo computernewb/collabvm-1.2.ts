@@ -187,12 +187,12 @@ impl Client {
 				Ok(None) => {
 					vnc.input(X11Event::Refresh).await?;
 
+					let batched = Rect::batch(&self.rects_in_frame);
+
 					// send current update state
 					if !self.rects_in_frame.is_empty() {
 						self.out_tx
-							.send(VncThreadMessageOutput::FramebufferUpdate(
-								self.rects_in_frame.clone(),
-							))
+							.send(VncThreadMessageOutput::FramebufferUpdate(vec![batched]))
 							.await?;
 
 						self.rects_in_frame.clear();
