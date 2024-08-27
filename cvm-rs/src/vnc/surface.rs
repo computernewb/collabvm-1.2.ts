@@ -26,6 +26,53 @@ impl Rect {
 
 		width_inclusive && height_inclusive
 	}
+
+	/// cvmts rect batcher
+	pub fn batch(rects: &Vec<Self>) -> Self {
+		let mut batched_rect = Rect {
+			x: 0,
+			y: 0,
+			width: 0,
+			height: 0,
+		};
+
+		if rects.len() == 1 {
+			return rects[0].clone();
+		}
+
+		/*
+
+		rects.forEach((r) => {
+			if (r.x < mergedX) mergedX = r.x;
+			if (r.y < mergedY) mergedY = r.y;
+		});
+
+		rects.forEach((r) => {
+			if (r.height + r.y - mergedY > mergedHeight) mergedHeight = r.height + r.y - mergedY;
+			if (r.width + r.x - mergedX > mergedWidth) mergedWidth = r.width + r.x - mergedX;
+		});
+			 */
+
+		for rect in rects.into_iter() {
+			if rect.x < batched_rect.x {
+				batched_rect.x = rect.x;
+			}
+			if rect.y < batched_rect.y {
+				batched_rect.y = rect.y;
+			}
+		}
+
+		for rect in rects.into_iter() {
+			if rect.height + rect.y - batched_rect.y > batched_rect.height {
+				batched_rect.height = rect.height + rect.y - batched_rect.y;
+			}
+			if rect.width + rect.x - batched_rect.x > batched_rect.width {
+				batched_rect.width = rect.width + rect.x - batched_rect.x;
+			}
+		}
+
+		batched_rect
+	}
 }
 
 impl From<vnc::Rect> for Rect {
@@ -77,8 +124,9 @@ impl Surface {
 	}
 
 	pub fn resize(&mut self, size: Size) {
-		self.buffer.resize(size.linear().expect("never fails"), 0);
+		println!("Surface::resize() : {:?}", size);
 		self.size = size;
+		self.buffer.resize(self.size.linear().expect("never fails"), 0);
 	}
 
 	pub fn get_buffer(&mut self) -> &mut Vec<u32> {
@@ -97,10 +145,9 @@ impl Surface {
 		}
 		 */
 
-		 
-		 /* 
-		for y in src_at.y..src_at.y + src_at.height - 1 {
-			for x in src_at.x..src_at.x + src_at.width - 1 {
+		
+		for y in src_at.y..src_at.y + src_at.height {
+			//for x in src_at.x..src_at.x + src_at.width {
 				let src = &data[off..off + src_at.width as usize];
 				let dest_start_offset = (y as usize * self.size.width as usize) + src_at.x as usize;
 
@@ -109,14 +156,12 @@ impl Surface {
 
 				dest.copy_from_slice(src);
 
-				off += 1;
-			}
+				off += (src_at.width as usize);
+			//}
 		}
-		 */
-		 
 		 
 
-		
+		 /* 
 		let start = ((src_at.y * self.size.width) + src_at.x);
 		let end = (src_at.y + src_at.height) * self.size.width;
 
@@ -130,9 +175,7 @@ impl Surface {
 
 			off += src_at.width;
 		}
-
-		
-		
+		*/
 	}
 
 	/*

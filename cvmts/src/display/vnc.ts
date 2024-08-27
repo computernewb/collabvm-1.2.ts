@@ -68,10 +68,6 @@ export class VncDisplay extends EventEmitter implements VMDisplay {
 
 			this.emit('frame');
 		});
-
-		// emulate nodejs-rfb behaviour of
-		// automatically connecting to the target
-		this.Connect();
 	}
 
 	private Reconnect() {
