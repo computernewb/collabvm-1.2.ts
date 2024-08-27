@@ -28,6 +28,17 @@ impl Rect {
 	}
 }
 
+impl From<vnc::Rect> for Rect {
+	fn from(value: vnc::Rect) -> Self {
+		Self {
+			x: value.x as u32,
+			y: value.y as u32,
+			width: value.width as u32,
+			height: value.height as u32,
+		}
+	}
+}
+
 #[napi(object)]
 #[derive(Debug)]
 pub struct Point {
@@ -73,7 +84,6 @@ impl Surface {
 	pub fn get_buffer(&mut self) -> &mut Vec<u32> {
 		&mut self.buffer
 	}
-	/*
 
 	/// Blits a buffer to this surface.
 	pub fn blit_buffer(&mut self, src_at: Rect, data: &[u32]) {
@@ -87,6 +97,26 @@ impl Surface {
 		}
 		 */
 
+		 
+		 /* 
+		for y in src_at.y..src_at.y + src_at.height - 1 {
+			for x in src_at.x..src_at.x + src_at.width - 1 {
+				let src = &data[off..off + src_at.width as usize];
+				let dest_start_offset = (y as usize * self.size.width as usize) + src_at.x as usize;
+
+				let dest =
+					&mut self.buffer[dest_start_offset..dest_start_offset + src_at.width as usize];
+
+				dest.copy_from_slice(src);
+
+				off += 1;
+			}
+		}
+		 */
+		 
+		 
+
+		
 		let start = ((src_at.y * self.size.width) + src_at.x);
 		let end = (src_at.y + src_at.height) * self.size.width;
 
@@ -100,8 +130,12 @@ impl Surface {
 
 			off += src_at.width;
 		}
+
+		
+		
 	}
 
+	/*
 	/// Returns a cloned surface containing a portion of this surface.
 	pub fn sub_surface(&self, at: Rect) -> Surface {
 		let rect = Rect {
