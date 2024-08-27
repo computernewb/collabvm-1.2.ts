@@ -213,9 +213,3 @@ impl Client {
 		Ok(())
 	}
 }
-
-impl Drop for Client {
-	fn drop(&mut self) {
-		println!("Client drop()ed");
-	}
-}

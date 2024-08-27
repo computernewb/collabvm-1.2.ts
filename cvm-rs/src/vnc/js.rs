@@ -97,7 +97,6 @@ impl JsClient {
 					}
 
 					VncThreadMessageOutput::FramebufferResized(size) => {
-						println!("RESIZE GET");
 						obj.set("event", "resize")?;
 						obj.set("size", size)?;
 
