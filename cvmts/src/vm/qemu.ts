@@ -42,9 +42,6 @@ export class QemuVMShim implements VM {
 	}
 
 	StartDisplay(): void {
-		console.log('entering StartDisplay');
-
-
 		let self = this;
 
 		// boot it up
@@ -68,7 +65,6 @@ export class QemuVMShim implements VM {
 					break;
 			}
 
-
 			this.display?.on('connected', () => {
 				// The VM can now be considered started
 				self.logger.info('Display connected');
@@ -76,7 +72,6 @@ export class QemuVMShim implements VM {
 		}
 
 		process.nextTick(() => {
-			console.log('trying to connect to display');
 			// now that QMP has connected, connect to the display
 			self.display?.Connect();
 		});

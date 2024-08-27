@@ -131,14 +131,14 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 				// start the display
 				if (self.VM.GetDisplay() == null) {
 					self.VM.StartDisplay();
-				}
 
-				self.VM.GetDisplay()?.on('connected', () => {
-					// well aware this sucks but whatever
-					self.VM.GetDisplay()?.on('resize', (size: Size) => self.OnDisplayResized(size));
-					self.VM.GetDisplay()?.on('rect', (rect: Rect) => self.OnDisplayRectangle(rect));
-					self.VM.GetDisplay()?.on('frame', () => self.OnDisplayFrame());
-				});
+					self.VM.GetDisplay()?.on('connected', () => {
+						// well aware this sucks but whatever
+						self.VM.GetDisplay()?.on('resize', (size: Size) => self.OnDisplayResized(size));
+						self.VM.GetDisplay()?.on('rect', (rect: Rect) => self.OnDisplayRectangle(rect));
+						self.VM.GetDisplay()?.on('frame', () => self.OnDisplayFrame());
+					});
+				}
 			}
 
 			if (newState == VMState.Stopped) {
@@ -674,8 +674,7 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 			this.screenHidden = false;
 			let displaySize = this.VM.GetDisplay()?.Size();
 
-			if(displaySize == undefined)
-				return;
+			if (displaySize == undefined) return;
 
 			let encoded = await this.MakeRectData({
 				x: 0,

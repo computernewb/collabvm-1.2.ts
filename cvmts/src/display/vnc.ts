@@ -30,13 +30,10 @@ export class VncDisplay extends EventEmitter implements VMDisplay {
 
 	private vncShouldReconnect: boolean = false;
 	private vncConnectOpts: any;
-	private buffer: Buffer | null = null;
 	private connected = State.Inactive;
 
 	constructor(vncConnectOpts: any) {
 		super();
-
-		console.log('VncDisplay constructor', vncConnectOpts);
 
 		this.vncConnectOpts = vncConnectOpts;
 
@@ -49,11 +46,13 @@ export class VncDisplay extends EventEmitter implements VMDisplay {
 
 		this.displayVnc.on('disconnect', () => {
 			self.connected = State.Inactive;
-			this.Reconnect();
+			// instead of spamming we can nicely do it
+			setTimeout(() => {
+				self.Reconnect();
+			}, 50);
 		});
 
 		this.displayVnc.on('resize', (size: Size) => {
-			self.buffer = self.displayVnc.Buffer();
 			this.emit('resize', size);
 		});
 
@@ -76,10 +75,8 @@ export class VncDisplay extends EventEmitter implements VMDisplay {
 		// TODO: this should also give up after a max tries count
 		// if we fail after max tries, emit a event
 
-		console.log('VNC connect', this.vncConnectOpts);
-
-		if (this.vncConnectOpts.host) this.displayVnc.ConnectAsync(`${this.vncConnectOpts.host}:${this.vncConnectOpts.port}`).then(() => {});
-		else if (this.vncConnectOpts.path) this.displayVnc.ConnectAsync(`${this.vncConnectOpts.path}`).then(() => {});
+		if (this.vncConnectOpts.host) this.displayVnc.Connect(`${this.vncConnectOpts.host}:${this.vncConnectOpts.port}`);
+		else if (this.vncConnectOpts.path) this.displayVnc.Connect(`${this.vncConnectOpts.path}`);
 	}
 
 	Connect() {
@@ -90,10 +87,6 @@ export class VncDisplay extends EventEmitter implements VMDisplay {
 	Disconnect() {
 		this.vncShouldReconnect = false;
 		this.displayVnc.Disconnect();
-
-		// bye bye!
-		this.displayVnc.removeAllListeners();
-		this.removeAllListeners();
 	}
 
 	Connected() {
@@ -101,7 +94,7 @@ export class VncDisplay extends EventEmitter implements VMDisplay {
 	}
 
 	Buffer(): Buffer {
-		return this.buffer!;
+		return this.displayVnc.Buffer();
 	}
 
 	Size(): Size {
