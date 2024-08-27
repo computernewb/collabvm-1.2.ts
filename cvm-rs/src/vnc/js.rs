@@ -1,6 +1,7 @@
 use super::{
 	client::{self, *},
-	surface::{Point, Rect, Surface},
+	surface::Surface,
+	types::*,
 };
 use napi::{Env, JsBuffer, JsObject};
 use napi_derive::napi;
@@ -13,16 +14,7 @@ use tokio::sync::mpsc::{channel, error::TryRecvError, Receiver, Sender};
 pub struct JsClient {
 	surf: Arc<Mutex<Surface>>,
 	event_tx: Option<Sender<VncThreadMessageInput>>,
-	event_rx: Option<Receiver<VncThreadMessageOutput>>, //js_event_cb: napi::JsFunction,
-}
-
-// hack
-unsafe impl Sync for JsClient {}
-
-#[napi(object)]
-pub struct JsRectEvent {
-	pub event: String, // "rects"
-	pub rects: Vec<Rect>,
+	event_rx: Option<Receiver<VncThreadMessageOutput>>,
 }
 
 #[napi]
@@ -133,11 +125,12 @@ impl JsClient {
 				}
 
 				Err(TryRecvError::Disconnected) => {
-					return Err(anyhow::anyhow!("disconnected..").into());
+					return Ok(obj);
+					//return Err(anyhow::anyhow!("Channel is disconnected").into());
 				}
 			}
 		} else {
-			Err(anyhow::anyhow!("????").into())
+			Err(anyhow::anyhow!("No VNC engine is running for this client").into())
 		}
 	}
 
@@ -168,7 +161,7 @@ impl JsClient {
 
 		// start the VNC engine thread
 		let _ = std::thread::Builder::new()
-			.name("vnc-engine".into())
+			.name("cvmrs-vnc-work".into())
 			.spawn(move || {
 				// Create a single-thread tokio runtime specifically for the VNC engine
 				let rt = tokio::runtime::Builder::new_current_thread()
@@ -183,14 +176,15 @@ impl JsClient {
 
 				// run the VNC engine on the Tokio runtime
 				let _ = rt.block_on(async {
-					// connect first. if this doesn't work we end the thread early and send a disconnect message to make that clear
+					// Connect to the VNC server. This runs the main loop
 					match client.connect_and_run(address.unwrap()).await {
 						Ok(_) => {
-							println!("connection broke out");
+							// No error occured
 						}
-						Err(e) => {
-							println!("FUCK {:?}", e);
 
+						Err(e) => {
+							// TODO: Marshal to javascript the error
+							//println!("Error {:?}", e);
 							let _ = tx_clone.send(VncThreadMessageOutput::Disconnect).await?;
 							return Err(e);
 						}
