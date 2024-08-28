@@ -159,21 +159,21 @@ impl Client {
 						// TODO copy rect
 						//}
 
-						// TODO: make this not thunder herd and send like a boatload of image messages,
-						// and batch it into one (which I suspect is what sometime is casing lag)
-						VncEvent::RawImage(dest_rect, data) => {
-							self.rects_in_frame.push(Rect::from(dest_rect));
+						VncEvent::RawImage(rects) => {
+							let mut lk = self.surf.lock().expect("couldn't lock Surface");
 
-							{
-								let mut lk = self.surf.lock().expect("couldn't lock Surface");
+							for rect in rects.iter() {
+								let cvm_rect = Rect::from(rect.rect);
 
 								// blit onto the surface
-								lk.blit_buffer(Rect::from(dest_rect), unsafe {
+								lk.blit_buffer(cvm_rect.clone(), unsafe {
 									std::slice::from_raw_parts(
-										data.as_ptr() as *const u32,
-										data.len() / core::mem::size_of::<u32>(),
+										rect.data.as_ptr() as *const u32,
+										rect.data.len() / core::mem::size_of::<u32>(),
 									)
 								});
+
+								self.rects_in_frame.push(cvm_rect);
 							}
 						}
 
