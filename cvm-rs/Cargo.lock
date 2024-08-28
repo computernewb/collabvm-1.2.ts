@@ -173,7 +173,6 @@ dependencies = [
  "napi",
  "napi-build",
  "napi-derive",
- "napi_ext",
  "once_cell",
  "rayon",
  "tokio",
@@ -432,29 +431,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "427802e8ec3a734331fec1035594a210ce1ff4dc5bc1950530920ab717964ea3"
 dependencies = [
  "libloading",
-]
-
-[[package]]
-name = "napi_ext"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "71c9e62e986a0a73a18f56784a989412fb1308678f8a4e0fda0dce2da5ccf97a"
-dependencies = [
- "futures",
- "napi",
- "napi_ext_macros",
- "once_cell",
-]
-
-[[package]]
-name = "napi_ext_macros"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c5f7c67a99e206d52392dcaa83b825faaa5f2c8255fec090b223a375c73762a1"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
 ]
 
 [[package]]
@@ -800,8 +776,7 @@ checksum = "d4c87d22b6e3f4a18d4d40ef354e97c90fcb14dd91d7dc0aa9d8a1172ebf7202"
 [[package]]
 name = "vnc-rs"
 version = "0.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cbf028bd7838e68563c5418379ca9e65e7a61ab3810a9c6a819f3421f17f30e0"
+source = "git+https://github.com/computernewb/vnc-rs.git#f238a4e65b788403226d9c68da9b29a6fb942c1e"
 dependencies = [
  "async_io_stream",
  "flate2",
