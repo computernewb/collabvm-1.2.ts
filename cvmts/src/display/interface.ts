@@ -6,7 +6,7 @@ import { Size, Rect } from '../Utilities';
 //
 // 'connected' -> () -> on successful connection
 // 'resize' -> (w, h) -> done when resize occurs
-// 'rect' -> (x, y, Buffer) -> framebuffer rect (RGBA)
+// 'rects' -> (rects: Rect[]) -> framebuffer rects
 // 'frame' -> () -> done at end of frame
 
 export interface VMDisplay extends EventEmitter {

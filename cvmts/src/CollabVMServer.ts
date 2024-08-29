@@ -903,6 +903,10 @@ export default class CollabVMServer {
 		await Promise.all(promises);
 	}
 
+	private async OnDisplayFrame() {
+		// send sync?
+	}
+
 	private async SendFullScreenWithSize(client: User) {
 		let display = this.VM.GetDisplay();
 		if (display == null) return;
@@ -938,6 +942,8 @@ export default class CollabVMServer {
 
 		// TODO: actually throw an error here
 		if (display == null) return Buffer.from('no');
+
+		if (rect.width == 0 || rect.height == 0) return Buffer.from('??? Fuck YOu DOing');
 
 		let displaySize = display.Size();
 		let encoded = await JPEGEncoder.Encode(display.Buffer(), displaySize, rect);

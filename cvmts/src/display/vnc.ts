@@ -1,7 +1,6 @@
 import { VncClient } from '@cvmts/cvm-rs';
 import { EventEmitter } from 'node:events';
 import { Clamp } from '../Utilities.js';
-import { BatchRects } from './batch.js';
 import { VMDisplay } from './interface.js';
 
 import { Size, Rect } from '../Utilities.js';
@@ -57,16 +56,11 @@ export class VncDisplay extends EventEmitter implements VMDisplay {
 		});
 
 		this.displayVnc.on('rects', (rects: Rect[]) => {
-			// use the cvmts batcher
-			let batched = BatchRects(this.Size(), rects);
-			this.emit('rect', batched);
-
-			// unbatched (watch the performace go now)
-			//for(let rect of rects)
-			//	this.emit('rect', rect);
-
+			this.emit('rects', rects);
 			this.emit('frame');
 		});
+
+		
 	}
 
 	private Reconnect() {
