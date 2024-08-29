@@ -1,4 +1,5 @@
 //! Shared types
+
 use napi_derive::napi;
 
 #[napi(object)]
@@ -11,8 +12,10 @@ pub struct Rect {
 }
 
 impl Rect {
-	/// cvmts rect batcher
-	pub fn batch(rects: &Vec<Self>) -> Self {
+	/// Batch a set of rectangles into a larger area, which is split into at least
+	/// 4 (currently) seperate rectangles (whos area ultimately adds up to the same).
+	pub fn batch_set(rects: &mut Vec<Self>) {
+		// This rect contains the overall area. It is split into pieces later.
 		let mut batched_rect = Rect {
 			x: 0,
 			y: 0,
@@ -20,8 +23,11 @@ impl Rect {
 			height: 0,
 		};
 
+		// Don't batch. Maybe split these too?
 		if rects.len() == 1 {
-			return rects[0].clone();
+			//let r = rects[0].clone();
+			//Self::split_into(&r, 4, rects);
+			return ();
 		}
 
 		for rect in rects.into_iter() {
@@ -42,7 +48,79 @@ impl Rect {
 			}
 		}
 
-		batched_rect
+		Self::split_into(&batched_rect, 4, rects);
+	}
+
+	/// Splits a input rectangle into multiple which will
+	/// add into the same space as the input.
+	pub fn split_into(rect: &Self, depth: u32, output: &mut Vec<Self>) {
+		//println!("batched rect: {:?}", rect);
+
+		output.clear();
+
+		let columns = ((depth as f32).sqrt()).ceil() as u32;
+
+		let rows = depth / columns;
+		let nr_orphans = depth % columns;
+
+		let width = rect.width / columns;
+		let height = rect.height / if nr_orphans == 0 { rows } else { rows + 1 };
+
+		for y in 0..rows {
+			for x in 0..columns {
+				let splat = Self {
+					x: x * width,
+					y: y * height,
+					width: width,
+					height: height,
+				};
+				output.push(splat);
+			}
+		}
+
+		if nr_orphans > 0 {
+			let orphan_width = rect.width / nr_orphans;
+
+			for x in 0..nr_orphans {
+				// don't think this is entirely correct,
+				// because it causes some graphical glitches
+				let splat = Self {
+					x: x * orphan_width,
+					y: rows * height,
+					width: orphan_width,
+					height: height,
+				};
+				output.push(splat);
+			}
+		}
+
+		// doesn't work properly, but it looks cool
+		/*
+
+		let mut rect_x = rect.x / depth;
+		let mut rect_y = rect.y / depth;
+
+		if rect_x == 0 {
+			rect_x = (rect.width / depth);
+		}
+
+		if rect_y == 0 {
+			rect_y = (rect.height / depth);
+		}
+
+		for i in 0..depth {
+			let splat = Self {
+				x: rect_x * i,
+				y: rect_y * i,
+				width: (rect.width / depth),
+				height: (rect.height / depth),
+			};
+
+			output.push(splat);
+		}
+		*/
+
+		//println!("out: {:?}", output);
 	}
 }
 
