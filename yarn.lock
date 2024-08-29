@@ -34,13 +34,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@computernewb/nodejs-rfb@npm:^0.3.0":
-  version: 0.3.0
-  resolution: "@computernewb/nodejs-rfb@npm:0.3.0"
-  checksum: 10c0/915a76118011a4a64e28fcc91fafcffe659e5e86db2505554578f1e5dff4883dbaf5fcc013ac377719fe9c798e730b178aa5030027da0f5a9583355ec2ac8af2
-  languageName: node
-  linkType: hard
-
 "@computernewb/superqemu@npm:^0.3.0":
   version: 0.3.2
   resolution: "@computernewb/superqemu@npm:0.3.2"
@@ -74,7 +67,6 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@cvmts/cvmts@workspace:cvmts"
   dependencies:
-    "@computernewb/nodejs-rfb": "npm:^0.3.0"
     "@computernewb/superqemu": "npm:^0.3.0"
     "@cvmts/cvm-rs": "npm:*"
     "@maxmind/geoip2-node": "npm:^5.0.0"

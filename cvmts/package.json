@@ -12,7 +12,6 @@
 	"author": "Elijah R, modeco80",
 	"license": "GPL-3.0",
 	"dependencies": {
-		"@computernewb/nodejs-rfb": "^0.3.0",
 		"@computernewb/superqemu": "^0.3.0",
 		"@cvmts/cvm-rs": "*",
 		"@maxmind/geoip2-node": "^5.0.0",
