@@ -158,7 +158,6 @@ impl Client {
 						//VncEvent::Copy(dest_rect, src_rect) => {
 						// TODO copy rect
 						//}
-
 						VncEvent::RawImage(rects) => {
 							let mut lk = self.surf.lock().expect("couldn't lock Surface");
 
@@ -185,15 +184,19 @@ impl Client {
 				Ok(None) => {
 					vnc.input(X11Event::Refresh).await?;
 
-					let batched = Rect::batch(&self.rects_in_frame);
-
-					// send current update state
 					if !self.rects_in_frame.is_empty() {
-						self.out_tx
-							.send(VncThreadMessageOutput::FramebufferUpdate(vec![batched]))
-							.await?;
+						Rect::batch_set(&mut self.rects_in_frame);
 
-						self.rects_in_frame.clear();
+						// send current update state
+						if !self.rects_in_frame.is_empty() {
+							self.out_tx
+								.send(VncThreadMessageOutput::FramebufferUpdate(
+									self.rects_in_frame.clone(),
+								))
+								.await?;
+
+							self.rects_in_frame.clear();
+						}
 					}
 				}
 
