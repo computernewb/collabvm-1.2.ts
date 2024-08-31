@@ -1,4 +1,4 @@
-//! Shared types
+//! Shared types.
 
 use napi_derive::napi;
 

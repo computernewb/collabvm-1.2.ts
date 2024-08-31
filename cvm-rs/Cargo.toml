@@ -25,5 +25,9 @@ anyhow = "1.0.86"
 vnc-rs = { git = "https://github.com/computernewb/vnc-rs.git" }
 tokio = { version = "1.39.3", features = ["full"] }
 
+# vnc thumbnails
+resize = "0.8.7"
+rgb = "0.8.50"
+
 [build-dependencies]
 napi-build = "2.1.3"
