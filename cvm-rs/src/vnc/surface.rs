@@ -48,48 +48,8 @@ impl Surface {
 				*dest = ((*src_item) & 0x00ffffff) | 0xff000000;
 			}
 
-			//dest.copy_from_slice(src);
-
 			off += src_at.width as usize;
 		}
 	}
 
-	/*
-	/// Returns a cloned surface containing a portion of this surface.
-	pub fn sub_surface(&self, at: Rect) -> Surface {
-		let rect = Rect {
-			x: 0,
-			y: 0,
-			width: self.size.width,
-			height: self.size.height,
-		};
-
-		assert!(
-			rect.includes(&at).expect("never fails"),
-			"Surface::sub_surface() must be given a rectangle that can fit in {}x{} (got {}x{})",
-			rect.width,
-			rect.height,
-			at.width,
-			at.height
-		);
-
-		let mut surf = Surface::new();
-		surf.resize(Size {
-			width: at.width,
-			height: at.height,
-		});
-
-		for y in 0..at.height {
-			let src_line_off = y * self.size.width;
-			let dest_line_off = y * at.width;
-
-			// copy the data from us
-			for x in 0..at.width {
-				surf.buffer[(dest_line_off + x) as usize] = self.buffer[(src_line_off + x) as usize]
-			}
-		}
-
-		surf
-	}
-	*/
 }

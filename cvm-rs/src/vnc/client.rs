@@ -3,6 +3,11 @@
 use super::surface::Surface;
 use super::types::*;
 
+use resize::Pixel::RGBA8;
+use resize::Type::Triangle;
+use rgb::FromSlice;
+//use rgb::RGBA8;
+
 use std::{
 	sync::{Arc, Mutex},
 	time::Duration,
@@ -139,18 +144,49 @@ impl Client {
 					VncThreadMessageInput::Thumbnail => {
 						use crate::jpeg_js;
 
-						// TODO: scale down the surface
 						let mut surf = self.surf.lock().expect("could not lock Surface");
 						let surf_size = surf.size.clone();
 						let surf_data = surf.get_buffer();
 
-						let data = jpeg_js::jpeg_encode_rs(
-							&surf_data,
-							surf_size.width,
-							surf_size.height,
-							surf_size.width,
-						);
+						// SAFETY: Slice invariants are still held.
+						let surf_slice = unsafe {
+							std::slice::from_raw_parts(
+								surf_data.as_ptr() as *const u8,
+								surf_data.len() * 4,
+							)
+						};
 
+						const THUMB_WIDTH: u32 = 400;
+						const THUMB_HEIGHT: u32 = 300;
+
+						let mut new_data: Vec<u8> =
+							vec![0; (THUMB_WIDTH * THUMB_HEIGHT) as usize * 4];
+
+						let mut resizer = resize::new(
+							surf_size.width as usize,
+							surf_size.height as usize,
+							THUMB_WIDTH as usize,
+							THUMB_HEIGHT as usize,
+							RGBA8,
+							Triangle,
+						)?;
+
+						resizer.resize(surf_slice.as_rgba(), new_data.as_rgba_mut())?;
+
+						let data = jpeg_js::jpeg_encode_rs(
+							// SAFETY: Like above, slice invariants are still held,
+							// and this does not allow access to uninitalized
+							// heap memory that is not a part of the Vec.
+							unsafe {
+								std::slice::from_raw_parts(
+									new_data.as_ptr() as *const u32,
+									new_data.len() / 4,
+								)
+							},
+							THUMB_WIDTH,
+							THUMB_HEIGHT,
+							THUMB_WIDTH,
+						);
 
 						self.out_tx
 							.send(VncThreadMessageOutput::ThumbnailProcessed(data))
