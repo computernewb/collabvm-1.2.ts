@@ -23,32 +23,26 @@ function sleep(ms) {
 	console.log('piss');
 	let once = false;
 
+	client.on('connect', async () => {
+	})
+
 	client.on('rects', async (rects) => {
-		//console.log('Rects:', rects);
-
-		//if (once == false) {
-		let b = client.Buffer();
-
-		let buf = await native.jpegEncode({
-			width: client.Size().width,
-			height: client.Size().height,
-			stride: client.Size().width,
-			buffer: b
-		});
-
-		await fs.writeFile('./pissing.jpg', buf);
-		//}
+		console.log('Rects:', rects);
+		//console.log('got rects?');
 	});
 
-	client.on('resize', (size) => {
+	client.on('resize', async (size) => {
 		console.log('New size:', size);
+
+		let data = await client.FullScreen();
+
+		console.log('full screen size', data.constructor);
 	});
 
 	// 127.0.0.1:6930
 	//10.16.0.1:5930
-	if (!(await client.ConnectAsync('127.0.0.1:6930'))) {
-		return;
-	}
+	client.Connect('127.0.0.1:6930');
+		
 
 	if (0) {
 		// .kit on

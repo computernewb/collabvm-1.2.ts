@@ -6,6 +6,8 @@ import EventEmitter from 'events';
 export function guacDecode(input: string): string[];
 export function guacEncode(...items: string[]): string;
 
+// JPEG Encoding (deprecated)
+
 interface JpegInputArgs {
 	width: number;
 	height: number;
@@ -21,6 +23,8 @@ export function jpegEncode(input: JpegInputArgs): Promise<Buffer>;
 
 // TODO: Version that can downscale?
 
+/// VNC client. Implemented in Rust, however some binding is done in JS
+/// to clean the API up.
 export class VncClient extends EventEmitter {
 	Connect(addr: string): void;
 
@@ -30,7 +34,9 @@ export class VncClient extends EventEmitter {
 
 	Size(): any;
 
-	Buffer(): Buffer;
+	FullScreen(): Promise<Buffer>;
+
+	Thumbnail(): Promise<Buffer>;
 
 	Disconnect(): void;
 }

@@ -3,7 +3,7 @@ use super::{
 	surface::Surface,
 	types::*,
 };
-use napi::{Env, JsBuffer, JsObject};
+use napi::{Env, JsObject};
 use napi_derive::napi;
 
 use std::sync::{Arc, Mutex};
@@ -28,25 +28,6 @@ impl JsClient {
 		}
 	}
 
-	/// call once on resize and discard on a new resize
-	#[napi]
-	pub fn get_surface_buffer(&self, nenv: Env) -> napi::Result<JsBuffer> {
-		// todo need to lock buffer in a better way
-		let mut surf = self.surf.lock().expect("fuck");
-		let buffer = unsafe {
-			let b = surf.get_buffer();
-			nenv.create_buffer_with_borrowed_data(
-				b.as_mut_ptr() as *mut u8,
-				b.len() * core::mem::size_of::<u32>(),
-				(),
-				napi::noop_finalize,
-			)
-			.expect("fail")
-		};
-
-		Ok(buffer.into_raw())
-	}
-
 	#[napi]
 	pub async fn send_mouse(&self, x: u32, y: u32, buttons: u8) -> napi::Result<()> {
 		if let Some(tx) = self.event_tx.as_ref() {
@@ -66,6 +47,22 @@ impl JsClient {
 			let _ = tx
 				.send(VncThreadMessageInput::KeyEvent { keysym, pressed })
 				.await;
+		}
+		Ok(())
+	}
+
+	#[napi]
+	pub async fn thumbnail(&self) -> napi::Result<()> {
+		if let Some(tx) = self.event_tx.as_ref() {
+			let _ = tx.send(VncThreadMessageInput::Thumbnail).await;
+		}
+		Ok(())
+	}
+
+	#[napi]
+	pub async fn full_screen(&self) -> napi::Result<()> {
+		if let Some(tx) = self.event_tx.as_ref() {
+			let _ = tx.send(VncThreadMessageInput::FullScreen).await;
 		}
 		Ok(())
 	}
@@ -113,8 +110,36 @@ impl JsClient {
 					}
 
 					VncThreadMessageOutput::FramebufferUpdate(rects) => {
+						let mut arr = env.create_array(rects.len() as u32)?;
+
+						// TODO: Make this not clone as much (or really at all)
+						for i in 0..rects.len() {
+							let mut rect_obj = env.create_object()?;
+							rect_obj.set("rect", rects[i].rect.clone())?;
+							rect_obj.set(
+								"data",
+								env.create_buffer_with_data(rects[i].data.clone())?
+									.into_raw(),
+							)?;
+							arr.set(i as u32, rect_obj)?;
+						}
+
 						obj.set("event", "rects")?;
-						obj.set("rects", rects)?;
+						obj.set("rects", arr)?;
+
+						return Ok(obj);
+					}
+
+					VncThreadMessageOutput::ThumbnailProcessed(p) => {
+						obj.set("event", "thumbnail")?;
+						obj.set("data", env.create_buffer_with_data(p)?.into_raw())?;
+
+						return Ok(obj);
+					}
+
+					VncThreadMessageOutput::FullScreenProcessed(p) => {
+						obj.set("event", "screen")?;
+						obj.set("data", env.create_buffer_with_data(p)?.into_raw())?;
 
 						return Ok(obj);
 					}
@@ -136,8 +161,8 @@ impl JsClient {
 
 	#[napi]
 	pub fn connect(&mut self, addr: String) -> napi::Result<()> {
-		let (engine_output_tx, engine_output_rx) = channel(128);
-		let (engine_input_tx, engine_input_rx) = channel(128);
+		let (engine_output_tx, engine_output_rx) = channel(32);
+		let (engine_input_tx, engine_input_rx) = channel(16);
 
 		// It is used but I guess something is mad
 		#[allow(unused_assignments)]

@@ -11,7 +11,6 @@ import { IPDataManager } from './IPData.js';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import AuthManager from './AuthManager.js';
-import { JPEGEncoder } from './JPEGEncoder.js';
 import VM from './vm/interface.js';
 import { ReaderModel } from '@maxmind/geoip2-node';
 import * as msgpack from 'msgpackr';
@@ -20,6 +19,7 @@ import { CollabVMProtocolMessage, CollabVMProtocolMessageType } from '@cvmts/col
 import { Size, Rect } from './Utilities.js';
 import pino from 'pino';
 import { BanManager } from './BanManager.js';
+import { VMDisplayRect } from './display/interface.js';
 import { TheAuditLog } from './AuditLog.js';
 
 // Instead of strange hacks we can just use nodejs provided
@@ -140,7 +140,8 @@ export default class CollabVMServer {
 
 					// add events
 					self.VM.GetDisplay()?.on('resize', (size: Size) => self.OnDisplayResized(size));
-					self.VM.GetDisplay()?.on('rect', (rect: Rect) => self.OnDisplayRectangle(rect));
+					self.VM.GetDisplay()?.on('rect', (rect: VMDisplayRect[]) => self.OnDisplayRectangles(rect));
+					self.VM.GetDisplay()?.on('frame', () => self.OnDisplayFrame());
 				}
 			}
 
@@ -690,13 +691,6 @@ export default class CollabVMServer {
 									let displaySize = this.VM.GetDisplay()?.Size();
 									if (displaySize == undefined) return;
 
-									let encoded = await this.MakeRectData({
-										x: 0,
-										y: 0,
-										width: displaySize.width,
-										height: displaySize.height
-									});
-
 									this.clients.forEach(async (client) => this.SendFullScreenWithSize(client));
 									break;
 							}
@@ -850,18 +844,17 @@ export default class CollabVMServer {
 		}
 	}
 
-	private async OnDisplayRectangles(rects: Rect[]) {
+	private async OnDisplayRectangles(rects: VMDisplayRect[]) {
 		let self = this;
 
-		let doRect = async (rect: Rect) => {
-			let encoded = await this.MakeRectData(rect);
-			let encodedb64 = encoded.toString('base64');
+		let doRect = async (rect: VMDisplayRect) => {
+			let encodedb64 = rect.data.toString('base64');
 			let bmsg: CollabVMProtocolMessage = {
 				type: CollabVMProtocolMessageType.rect,
 				rect: {
-					x: rect.x,
-					y: rect.y,
-					data: encoded
+					x: rect.rect.x,
+					y: rect.rect.y,
+					data: rect.data
 				}
 			};
 
@@ -874,7 +867,8 @@ export default class CollabVMServer {
 					if (c.Capabilities.bin) {
 						c.socket.sendBinary(encodedbin);
 					} else {
-						c.sendMsg(cvm.guacEncode('png', '0', '0', rect.x.toString(), rect.y.toString(), encodedb64));
+						c.sendMsg(cvm.guacEncode('png', '0', '0', rect.rect.x.toString(), rect.rect.y.toString(), encodedb64));
+						c.sendMsg(cvm.guacEncode('sync', Date.now().toString()));
 					}
 				});
 		};
@@ -916,12 +910,7 @@ export default class CollabVMServer {
 
 		let displaySize = display.Size();
 
-		let encoded = await this.MakeRectData({
-			x: 0,
-			y: 0,
-			width: displaySize.width,
-			height: displaySize.height
-		});
+		let encoded = await display.GetFullScreen();
 
 		client.sendMsg(cvm.guacEncode('size', '0', displaySize.width.toString(), displaySize.height.toString()));
 
@@ -940,27 +929,13 @@ export default class CollabVMServer {
 		}
 	}
 
-	private async MakeRectData(rect: Rect) {
-		let display = this.VM.GetDisplay();
-
-		// TODO: actually throw an error here
-		if (display == null) return Buffer.from('no');
-
-		if (rect.width == 0 || rect.height == 0) return Buffer.from('??? Fuck YOu DOing');
-
-		let displaySize = display.Size();
-		let encoded = await JPEGEncoder.Encode(display.Buffer(), displaySize, rect);
-
-		return encoded;
-	}
-
 	async getThumbnail(): Promise<string> {
 		let display = this.VM.GetDisplay();
 
 		// oh well
 		if (!display?.Connected()) return '';
 
-		let buf = await JPEGEncoder.EncodeThumbnail(display.Buffer(), display.Size());
+		let buf = await display.GetThumbnail();
 		return buf.toString('base64');
 	}
 

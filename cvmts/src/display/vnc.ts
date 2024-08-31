@@ -1,7 +1,7 @@
 import { VncClient } from '@cvmts/cvm-rs';
 import { EventEmitter } from 'node:events';
 import { Clamp } from '../Utilities.js';
-import { VMDisplay } from './interface.js';
+import { VMDisplay, VMDisplayRect } from './interface.js';
 
 import { Size, Rect } from '../Utilities.js';
 
@@ -55,7 +55,7 @@ export class VncDisplay extends EventEmitter implements VMDisplay {
 			this.emit('resize', size);
 		});
 
-		this.displayVnc.on('rects', (rects: Rect[]) => {
+		this.displayVnc.on('rects', (rects: VMDisplayRect[]) => {
 			this.emit('rects', rects);
 			this.emit('frame');
 		});
@@ -87,8 +87,12 @@ export class VncDisplay extends EventEmitter implements VMDisplay {
 		return this.connected == State.Connected;
 	}
 
-	Buffer(): Buffer {
-		return this.displayVnc.Buffer();
+	async GetThumbnail(): Promise<Buffer> {
+		return this.displayVnc.Thumbnail();
+	}
+
+	async GetFullScreen(): Promise<Buffer> {
+		return this.displayVnc.FullScreen();	
 	}
 
 	Size(): Size {

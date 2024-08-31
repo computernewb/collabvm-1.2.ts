@@ -21,13 +21,23 @@ pub enum Address {
 	Unix(std::path::PathBuf),
 }
 
+#[derive(Debug)]
+pub struct RectWithJpegData {
+	pub rect: Rect,
+	pub data: Vec<u8>,
+}
+
 /// Output message
 #[derive(Debug)]
 pub enum VncThreadMessageOutput {
 	Connect,
 	Disconnect,
-	FramebufferUpdate(Vec<Rect>),
+	FramebufferUpdate(Vec<RectWithJpegData>),
 	FramebufferResized(Size),
+
+	// these allow
+	ThumbnailProcessed(Vec<u8>),
+	FullScreenProcessed(Vec<u8>),
 }
 
 #[derive(Debug)]
@@ -35,6 +45,9 @@ pub enum VncThreadMessageInput {
 	KeyEvent { keysym: u32, pressed: bool },
 	MouseEvent { pt: Point, buttons: u8 },
 	Disconnect,
+
+	Thumbnail,
+	FullScreen,
 }
 
 pub struct Client {
@@ -122,6 +135,46 @@ impl Client {
 						.await?;
 					}
 					VncThreadMessageInput::Disconnect => break,
+
+					VncThreadMessageInput::Thumbnail => {
+						use crate::jpeg_js;
+
+						// TODO: scale down the surface
+						let mut surf = self.surf.lock().expect("could not lock Surface");
+						let surf_size = surf.size.clone();
+						let surf_data = surf.get_buffer();
+
+						let data = jpeg_js::jpeg_encode_rs(
+							&surf_data,
+							surf_size.width,
+							surf_size.height,
+							surf_size.width,
+						);
+
+
+						self.out_tx
+							.send(VncThreadMessageOutput::ThumbnailProcessed(data))
+							.await?
+					}
+
+					VncThreadMessageInput::FullScreen => {
+						use crate::jpeg_js;
+
+						let mut surf = self.surf.lock().expect("could not lock Surface");
+						let surf_size = surf.size.clone();
+						let surf_data = surf.get_buffer();
+
+						let data = jpeg_js::jpeg_encode_rs(
+							&surf_data,
+							surf_size.width,
+							surf_size.height,
+							surf_size.width,
+						);
+
+						self.out_tx
+							.send(VncThreadMessageOutput::FullScreenProcessed(data))
+							.await?;
+					}
 				},
 
 				Err(TryRecvError::Empty) => {}
@@ -189,10 +242,32 @@ impl Client {
 
 						// send current update state
 						if !self.rects_in_frame.is_empty() {
+							let mut surf = self.surf.lock().expect("could not lock Surface");
+							let surf_size = surf.size.clone();
+							let surf_data = surf.get_buffer();
+
+							let mut new_rects = Vec::new();
+
+							use crate::jpeg_js;
+							for r in self.rects_in_frame.iter() {
+								let src_offset = (r.y * surf_size.width + r.x) as usize;
+								let src_rect = &surf_data[src_offset..];
+
+								let data = jpeg_js::jpeg_encode_rs(
+									src_rect,
+									r.width,
+									r.height,
+									surf_size.width,
+								);
+
+								new_rects.push(RectWithJpegData {
+									rect: r.clone(),
+									data: data,
+								});
+							}
+
 							self.out_tx
-								.send(VncThreadMessageOutput::FramebufferUpdate(
-									self.rects_in_frame.clone(),
-								))
+								.send(VncThreadMessageOutput::FramebufferUpdate(new_rects))
 								.await?;
 
 							self.rects_in_frame.clear();
