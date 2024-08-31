@@ -136,8 +136,8 @@ impl JsClient {
 
 	#[napi]
 	pub fn connect(&mut self, addr: String) -> napi::Result<()> {
-		let (engine_output_tx, engine_output_rx) = channel(32);
-		let (engine_input_tx, engine_input_rx) = channel(16);
+		let (engine_output_tx, engine_output_rx) = channel(128);
+		let (engine_input_tx, engine_input_rx) = channel(128);
 
 		// It is used but I guess something is mad
 		#[allow(unused_assignments)]
