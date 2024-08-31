@@ -12,6 +12,12 @@ pub struct Rect {
 }
 
 impl Rect {
+	/// Returns the area of the rect in pixels.
+	//pub fn area(&self) -> usize {
+		// a = wl
+	//	(self.width * self.height) as usize
+	//}
+
 	/// Batch a set of rectangles into a larger area, which is split into at least
 	/// 4 (currently) seperate rectangles (whos area ultimately adds up to the same).
 	pub fn batch_set(rects: &mut Vec<Self>) {
@@ -23,10 +29,18 @@ impl Rect {
 			height: 0,
 		};
 
-		// Don't batch. Maybe split these too?
+		// Don't batch.
 		if rects.len() == 1 {
 			//let r = rects[0].clone();
-			//Self::split_into(&r, 4, rects);
+
+			// Split rects that have a large enough area
+			// (currently, at least 240 * 240)
+			// This introduces graphical glitches so I'm disabling it for now
+			//if r.area() >= 57600 {
+			//	println!("splitting {:?}, its area is {}", r, r.area());
+			//	Self::split_into(&r, 2, rects);
+			//}
+
 			return ();
 		}
 
@@ -51,20 +65,23 @@ impl Rect {
 		Self::split_into(&batched_rect, 4, rects);
 	}
 
-	/// Splits a input rectangle into multiple which will
-	/// add into the same space as the input.
-	pub fn split_into(rect: &Self, depth: u32, output: &mut Vec<Self>) {
-		//println!("batched rect: {:?}", rect);
+	/// Splits a input rectangle into multiple which will add into the same area as the input.
+	/// The provided split amount **MUST** be a power of 2.
+	pub fn split_into(input_rect: &Self, split_amount: u32, output: &mut Vec<Self>) {
+		debug_assert!(
+			split_amount.is_power_of_two(),
+			"input split_amount {} is not pow2",
+			split_amount
+		);
 
 		output.clear();
 
-		let columns = ((depth as f32).sqrt()).ceil() as u32;
+		let columns = ((split_amount as f32).sqrt()).ceil() as u32;
 
-		let rows = depth / columns;
-		let nr_orphans = depth % columns;
-
-		let width = rect.width / columns;
-		let height = rect.height / if nr_orphans == 0 { rows } else { rows + 1 };
+		let rows = split_amount / columns;
+		let width = input_rect.width / columns;
+		// This is a total bodge but it seemingly works.
+		let height = (input_rect.height / rows) + 1;
 
 		for y in 0..rows {
 			for x in 0..columns {
@@ -77,50 +94,6 @@ impl Rect {
 				output.push(splat);
 			}
 		}
-
-		if nr_orphans > 0 {
-			let orphan_width = rect.width / nr_orphans;
-
-			for x in 0..nr_orphans {
-				// don't think this is entirely correct,
-				// because it causes some graphical glitches
-				let splat = Self {
-					x: x * orphan_width,
-					y: rows * height,
-					width: orphan_width,
-					height: height,
-				};
-				output.push(splat);
-			}
-		}
-
-		// doesn't work properly, but it looks cool
-		/*
-
-		let mut rect_x = rect.x / depth;
-		let mut rect_y = rect.y / depth;
-
-		if rect_x == 0 {
-			rect_x = (rect.width / depth);
-		}
-
-		if rect_y == 0 {
-			rect_y = (rect.height / depth);
-		}
-
-		for i in 0..depth {
-			let splat = Self {
-				x: rect_x * i,
-				y: rect_y * i,
-				width: (rect.width / depth),
-				height: (rect.height / depth),
-			};
-
-			output.push(splat);
-		}
-		*/
-
-		//println!("out: {:?}", output);
 	}
 }
 
