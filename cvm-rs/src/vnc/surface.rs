@@ -9,7 +9,7 @@ use super::types::*;
 /// A BGRA-format surface.
 pub struct Surface {
 	buffer: Vec<u32>,
-	size: Size,
+	pub size: Size,
 }
 
 impl Surface {
