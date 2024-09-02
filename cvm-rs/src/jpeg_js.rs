@@ -3,7 +3,7 @@ use napi_derive::napi;
 
 use std::{
 	cell::RefCell,
-	sync::Mutex, time::Duration,
+	sync::Mutex,
 };
 
 use once_cell::sync::Lazy;
@@ -30,19 +30,19 @@ enum JpegEncodeThreadInput {
 pub type JpegEncodeThreadOutput = Vec<u8>;
 
 pub struct JpegEncodeThread {
-	input_tx: mpsc::SyncSender<JpegEncodeThreadInput>,
+	input_tx: mpsc::Sender<JpegEncodeThreadInput>,
 	output_rx: mpsc::Receiver<JpegEncodeThreadOutput>,
 }
 
 impl JpegEncodeThread {
 	fn new() -> Self {
-		let (input_tx, input_rx) = mpsc::sync_channel(32);
-		let (output_tx, output_rx) = mpsc::sync_channel(32);
+		let (input_tx, input_rx) = mpsc::channel();
+		let (output_tx, output_rx) = mpsc::channel();
 
 		std::thread::Builder::new()
 			.name("cvmrs-jpeg-work".into())
 			.spawn(move || loop {
-				match input_rx.try_recv() {
+				match input_rx.recv() {
 					Ok(input_message) => match input_message {
 						JpegEncodeThreadInput::Buffer {
 							buf,
@@ -61,7 +61,7 @@ impl JpegEncodeThread {
 
 							let buffer = COMPRESSOR.with(|lazy| {
 								let mut b = lazy.borrow_mut();
-								b.set_quality(30);
+								b.set_quality(35);
 								b.set_subsamp(turbojpeg_sys::TJSAMP_TJSAMP_420);
 								b.compress_buffer(&image)
 							});
@@ -70,11 +70,7 @@ impl JpegEncodeThread {
 						}
 					},
 
-					Err(mpsc::TryRecvError::Empty) => {
-						std::thread::sleep(Duration::from_millis(10));
-					}
-
-					Err(mpsc::TryRecvError::Disconnected) => break,
+					Err(_) => break,
 				}
 			}).expect("cvm-rs couldn't start JPEG thread.");
 
