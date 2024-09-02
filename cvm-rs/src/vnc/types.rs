@@ -14,7 +14,7 @@ pub struct Rect {
 impl Rect {
 	/// Returns the area of the rect in pixels.
 	//pub fn area(&self) -> usize {
-		// a = wl
+	// a = wl
 	//	(self.width * self.height) as usize
 	//}
 
@@ -62,11 +62,15 @@ impl Rect {
 			}
 		}
 
-		Self::split_into(&batched_rect, 4, rects);
+		rects.clear();
+		rects.push(batched_rect);
+
+		//Self::split_into(&batched_rect, 4, rects);
 	}
 
 	/// Splits a input rectangle into multiple which will add into the same area as the input.
 	/// The provided split amount **MUST** be a power of 2.
+	#[allow(unused)] // Needs a lot of refinement
 	pub fn split_into(input_rect: &Self, split_amount: u32, output: &mut Vec<Self>) {
 		debug_assert!(
 			split_amount.is_power_of_two(),
@@ -74,26 +78,32 @@ impl Rect {
 			split_amount
 		);
 
+		println!("in: {:?}", input_rect);
+
 		output.clear();
 
 		let columns = ((split_amount as f32).sqrt()).ceil() as u32;
 
 		let rows = split_amount / columns;
-		let width = input_rect.width / columns;
+		let width = input_rect.width / (rows*columns);
 		// This is a total bodge but it seemingly works.
-		let height = (input_rect.height / rows) + 1;
+		let height = (input_rect.height / (rows * columns)) + 1;
+
+		println!("rows {}, columns {}, {}x{}", columns, rows, width, height);
 
 		for y in 0..rows {
 			for x in 0..columns {
 				let splat = Self {
 					x: x * width,
 					y: y * height,
-					width: width,
-					height: height,
+					width: width / if x == 0 { 1 } else { x },
+					height: height / if y == 0 { 1 } else { y },
 				};
 				output.push(splat);
 			}
 		}
+
+		println!("out: {:?}", output);
 	}
 }
 

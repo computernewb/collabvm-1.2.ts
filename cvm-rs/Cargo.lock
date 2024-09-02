@@ -172,7 +172,7 @@ dependencies = [
 
 [[package]]
 name = "cvm-rs"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "libc",
@@ -180,7 +180,6 @@ dependencies = [
  "napi-build",
  "napi-derive",
  "once_cell",
- "rayon",
  "resize",
  "rgb",
  "tokio",

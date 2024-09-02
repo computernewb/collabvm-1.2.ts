@@ -7,7 +7,7 @@ export function guacDecode(input: string): string[];
 export function guacEncode(...items: string[]): string;
 
 // JPEG Encoding (deprecated)
-
+/** @deprecated This API is no longer supported. Do not use it */
 interface JpegInputArgs {
 	width: number;
 	height: number;
@@ -19,6 +19,7 @@ interface JpegInputArgs {
 }
 
 /// Performs JPEG encoding.
+/** @deprecated This API is no longer supported. Do not use it */
 export function jpegEncode(input: JpegInputArgs): Promise<Buffer>;
 
 // TODO: Version that can downscale?
