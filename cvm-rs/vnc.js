@@ -1,30 +1,44 @@
-// *sigh*
+import { cvmrsRequire } from './require.js';
+import EventEmitter from 'node:events';
 
-import { createRequire } from 'module';
-const require = createRequire(import.meta.url);
+const native = cvmrsRequire('./index.node');
 
-import EventEmitter from 'events';
+const kIdlePollRate = 66;
+const kFastPollRate = 8;
 
-let native = require('./index.node');
-
-// Wrapper over the cvm-rs native VNC client engine
-// to make it more idiomatic node.js
+// Wrapper over the cvm-rs VNC client engine
+// to make it more idiomatic node.js.
 export class VncClient extends EventEmitter {
-	#client = new native.ClientInnerImpl();
+	#client = null;
 	#size = null;
-	#disc = false;
+	#disconnectFlag = false;
+
+	constructor() {
+		super();
+
+		let self = this;
+		this.on('disconnect', () => {
+			this.#client = null;
+		});
+	}
 
 	Connect(addr) {
+		// Create a VNC client object if one does not exist
+		if (this.#client == null) this.#client = new native.ClientInnerImpl();
+
 		this.#client.connect(addr);
 
-		// Run a reduced speed poll in the background
+		// Run a reduced speed poll (since it doesn't need to be
+		// fast or really that high priority).
 		// to wait until we get a connect or disconnect event
-		// from the Rust VNC engine
-		let poll = () => {
+		// from the Rust VNC engine. Once we get one we handle it as needed.
+		let slowPollUntilConnect = () => {
+			if (this.#client == null) return;
+
 			let ev = this.#client.pollEvent();
 
 			if (ev.event == 'connect') {
-				this.#Spawn();
+				this.#StartFastPoll();
 				return;
 			} else if (ev.event == 'disconnect') {
 				this.#client.disconnect();
@@ -33,21 +47,23 @@ export class VncClient extends EventEmitter {
 			}
 
 			setTimeout(() => {
-				process.nextTick(poll);
-			}, 66);
+				process.nextTick(slowPollUntilConnect);
+			}, kIdlePollRate);
 		};
 
-		process.nextTick(poll);
+		process.nextTick(slowPollUntilConnect);
 	}
 
-	#Spawn() {
+	#StartFastPoll() {
 		let self = this;
 
 		this.emit('connect');
 
-		let loop = () => {
-			if (self.#disc) {
-				self.#disc = false;
+		let fastPollForEvent = () => {
+			if (self.#client == null) return;
+
+			if (self.#disconnectFlag) {
+				self.#disconnectFlag = false;
 				self.#client.disconnect();
 				this.emit('disconnect');
 				return;
@@ -55,7 +71,7 @@ export class VncClient extends EventEmitter {
 
 			let event = self.#client.pollEvent();
 
-			// empty object means there was no event observed
+			// An empty object means there was no event observed
 			if (event.event !== undefined) {
 				switch (event.event) {
 					case 'disconnect':
@@ -85,11 +101,11 @@ export class VncClient extends EventEmitter {
 			}
 
 			setTimeout(() => {
-				process.nextTick(loop);
-			}, 8);
+				process.nextTick(fastPollForEvent);
+			}, kFastPollRate);
 		};
 
-		process.nextTick(loop);
+		process.nextTick(fastPollForEvent);
 	}
 
 	async SendMouse(x, y, buttons) {
@@ -104,7 +120,7 @@ export class VncClient extends EventEmitter {
 		// send request
 		await this.#client.thumbnail();
 
-		// wait for it to come
+		// wait for the response to come
 		return new Promise((res, rej) => {
 			this.once('thumbnail', (data) => {
 				res(data);
@@ -127,7 +143,7 @@ export class VncClient extends EventEmitter {
 
 	Disconnect() {
 		process.nextTick(() => {
-			this.#disc = true;
+			this.#disconnectFlag = true;
 		});
 	}
 }

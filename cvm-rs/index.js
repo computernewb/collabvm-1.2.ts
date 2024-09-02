@@ -1,8 +1,6 @@
-// *sigh*
-import { createRequire } from 'module';
-const require = createRequire(import.meta.url);
+import { cvmrsRequire } from './require.js';
 
-let { guacDecode, guacEncodeImpl } = require('./index.node');
+const { guacDecode, guacEncodeImpl } = cvmrsRequire('./index.node');
 
 export { guacDecode };
 
