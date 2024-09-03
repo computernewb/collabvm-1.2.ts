@@ -41,7 +41,7 @@ export class VncClient extends EventEmitter {
 				this.#StartFastPoll();
 				return;
 			} else if (ev.event == 'disconnect') {
-				this.#client.disconnect();
+				native.vncDisconnect(this.#client);
 				this.emit('disconnect');
 				return;
 			}
