@@ -3,23 +3,21 @@ use super::{
 	surface::Surface,
 	types::*,
 };
-use napi::{Env, JsObject};
-use napi_derive::napi;
 
+use neon::{prelude::*, types::buffer::TypedArray};
+
+use std::cell::RefCell;
 use std::sync::{Arc, Mutex};
 
 use tokio::sync::mpsc::{channel, error::TryRecvError, Receiver, Sender};
 
-#[napi(js_name = "ClientInnerImpl")]
 pub struct JsClient {
 	surf: Arc<Mutex<Surface>>,
 	event_tx: Option<Sender<VncThreadMessageInput>>,
 	event_rx: Option<Receiver<VncThreadMessageOutput>>,
 }
 
-#[napi]
 impl JsClient {
-	#[napi(constructor)]
 	pub fn new() -> Self {
 		Self {
 			surf: Arc::new(Mutex::new(Surface::new())),
@@ -28,47 +26,38 @@ impl JsClient {
 		}
 	}
 
-	#[napi]
-	pub async fn send_mouse(&self, x: u32, y: u32, buttons: u8) -> napi::Result<()> {
+	pub fn send_mouse(&self, x: u32, y: u32, buttons: u8) -> NeonResult<()> {
 		if let Some(tx) = self.event_tx.as_ref() {
-			let _ = tx
-				.send(VncThreadMessageInput::MouseEvent {
-					pt: Point { x, y },
-					buttons: buttons,
-				})
-				.await;
+			let _ = tx.blocking_send(VncThreadMessageInput::MouseEvent {
+				pt: Point { x, y },
+				buttons: buttons,
+			});
 		}
 		Ok(())
 	}
 
-	#[napi]
-	pub async fn send_key(&self, keysym: u32, pressed: bool) -> napi::Result<()> {
+	pub fn send_key(&self, keysym: u32, pressed: bool) -> NeonResult<()> {
 		if let Some(tx) = self.event_tx.as_ref() {
-			let _ = tx
-				.send(VncThreadMessageInput::KeyEvent { keysym, pressed })
-				.await;
+			let _ = tx.blocking_send(VncThreadMessageInput::KeyEvent { keysym, pressed });
 		}
 		Ok(())
 	}
 
-	#[napi]
-	pub async fn thumbnail(&self) -> napi::Result<()> {
+	pub fn thumbnail(&self) -> NeonResult<()> {
 		if let Some(tx) = self.event_tx.as_ref() {
-			let _ = tx.send(VncThreadMessageInput::Thumbnail).await;
+			let _ = tx.blocking_send(VncThreadMessageInput::Thumbnail);
 		}
 		Ok(())
 	}
 
-	#[napi]
-	pub async fn full_screen(&self) -> napi::Result<()> {
+	pub fn full_screen(&self) -> NeonResult<()> {
 		if let Some(tx) = self.event_tx.as_ref() {
-			let _ = tx.send(VncThreadMessageInput::FullScreen).await;
+			let _ = tx.blocking_send(VncThreadMessageInput::FullScreen);
 		}
 		Ok(())
 	}
 
-	#[napi]
-	pub fn disconnect(&mut self) -> napi::Result<()> {
+	pub fn disconnect(&self) -> NeonResult<()> {
 		if let Some(tx) = self.event_tx.as_ref() {
 			let _ = tx.blocking_send(VncThreadMessageInput::Disconnect);
 		}
@@ -81,86 +70,105 @@ impl JsClient {
 		self.event_rx = None;
 	}
 
-	#[napi]
-	pub fn poll_event(&mut self, env: Env) -> napi::Result<JsObject> {
-		let mut obj = env.create_object()?;
-
+	pub fn poll_event<'a>(&mut self, mut cx: FunctionContext<'a>) -> JsResult<'a, JsObject> {
 		if let Some(rx) = self.event_rx.as_mut() {
+			let obj = cx.empty_object();
+
 			match rx.try_recv() {
 				Ok(val) => match val {
 					VncThreadMessageOutput::Connect => {
-						obj.set("event", "connect")?;
-
-						return Ok(obj);
+						let event = cx.string("connect");
+						obj.set(&mut cx, "event", event)?;
 					}
 
 					VncThreadMessageOutput::Disconnect => {
-						obj.set("event", "disconnect")?;
-
+						let event = cx.string("disconnect");
+						obj.set(&mut cx, "event", event)?;
 						self.reset_channels();
-
-						return Ok(obj);
 					}
 
 					VncThreadMessageOutput::FramebufferResized(size) => {
-						obj.set("event", "resize")?;
-						obj.set("size", size)?;
+						let size_obj = cx.empty_object();
+						let size_width = cx.number(size.width);
+						let size_height = cx.number(size.height);
+						size_obj.set(&mut cx, "width", size_width)?;
+						size_obj.set(&mut cx, "height", size_height)?;
 
-						return Ok(obj);
+						let event = cx.string("resize");
+
+						obj.set(&mut cx, "event", event)?;
+						obj.set(&mut cx, "size", size_obj)?;
 					}
 
 					VncThreadMessageOutput::FramebufferUpdate(rects) => {
-						let mut arr = env.create_array(rects.len() as u32)?;
+						let arr = cx.empty_array();
 
 						// TODO: Make this not clone as much (or really at all)
 						for i in 0..rects.len() {
-							let mut rect_obj = env.create_object()?;
-							rect_obj.set("rect", rects[i].rect.clone())?;
-							rect_obj.set(
-								"data",
-								env.create_buffer_with_data(rects[i].data.clone())?
-									.into_raw(),
-							)?;
-							arr.set(i as u32, rect_obj)?;
+							let rect_obj = cx.empty_object();
+
+							let rect_inner_rect_obj = cx.empty_object();
+							let rect_x = cx.number(rects[i].rect.x);
+							let rect_y = cx.number(rects[i].rect.y);
+							let rect_width = cx.number(rects[i].rect.width);
+							let rect_height = cx.number(rects[i].rect.height);
+							rect_inner_rect_obj.set(&mut cx, "x", rect_x)?;
+							rect_inner_rect_obj.set(&mut cx, "y", rect_y)?;
+							rect_inner_rect_obj.set(&mut cx, "width", rect_width)?;
+							rect_inner_rect_obj.set(&mut cx, "height", rect_height)?;
+
+							// clone rect data into a node buffer
+							let mut rect_data_buffer = cx.buffer(rects[i].data.len())?;
+							rect_data_buffer
+								.as_mut_slice(&mut cx)
+								.copy_from_slice(&rects[i].data[..]);
+
+							rect_obj.set(&mut cx, "rect", rect_inner_rect_obj)?;
+							rect_obj.set(&mut cx, "data", rect_data_buffer)?;
+							arr.set(&mut cx, i as u32, rect_obj)?;
 						}
 
-						obj.set("event", "rects")?;
-						obj.set("rects", arr)?;
-
-						return Ok(obj);
+						let event = cx.string("rects");
+						obj.set(&mut cx, "event", event)?;
+						obj.set(&mut cx, "rects", arr)?;
 					}
 
 					VncThreadMessageOutput::ThumbnailProcessed(p) => {
-						obj.set("event", "thumbnail")?;
-						obj.set("data", env.create_buffer_with_data(p)?.into_raw())?;
+						let event = cx.string("thumbnail");
+						obj.set(&mut cx, "event", event)?;
 
-						return Ok(obj);
+						// copy into node buffer :)
+						let mut buffer = cx.buffer(p.len())?;
+						buffer.as_mut_slice(&mut cx).copy_from_slice(&p[..]);
+						obj.set(&mut cx, "data", buffer)?;
 					}
 
 					VncThreadMessageOutput::FullScreenProcessed(p) => {
-						obj.set("event", "screen")?;
-						obj.set("data", env.create_buffer_with_data(p)?.into_raw())?;
+						let event = cx.string("screen");
+						obj.set(&mut cx, "event", event)?;
 
-						return Ok(obj);
+						let mut buffer = cx.buffer(p.len())?;
+						buffer.as_mut_slice(&mut cx).copy_from_slice(&p[..]);
+						obj.set(&mut cx, "data", buffer)?;
 					}
 				},
 
-				Err(TryRecvError::Empty) => {
-					return Ok(obj);
-				}
+				Err(TryRecvError::Empty) => {}
 
 				Err(TryRecvError::Disconnected) => {
-					return Ok(obj);
+					//return Ok(cx.empty_object());
 					//return Err(anyhow::anyhow!("Channel is disconnected").into());
+					return cx.throw_error("No VNC engine is running for this client");
 				}
 			}
+
+			Ok(obj)
 		} else {
-			Err(anyhow::anyhow!("No VNC engine is running for this client").into())
+			return cx.throw_error("No VNC engine is running for this client");
 		}
 	}
 
-	#[napi]
-	pub fn connect(&mut self, addr: String) -> napi::Result<()> {
+	pub fn connect(&mut self, addr: String) -> NeonResult<()> {
 		let (engine_output_tx, engine_output_rx) = channel(32);
 		let (engine_input_tx, engine_input_rx) = channel(16);
 
@@ -221,4 +229,87 @@ impl JsClient {
 
 		return Ok(());
 	}
+}
+
+// TODO
+impl Finalize for JsClient {}
+
+type BoxedClient = JsBox<RefCell<JsClient>>;
+
+fn vnc_new(mut cx: FunctionContext) -> JsResult<BoxedClient> {
+	let client = RefCell::new(JsClient::new());
+	Ok(cx.boxed(client))
+}
+
+fn vnc_connect(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+	let client = &**cx.argument::<BoxedClient>(0)?;
+
+	let addr = cx.argument::<JsString>(1)?;
+
+	client.borrow_mut().connect(addr.value(&mut cx))?;
+
+	Ok(cx.undefined())
+}
+
+fn vnc_poll_event(mut cx: FunctionContext) -> JsResult<JsObject> {
+	let client = &**cx.argument::<BoxedClient>(0)?;
+	let ev = client.borrow_mut().poll_event(cx)?;
+	Ok(ev)
+}
+
+fn vnc_send_key(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+	let client = &**cx.argument::<BoxedClient>(0)?;
+
+	let keysym = cx.argument::<JsNumber>(1)?.value(&mut cx) as u32;
+	let pressed = cx.argument::<JsBoolean>(2)?.value(&mut cx);
+
+	client.borrow().send_key(keysym, pressed)?;
+
+	Ok(cx.undefined())
+}
+
+fn vnc_send_mouse(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+	let client = &**cx.argument::<BoxedClient>(0)?;
+
+	let x = cx.argument::<JsNumber>(1)?.value(&mut cx) as u32;
+	let y = cx.argument::<JsNumber>(2)?.value(&mut cx) as u32;
+	let buttons = cx.argument::<JsNumber>(3)?.value(&mut cx) as u8;
+
+	client.borrow().send_mouse(x, y, buttons)?;
+
+	Ok(cx.undefined())
+}
+
+fn vnc_disconnect(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+	let client = &**cx.argument::<BoxedClient>(0)?;
+	client.borrow().disconnect()?;
+
+	Ok(cx.undefined())
+}
+
+fn vnc_thumbnail(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+	let client = &**cx.argument::<BoxedClient>(0)?;
+	client.borrow().thumbnail()?;
+
+	Ok(cx.undefined())
+}
+
+fn vnc_full_screen(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+	let client = &**cx.argument::<BoxedClient>(0)?;
+	client.borrow().full_screen()?;
+
+	Ok(cx.undefined())
+}
+
+/// binds the VNC engine to rust
+pub fn export(cx: &mut ModuleContext) -> NeonResult<()> {
+	cx.export_function("vncNew", vnc_new)?;
+	cx.export_function("vncConnect", vnc_connect)?;
+	cx.export_function("vncPollEvent", vnc_poll_event)?;
+	cx.export_function("vncSendKey", vnc_send_key)?;
+	cx.export_function("vncSendMouse", vnc_send_mouse)?;
+	cx.export_function("vncThumbnail", vnc_thumbnail)?;
+	cx.export_function("vncFullScreen", vnc_full_screen)?;
+	cx.export_function("vncDisconnect", vnc_disconnect)?;
+	Ok(())
 }

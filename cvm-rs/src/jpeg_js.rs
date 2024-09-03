@@ -1,6 +1,4 @@
-use napi::Env;
-use napi_derive::napi;
-
+//! This module's name is historical and will be changed upon merge
 use std::{
 	cell::RefCell,
 	sync::Mutex,
@@ -105,20 +103,4 @@ pub fn jpeg_encode_rs(src: &[u32], width: u32, height: u32, stride: u32) -> Vec<
 		.expect("boom");
 
 	encoder.output_rx.recv().expect("BOOM")
-}
-
-// TODO: These APIs will be dropped, probably should make a 0.3.0 to force rebuild or something
-
-#[napi(object)]
-pub struct JpegInputArgs {
-	pub width: u32,
-	pub height: u32,
-	pub stride: u32,
-	pub buffer: napi::JsBuffer,
-}
-
-#[napi(js_name = "jpegEncode")]
-#[allow(unused)]
-pub fn jpeg_encode(env: Env, input: JpegInputArgs) -> napi::Result<napi::JsObject> {
-	Err(anyhow::anyhow!("This function is no longer supported").into())
 }
