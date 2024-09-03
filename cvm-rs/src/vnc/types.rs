@@ -1,8 +1,5 @@
 //! Shared types.
 
-use napi_derive::napi;
-
-#[napi(object)]
 #[derive(Clone, Debug)]
 pub struct Rect {
 	pub x: u32,
@@ -85,7 +82,7 @@ impl Rect {
 		let columns = ((split_amount as f32).sqrt()).ceil() as u32;
 
 		let rows = split_amount / columns;
-		let width = input_rect.width / (rows*columns);
+		let width = input_rect.width / (rows * columns);
 		// This is a total bodge but it seemingly works.
 		let height = (input_rect.height / (rows * columns)) + 1;
 
@@ -118,14 +115,12 @@ impl From<vnc::Rect> for Rect {
 	}
 }
 
-#[napi(object)]
 #[derive(Debug)]
 pub struct Point {
 	pub x: u32,
 	pub y: u32,
 }
 
-#[napi(object)]
 #[derive(Clone, Debug)]
 pub struct Size {
 	pub width: u32,

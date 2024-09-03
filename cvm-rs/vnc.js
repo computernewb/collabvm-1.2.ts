@@ -24,9 +24,9 @@ export class VncClient extends EventEmitter {
 
 	Connect(addr) {
 		// Create a VNC client object if one does not exist
-		if (this.#client == null) this.#client = new native.ClientInnerImpl();
+		if (this.#client == null) this.#client = native.vncNew();
 
-		this.#client.connect(addr);
+		native.vncConnect(this.#client, addr);
 
 		// Run a reduced speed poll (since it doesn't need to be
 		// fast or really that high priority).
@@ -35,7 +35,7 @@ export class VncClient extends EventEmitter {
 		let slowPollUntilConnect = () => {
 			if (this.#client == null) return;
 
-			let ev = this.#client.pollEvent();
+			let ev = native.vncPollEvent(this.#client);
 
 			if (ev.event == 'connect') {
 				this.#StartFastPoll();
@@ -64,18 +64,18 @@ export class VncClient extends EventEmitter {
 
 			if (self.#disconnectFlag) {
 				self.#disconnectFlag = false;
-				self.#client.disconnect();
-				this.emit('disconnect');
+				native.vncDisconnect(self.#client);
+				self.emit('disconnect');
 				return;
 			}
 
-			let event = self.#client.pollEvent();
+			let event = native.vncPollEvent(self.#client);
 
 			// An empty object means there was no event observed
 			if (event.event !== undefined) {
 				switch (event.event) {
 					case 'disconnect':
-						this.emit('disconnect');
+						self.emit('disconnect');
 						return;
 
 					case 'resize':
@@ -109,16 +109,16 @@ export class VncClient extends EventEmitter {
 	}
 
 	async SendMouse(x, y, buttons) {
-		await this.#client.sendMouse(x, y, buttons);
+		native.vncSendMouse(this.#client, x, y, buttons);
 	}
 
 	async SendKey(keysym, pressed) {
-		await this.#client.sendKey(keysym, pressed);
+		native.vncSendKey(this.#client, keysym, pressed);
 	}
 
 	async Thumbnail() {
 		// send request
-		await this.#client.thumbnail();
+		native.vncThumbnail(this.#client);
 
 		// wait for the response to come
 		return new Promise((res, rej) => {
@@ -129,7 +129,7 @@ export class VncClient extends EventEmitter {
 	}
 
 	async FullScreen() {
-		await this.#client.fullScreen();
+		native.vncFullScreen(this.#client);
 		return new Promise((res, rej) => {
 			this.once('fullscreen', (data) => {
 				res(data);

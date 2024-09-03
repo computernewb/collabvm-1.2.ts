@@ -16,8 +16,7 @@ once_cell = "1.19.0"
 turbojpeg-sys = "1.0.0"
 
 # node sex
-napi =  { version = "2.16.9", features = [ "async", "napi8", "error_anyhow" ] }
-napi-derive = "2.16.11"
+neon = "1"
 anyhow = "1.0.86"
 
 # vnc
