@@ -24,7 +24,7 @@ export default class WSServer extends EventEmitter implements NetworkServer {
 		this.Config = config;
 		this.clients = [];
 		this.httpServer = http.createServer();
-		this.wsServer = new WebSocketServer({ noServer: true });
+		this.wsServer = new WebSocketServer({ noServer: true, perMessageDeflate: false, clientTracking: false });
 		this.httpServer.on('upgrade', (req: http.IncomingMessage, socket: internal.Duplex, head: Buffer) => this.httpOnUpgrade(req, socket, head));
 		this.httpServer.on('request', (req, res) => {
 			res.writeHead(426);
