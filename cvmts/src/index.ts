@@ -33,7 +33,7 @@ try {
 	var configRaw = fs.readFileSync('config.toml').toString();
 	Config = toml.parse(configRaw);
 } catch (e) {
-	logger.error('Fatal error: Failed to read or parse the config file: {0}', (e as Error).message);
+	logger.error({err: e}, 'Fatal error: Failed to read or parse the config file');
 	process.exit(1);
 }
 
