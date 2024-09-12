@@ -17,11 +17,11 @@ impl Rect {
 
 	/// Batch a set of rectangles into a larger area, which is split into at least
 	/// 4 (currently) seperate rectangles (whos area ultimately adds up to the same).
-	pub fn batch_set(rects: &mut Vec<Self>) {
+	pub fn batch_set(size: &Size, rects: &mut Vec<Self>) {
 		// This rect contains the overall area. It is split into pieces later.
 		let mut batched_rect = Rect {
-			x: 0,
-			y: 0,
+			x: size.width,
+			y: size.height,
 			width: 0,
 			height: 0,
 		};
