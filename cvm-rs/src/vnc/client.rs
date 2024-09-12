@@ -274,12 +274,13 @@ impl Client {
 					vnc.input(X11Event::Refresh).await?;
 
 					if !self.rects_in_frame.is_empty() {
-						Rect::batch_set(&mut self.rects_in_frame);
+						let mut surf = self.surf.lock().expect("could not lock Surface");
+						let surf_size = surf.size.clone();
+
+						Rect::batch_set(&surf_size, &mut self.rects_in_frame);
 
 						// send current update state
 						if !self.rects_in_frame.is_empty() {
-							let mut surf = self.surf.lock().expect("could not lock Surface");
-							let surf_size = surf.size.clone();
 							let surf_data = surf.get_buffer();
 
 							let mut new_rects = Vec::new();
