@@ -890,7 +890,9 @@ export default class CollabVMServer {
 
 		for (let rect of self.rectQueue) promises.push(doRect(rect));
 
-		this.rectQueue = [];
+		// javascript is a very solidly designed language with no holes
+		// or usability traps inside of it whatsoever
+		this.rectQueue.length = 0;
 
 		await Promise.all(promises);
 	}
