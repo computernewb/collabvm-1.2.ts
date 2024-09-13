@@ -25,7 +25,7 @@ enum JpegEncodeThreadInput {
 	},
 }
 
-pub type JpegEncodeThreadOutput = Vec<u8>;
+pub type JpegEncodeThreadOutput = anyhow::Result<Box<[u8]>>;
 
 pub struct JpegEncodeThread {
 	input_tx: mpsc::Sender<JpegEncodeThreadInput>,
@@ -79,7 +79,7 @@ impl JpegEncodeThread {
 	}
 }
 
-pub fn jpeg_encode_rs(src: &[u32], width: u32, height: u32, stride: u32) -> Vec<u8> {
+pub fn jpeg_encode_rs(src: &[u32], width: u32, height: u32, stride: u32) -> anyhow::Result<Box<[u8]>> {
 	// SAFETY: The slice invariants are still upheld, we just cast to &[u8] since
 	// that's what we want here.
 	let s = unsafe {

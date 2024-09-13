@@ -29,7 +29,7 @@ pub enum Address {
 #[derive(Debug)]
 pub struct RectWithJpegData {
 	pub rect: Rect,
-	pub data: Vec<u8>,
+	pub data: Box<[u8]>,
 }
 
 /// Output message
@@ -41,8 +41,8 @@ pub enum VncThreadMessageOutput {
 	FramebufferResized(Size),
 
 	// these allow
-	ThumbnailProcessed(Vec<u8>),
-	FullScreenProcessed(Vec<u8>),
+	ThumbnailProcessed(Box<[u8]>),
+	FullScreenProcessed(Box<[u8]>),
 }
 
 #[derive(Debug)]
@@ -188,9 +188,11 @@ impl Client {
 							THUMB_WIDTH,
 						);
 
-						self.out_tx
-							.send(VncThreadMessageOutput::ThumbnailProcessed(data))
-							.await?
+						if data.is_ok() {
+							self.out_tx
+								.send(VncThreadMessageOutput::ThumbnailProcessed(data.unwrap()))
+								.await?
+						}
 					}
 
 					VncThreadMessageInput::FullScreen => {
@@ -207,9 +209,12 @@ impl Client {
 							surf_size.width,
 						);
 
-						self.out_tx
-							.send(VncThreadMessageOutput::FullScreenProcessed(data))
-							.await?;
+						// TODO: Actually log failures
+						if data.is_ok() {
+							self.out_tx
+								.send(VncThreadMessageOutput::FullScreenProcessed(data.unwrap()))
+								.await?;
+						}
 					}
 				},
 
@@ -295,7 +300,7 @@ impl Client {
 									r.width,
 									r.height,
 									surf_size.width,
-								);
+								)?;
 
 								new_rects.push(RectWithJpegData {
 									rect: r.clone(),
