@@ -3,7 +3,6 @@
 use super::surface::Surface;
 use super::types::*;
 
-use futures::{stream::FuturesUnordered, StreamExt};
 use resize::Pixel::RGBA8;
 use resize::Type::Triangle;
 use rgb::FromSlice;
@@ -300,43 +299,27 @@ impl Client {
 						// send current update state
 						if !self.rects_in_frame.is_empty() {
 							let surf_data = surf.get_buffer();
-
-							let encode_futures = FuturesUnordered::new();
+							let mut new_rects = Vec::new();
 
 							use crate::jpeg_js;
-
 							for r in self.rects_in_frame.iter() {
 								let src_offset = (r.y * surf_size.width + r.x) as usize;
 								let src_rect = &surf_data[src_offset..];
 
-								encode_futures.push(jpeg_js::jpeg_encode_rs(
+								let data = jpeg_js::jpeg_encode_rs(
 									src_rect,
 									r.width,
 									r.height,
 									surf_size.width,
-									self.jpeg_quality,
-								));
-							}
+									self.jpeg_quality
+								)
+								.await?;
 
-							// Essentially this lets the encode jobs run in parallel,
-							// which should (hopefully) provide a noticable increase
-							// in performance. I mean, it submits to a thread pool..
-							//
-							// This *does* look a bit messy though...
-							let mut new_rects = Vec::new();
-							let _ = encode_futures
-								.collect::<Vec<_>>()
-								.await
-								.into_iter()
-								.zip(self.rects_in_frame.iter())
-								.map(|(r, rect)| {
-									if r.is_ok() {
-										new_rects.push(RectWithJpegData {
-											rect: rect.clone(),
-											data: r.unwrap(),
-										});
-									}
+								new_rects.push(RectWithJpegData {
+									rect: r.clone(),
+									data: data,
 								});
+							}
 
 							self.out_tx
 								.send(VncThreadMessageOutput::FramebufferUpdate(new_rects))
