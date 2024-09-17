@@ -11,14 +11,16 @@ pub struct Rect {
 impl Rect {
 	/// Returns the area of the rect in pixels.
 	//pub fn area(&self) -> usize {
-	// a = wl
+		// a = wl
 	//	(self.width * self.height) as usize
-	//}
+	////}
 
-	/// Batch a set of rectangles into a larger area, which is split into at least
-	/// 4 (currently) seperate rectangles (whos area ultimately adds up to the same).
+	/// Batch a set of rectangles into a larger area.
+	/// 
+	/// TODO: This function should also split them into chunks
+	/// for our encoding thread pool...
 	pub fn batch_set(size: &Size, rects: &mut Vec<Self>) {
-		// This rect contains the overall area. It is split into pieces later.
+		// This rect contains the overall area.
 		let mut batched_rect = Rect {
 			x: size.width,
 			y: size.height,
@@ -30,7 +32,7 @@ impl Rect {
 		if rects.len() == 1 {
 			//let r = rects[0].clone();
 
-			// Split rects that have a large enough area
+			// Split singular rects that have a large enough area
 			// (currently, at least 240 * 240)
 			// This introduces graphical glitches so I'm disabling it for now
 			//if r.area() >= 57600 {
@@ -38,7 +40,7 @@ impl Rect {
 			//	Self::split_into(&r, 2, rects);
 			//}
 
-			return ();
+			()
 		}
 
 		for rect in rects.into_iter() {
@@ -59,10 +61,10 @@ impl Rect {
 			}
 		}
 
+		//Self::split_into(&batched_rect, 16, rects);
+
 		rects.clear();
 		rects.push(batched_rect);
-
-		//Self::split_into(&batched_rect, 4, rects);
 	}
 
 	/// Splits a input rectangle into multiple which will add into the same area as the input.

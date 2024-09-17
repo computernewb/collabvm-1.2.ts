@@ -26,6 +26,8 @@ tokio = { version = "1.39.3", features = ["full"] }
 # vnc thumbnails
 resize = "0.8.7"
 rgb = "0.8.50"
+rayon = "1.10.0"
+futures = "0.3.30"
 
 [build-dependencies]
 napi-build = "2.1.3"

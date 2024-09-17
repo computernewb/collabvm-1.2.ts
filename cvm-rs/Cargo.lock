@@ -147,10 +147,12 @@ name = "cvm-rs"
 version = "0.3.0"
 dependencies = [
  "anyhow",
+ "futures",
  "libc",
  "napi-build",
  "neon",
  "once_cell",
+ "rayon",
  "resize",
  "rgb",
  "tokio",
