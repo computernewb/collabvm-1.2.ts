@@ -3,6 +3,7 @@
 use super::surface::Surface;
 use super::types::*;
 
+use futures::{stream::FuturesUnordered, StreamExt};
 use resize::Pixel::RGBA8;
 use resize::Type::Triangle;
 use rgb::FromSlice;
@@ -53,10 +54,12 @@ pub enum VncThreadMessageInput {
 
 	Thumbnail,
 	FullScreen,
+	SetJpegQuality(u32),
 }
 
 pub struct Client {
 	surf: Arc<Mutex<Surface>>,
+	jpeg_quality: u32,
 
 	out_tx: Sender<VncThreadMessageOutput>,
 	in_rx: Receiver<VncThreadMessageInput>,
@@ -72,6 +75,7 @@ impl Client {
 	) -> Box<Self> {
 		let client_obj = Box::new(Self {
 			surf: surface,
+			jpeg_quality: 35,
 			out_tx,
 			in_rx,
 			rects_in_frame: Vec::new(),
@@ -159,6 +163,7 @@ impl Client {
 						const THUMB_WIDTH: u32 = 400;
 						const THUMB_HEIGHT: u32 = 300;
 
+						// would it be wise to make a new Surface for this? or run it on a thread? Probably not
 						let mut new_data: Vec<u8> =
 							vec![0; (THUMB_WIDTH * THUMB_HEIGHT) as usize * 4];
 
@@ -186,7 +191,9 @@ impl Client {
 							THUMB_WIDTH,
 							THUMB_HEIGHT,
 							THUMB_WIDTH,
-						);
+							self.jpeg_quality,
+						)
+						.await;
 
 						if data.is_ok() {
 							self.out_tx
@@ -207,7 +214,9 @@ impl Client {
 							surf_size.width,
 							surf_size.height,
 							surf_size.width,
-						);
+							self.jpeg_quality,
+						)
+						.await;
 
 						// TODO: Actually log failures
 						if data.is_ok() {
@@ -215,6 +224,10 @@ impl Client {
 								.send(VncThreadMessageOutput::FullScreenProcessed(data.unwrap()))
 								.await?;
 						}
+					}
+
+					VncThreadMessageInput::SetJpegQuality(qual) => {
+						self.jpeg_quality = qual;
 					}
 				},
 
@@ -288,25 +301,42 @@ impl Client {
 						if !self.rects_in_frame.is_empty() {
 							let surf_data = surf.get_buffer();
 
-							let mut new_rects = Vec::new();
+							let encode_futures = FuturesUnordered::new();
 
 							use crate::jpeg_js;
+
 							for r in self.rects_in_frame.iter() {
 								let src_offset = (r.y * surf_size.width + r.x) as usize;
 								let src_rect = &surf_data[src_offset..];
 
-								let data = jpeg_js::jpeg_encode_rs(
+								encode_futures.push(jpeg_js::jpeg_encode_rs(
 									src_rect,
 									r.width,
 									r.height,
 									surf_size.width,
-								)?;
-
-								new_rects.push(RectWithJpegData {
-									rect: r.clone(),
-									data: data,
-								});
+									self.jpeg_quality,
+								));
 							}
+
+							// Essentially this lets the encode jobs run in parallel,
+							// which should (hopefully) provide a noticable increase
+							// in performance. I mean, it submits to a thread pool..
+							//
+							// This *does* look a bit messy though...
+							let mut new_rects = Vec::new();
+							let _ = encode_futures
+								.collect::<Vec<_>>()
+								.await
+								.into_iter()
+								.zip(self.rects_in_frame.iter())
+								.map(|(r, rect)| {
+									if r.is_ok() {
+										new_rects.push(RectWithJpegData {
+											rect: rect.clone(),
+											data: r.unwrap(),
+										});
+									}
+								});
 
 							self.out_tx
 								.send(VncThreadMessageOutput::FramebufferUpdate(new_rects))
