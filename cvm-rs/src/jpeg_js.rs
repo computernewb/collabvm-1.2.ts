@@ -57,7 +57,7 @@ pub async fn jpeg_encode_rs(
 			height: height as u32,
 
 			stride: (stride as u64 * 4u64) as u32,
-			format: turbojpeg_sys::TJPF_TJPF_RGBA,
+			format: turbojpeg_sys::TJPF_TJPF_BGRA,
 		};
 
 		let vec = COMPRESSOR.with(|lazy| {
