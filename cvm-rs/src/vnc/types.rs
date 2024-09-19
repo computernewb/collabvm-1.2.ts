@@ -135,7 +135,7 @@ impl Rect {
 		//rects.extend(rect_queue);
 		rects.push(batched_rect);
 
-		println!("output rects: {:?}", rects);
+		//println!("output rects: {:?}", rects);
 	}
 
 	/// Splits a input rectangle into multiple tiles recursively.
