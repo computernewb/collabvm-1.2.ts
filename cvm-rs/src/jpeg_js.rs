@@ -19,6 +19,8 @@ fn rayon_pool() -> &'static ThreadPool {
 			nr_threads = 4;
 		}
 
+		println!("cvm-rs: Using {nr_threads} Rayon threads for JPEG encoding pool");
+
 		ThreadPoolBuilder::new()
 			.num_threads(nr_threads)
 			.thread_name(|index| format!("cvmrs_jpeg_{}", index + 1))
@@ -67,7 +69,7 @@ pub async fn jpeg_encode_rs(
 			jpeg_encoder.compress_buffer(&image)
 		});
 
-		tx.send(vec).expect("you have BALLS!");
+		tx.send(vec).expect("somehow rx closed before we spawned or something..? (this is more than likely impossible and signs of worse problems)");
 	});
 
 	rx.await.expect("piss")

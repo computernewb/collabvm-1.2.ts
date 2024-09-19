@@ -31,3 +31,11 @@ futures = "0.3.30"
 
 [build-dependencies]
 napi-build = "2.1.3"
+
+[features]
+# Enables splatting batcher rects into multiple tiles, allowing for multithreaded/
+# parallel processing of rects (which should increase performance).
+# Currently only explicitly enabled because it's buggy.
+# To explicitly use this:
+# `cargo build --release -F multi_splat && cp target/release/libcvm_rs.so index.node`
+multi_splat = []

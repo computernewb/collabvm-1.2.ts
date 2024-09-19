@@ -3,6 +3,9 @@
 use super::surface::Surface;
 use super::types::*;
 
+use futures::Stream;
+use futures::{stream::FuturesUnordered, StreamExt};
+
 use resize::Pixel::RGBA8;
 use resize::Type::Triangle;
 use rgb::FromSlice;
@@ -296,30 +299,45 @@ impl Client {
 
 						Rect::batch_set(&surf_size, &mut self.rects_in_frame);
 
-						// send current update state
+						// send current update state if the batcher didn't return nothing
 						if !self.rects_in_frame.is_empty() {
 							let surf_data = surf.get_buffer();
 							let mut new_rects = Vec::new();
+							let futures = FuturesUnordered::new();
 
-							use crate::jpeg_js;
+							// create futures to encode JPEG
+							// (this is done on a internal worker pool. See src/jpeg_js.rs)			
 							for r in self.rects_in_frame.iter() {
 								let src_offset = (r.y * surf_size.width + r.x) as usize;
 								let src_rect = &surf_data[src_offset..];
 
-								let data = jpeg_js::jpeg_encode_rs(
+								use crate::jpeg_js;
+								futures.push(jpeg_js::jpeg_encode_rs(
 									src_rect,
 									r.width,
 									r.height,
 									surf_size.width,
-									self.jpeg_quality
-								)
-								.await?;
-
-								new_rects.push(RectWithJpegData {
-									rect: r.clone(),
-									data: data,
-								});
+									self.jpeg_quality,
+								));
 							}
+
+							// This looks really weird but it allows multiple rects to be encoded
+							// completely in parallel! Right now that isn't taken advantage of though,
+							// since the batcher only outputs a single rect.
+							let _ = futures
+								.collect::<Vec<Result<_, _>>>()
+								.await
+								.iter()
+								.zip(self.rects_in_frame.iter())
+								.map(|(res, rect)| {
+									if res.is_ok() {
+										new_rects.push(RectWithJpegData {
+											rect: rect.clone(),
+											data: res.as_ref().unwrap().clone(),
+										});
+									}
+								})
+								.collect::<()>();
 
 							self.out_tx
 								.send(VncThreadMessageOutput::FramebufferUpdate(new_rects))
