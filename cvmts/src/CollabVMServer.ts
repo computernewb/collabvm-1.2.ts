@@ -129,17 +129,17 @@ export default class CollabVMServer {
 			if (newState == VMState.Started) {
 				self.logger.info('VM started');
 
-				// start the display
+				// start the display and add the events once
 				if (self.VM.GetDisplay() == null) {
 					self.VM.StartDisplay();
-				}
 
-				self.VM.GetDisplay()?.on('connected', () => {
-					// well aware this sucks but whatever
+					self.logger.info('started display, adding events now');
+
+					// add events
 					self.VM.GetDisplay()?.on('resize', (size: Size) => self.OnDisplayResized(size));
 					self.VM.GetDisplay()?.on('rect', (rect: Rect) => self.OnDisplayRectangle(rect));
 					self.VM.GetDisplay()?.on('frame', () => self.OnDisplayFrame());
-				});
+				}
 			}
 
 			if (newState == VMState.Stopped) {
