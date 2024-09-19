@@ -138,7 +138,7 @@ export default class CollabVMServer {
 
 					// add events
 					self.VM.GetDisplay()?.on('resize', (size: Size) => self.OnDisplayResized(size));
-					self.VM.GetDisplay()?.on('rect', (rect: VMDisplayRect[]) => self.OnDisplayRectangles(rect));
+					self.VM.GetDisplay()?.on('rects', (rect: VMDisplayRect[]) => self.OnDisplayRectangles(rect));
 					self.VM.GetDisplay()?.on('frame', () => self.OnDisplayFrame());
 				}
 			}
