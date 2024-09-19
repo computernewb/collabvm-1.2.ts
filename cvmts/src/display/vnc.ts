@@ -48,16 +48,16 @@ export class VncDisplay extends EventEmitter implements VMDisplay {
 			// instead of spamming we can nicely do it
 			setTimeout(() => {
 				self.Reconnect();
-			}, 50);
+			}, 500);
 		});
 
 		this.displayVnc.on('resize', (size: Size) => {
-			this.emit('resize', size);
+			self.emit('resize', size);
 		});
 
 		this.displayVnc.on('rects', (rects: VMDisplayRect[]) => {
-			this.emit('rects', rects);
-			this.emit('frame');
+			self.emit('rects', rects);
+			self.emit('frame');
 		});
 
 		
