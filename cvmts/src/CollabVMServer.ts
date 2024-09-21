@@ -142,7 +142,6 @@ export default class CollabVMServer {
 
 					disp?.on('resize', (size: Size) => self.OnDisplayResized(size));
 					disp?.on('rects', (rect: VMDisplayRect[]) => self.OnDisplayRectangles(rect));
-					disp?.on('frame', () => self.OnDisplayFrame());
 				}
 			}
 
@@ -908,10 +907,6 @@ export default class CollabVMServer {
 			});
 
 			
-	}
-
-	private async OnDisplayFrame() {
-		// send sync?
 	}
 
 	private async SendFullScreenWithSize(client: User) {

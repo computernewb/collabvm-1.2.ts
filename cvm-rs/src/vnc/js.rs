@@ -66,7 +66,7 @@ impl JsClient {
 	}
 
 	fn reset_channels(&mut self) {
-		// Destroy the channels after we recieve this
+		// Destroy the channels.
 		self.event_tx = None;
 		self.event_rx = None;
 	}
@@ -103,8 +103,7 @@ impl JsClient {
 
 					VncThreadMessageOutput::FramebufferUpdate(rects) => {
 						let arr = cx.empty_array();
-
-						// TODO: Make this not clone as much (or really at all)
+						
 						for i in 0..rects.len() {
 							let rect_obj = cx.empty_object();
 
@@ -157,8 +156,6 @@ impl JsClient {
 				Err(TryRecvError::Empty) => {}
 
 				Err(TryRecvError::Disconnected) => {
-					//return Ok(cx.empty_object());
-					//return Err(anyhow::anyhow!("Channel is disconnected").into());
 					return cx.throw_error("No VNC engine is running for this client");
 				}
 			}

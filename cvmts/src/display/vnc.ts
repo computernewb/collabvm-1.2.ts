@@ -57,10 +57,7 @@ export class VncDisplay extends EventEmitter implements VMDisplay {
 
 		this.displayVnc.on('rects', (rects: VMDisplayRect[]) => {
 			self.emit('rects', rects);
-			self.emit('frame');
 		});
-
-		
 	}
 
 	private Reconnect() {
