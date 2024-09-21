@@ -20,6 +20,7 @@ import { Size, Rect } from './Utilities.js';
 import pino from 'pino';
 import { BanManager } from './BanManager.js';
 import { VMDisplayRect } from './display/interface.js';
+import { VncDisplay } from './display/vnc.js';
 import { TheAuditLog } from './AuditLog.js';
 
 // Instead of strange hacks we can just use nodejs provided
@@ -133,13 +134,21 @@ export default class CollabVMServer {
 				// start the display and add the events once
 				if (self.VM.GetDisplay() == null) {
 					self.VM.StartDisplay();
-
 					self.logger.info('started display, adding events now');
 
+					// The above code is sync so we WILL have a display object by this point
+					let disp = self.VM.GetDisplay();
+
 					// add events
-					self.VM.GetDisplay()?.on('resize', (size: Size) => self.OnDisplayResized(size));
-					self.VM.GetDisplay()?.on('rects', (rect: VMDisplayRect[]) => self.OnDisplayRectangles(rect));
-					self.VM.GetDisplay()?.on('frame', () => self.OnDisplayFrame());
+					disp?.on('connected', () => {
+						// hack. later on (if) there are more display types this should be an official
+						// part of the interface
+						(disp as VncDisplay).SetJpegQuality(self.Config.vm.jpegQuality);
+					})
+
+					disp?.on('resize', (size: Size) => self.OnDisplayResized(size));
+					disp?.on('rects', (rect: VMDisplayRect[]) => self.OnDisplayRectangles(rect));
+					disp?.on('frame', () => self.OnDisplayFrame());
 				}
 			}
 

@@ -49,6 +49,10 @@ vote = true
 #    "vncvm" - Connects to an existing VNC server
 type = "qemu"
 
+# JPEG quality. The value of 35 is a sane default,
+# however you can change it if you desire.
+jpegQuality = 35
+
 # QEMU options
 # Only used if vm.type is set to "qemu"
 [qemu]

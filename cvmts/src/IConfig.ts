@@ -34,6 +34,7 @@ export default interface IConfig {
 	};
 	vm: {
 		type: 'qemu' | 'vncvm';
+		jpegQuality: number;
 	};
 	qemu: {
 		qemuArgs: string;

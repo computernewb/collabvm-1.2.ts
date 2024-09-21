@@ -168,6 +168,19 @@ impl JsClient {
 		}
 	}
 
+	pub fn set_jpeg_quality<'a>(
+		&mut self,
+		mut cx: FunctionContext<'a>,
+	) -> JsResult<'a, JsUndefined> {
+		if let Some(tx) = self.event_tx.as_mut() {
+			let jpeg_quality = cx.argument::<JsNumber>(1)?.value(&mut cx) as u32;
+			let _ = tx.blocking_send(VncThreadMessageInput::SetJpegQuality(jpeg_quality));
+			Ok(cx.undefined())
+		} else {
+			cx.throw_error("No VNC engine is running for this client")
+		}
+	}
+
 	pub fn connect(&mut self, addr: String) -> NeonResult<()> {
 		let (engine_output_tx, engine_output_rx) = channel(32);
 		let (engine_input_tx, engine_input_rx) = channel(16);
@@ -301,6 +314,12 @@ fn vnc_full_screen(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 	Ok(cx.undefined())
 }
 
+fn vnc_set_jpeg_quality(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+	let client = &**cx.argument::<BoxedClient>(0)?;
+	let res = client.borrow_mut().set_jpeg_quality(cx);
+	res
+}
+
 /// binds the VNC engine to rust
 pub fn export(cx: &mut ModuleContext) -> NeonResult<()> {
 	cx.export_function("vncNew", vnc_new)?;
@@ -310,6 +329,7 @@ pub fn export(cx: &mut ModuleContext) -> NeonResult<()> {
 	cx.export_function("vncSendMouse", vnc_send_mouse)?;
 	cx.export_function("vncThumbnail", vnc_thumbnail)?;
 	cx.export_function("vncFullScreen", vnc_full_screen)?;
+	cx.export_function("vncSetJPEGQuality", vnc_set_jpeg_quality)?;
 	cx.export_function("vncDisconnect", vnc_disconnect)?;
 	Ok(())
 }
