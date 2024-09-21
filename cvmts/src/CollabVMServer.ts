@@ -117,12 +117,6 @@ export default class CollabVMServer {
 		this.indefiniteTurn = null;
 		this.ModPerms = Utilities.MakeModPerms(this.Config.collabvm.moderatorPermissions);
 
-		// No size initially, since there usually won't be a display connected at all during initalization
-		this.OnDisplayResized({
-			width: 0,
-			height: 0
-		});
-
 		this.VM = vm;
 
 		let self = this;
@@ -882,13 +876,38 @@ export default class CollabVMServer {
 
 		let promises: Promise<void>[] = [];
 
-		for (let rect of self.rectQueue) promises.push(doRect(rect));
+		for (let rect of rects) promises.push(doRect(rect));
+	}
 
-		// javascript is a very solidly designed language with no holes
-		// or usability traps inside of it whatsoever
-		this.rectQueue.length = 0;
+	private async OnDisplayResized(size: Size) {
+		let display = this.VM.GetDisplay();
+		if (display == null) return;
+		let encoded = await display.GetFullScreen();
 
-		await Promise.all(promises);
+		this.clients
+			.filter((c) => c.connectedToNode || c.viewMode == 1)
+			.forEach(async (c) => {
+				if (this.screenHidden && c.rank == Rank.Unregistered) return;
+				c.sendMsg(cvm.guacEncode('size', '0', size.width.toString(), size.height.toString()));
+
+
+				// send fullscreen jpeg
+				if (c.Capabilities.bin) {
+					let msg: CollabVMProtocolMessage = {
+						type: CollabVMProtocolMessageType.rect,
+						rect: {
+							x: 0,
+							y: 0,
+							data: encoded
+						}
+					};
+					c.socket.sendBinary(msgpack.encode(msg));
+				} else {
+					c.sendMsg(cvm.guacEncode('png', '0', '0', '0', '0', encoded.toString('base64')));
+				}
+			});
+
+			
 	}
 
 	private async OnDisplayFrame() {
