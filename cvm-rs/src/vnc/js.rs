@@ -9,6 +9,7 @@ use neon::{prelude::*, types::buffer::TypedArray};
 use std::cell::RefCell;
 use std::sync::{Arc, Mutex};
 
+use tokio::net;
 use tokio::sync::mpsc::{channel, error::TryRecvError, Receiver, Sender};
 
 pub struct JsClient {
@@ -182,25 +183,14 @@ impl JsClient {
 	}
 
 	pub fn connect(&mut self, addr: String) -> NeonResult<()> {
+		// Channels used to communicate between JS and the VNC thread
 		let (engine_output_tx, engine_output_rx) = channel(32);
 		let (engine_input_tx, engine_input_rx) = channel(16);
-
-		// It is used but I guess something is mad
-		#[allow(unused_assignments)]
-		let mut address: Option<client::Address> = None;
 
 		self.reset_channels();
 
 		self.event_tx = Some(engine_input_tx);
 		self.event_rx = Some(engine_output_rx);
-
-		// address parsing bullfuckery
-		if addr.as_str().starts_with('/') {
-			address = Some(client::Address::Unix(std::path::PathBuf::from(addr)));
-		} else {
-			// TODO hostname support.
-			address = Some(client::Address::Tcp(addr.parse().expect("parse fail")));
-		}
 
 		// clone surface
 		let surf_client_thread_clone = Arc::clone(&self.surf);
@@ -214,6 +204,28 @@ impl JsClient {
 					.enable_all()
 					.build()
 					.unwrap();
+
+				// address parsing:
+				// if the path starts with / then it's assumed to be a Unix domain socket.
+				// otherwise it's assumed to be a TCP host, either a DNS name or IP address.
+				//
+				// We use the first record returned by DNS which probably isn't a good idea but
+				// it works I guess
+				let mut address: Option<client::Address> = None;
+
+				rt.block_on(async {
+					if addr.as_str().starts_with('/') {
+						address = Some(client::Address::Unix(std::path::PathBuf::from(addr)));
+					} else {
+						let mut names = net::lookup_host(&addr).await.expect("DNS failure");
+
+						let addr = names.next().unwrap_or_else(|| {
+							(&addr).parse().expect("Failed to parse SocketAddr")
+						});
+
+						address = Some(client::Address::Tcp(addr));
+					}
+				});
 
 				// Create the VNC engine itself
 				let tx_clone = engine_output_tx.clone();
@@ -244,7 +256,10 @@ impl JsClient {
 	}
 }
 
-// TODO
+// JavaScript (Neon) bindings
+
+// JsClient does not store any reference to JavaScript owned objects
+// therefore the default impl of [Finalize::finalize] is good enough.
 impl Finalize for JsClient {}
 
 type BoxedClient = JsBox<RefCell<JsClient>>;
