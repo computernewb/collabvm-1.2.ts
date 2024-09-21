@@ -30,8 +30,8 @@ export class VncClient extends EventEmitter {
 
 		// Run a reduced speed poll (since it doesn't need to be
 		// fast or really that high priority).
-		// to wait until we get a connect or disconnect event
-		// from the Rust VNC engine. Once we get one we handle it as needed.
+		// This poll is done until we get a connect or disconnect event
+		// from the Rust VNC engine. Once we either one, we handle it as needed.
 		let slowPollUntilConnect = () => {
 			if (this.#client == null) return;
 
@@ -135,6 +135,10 @@ export class VncClient extends EventEmitter {
 				res(data);
 			});
 		});
+	}
+
+	SetJpegQuality(quality) {
+		native.vncSetJPEGQuality(this.#client, quality);
 	}
 
 	Size() {

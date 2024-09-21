@@ -105,6 +105,12 @@ export class VncDisplay extends EventEmitter implements VMDisplay {
 		return this.displayVnc.Size();
 	}
 
+	SetJpegQuality(quality: number) {
+		if(this.connected) {
+			return this.displayVnc.SetJpegQuality(quality);
+		}
+	}
+
 	MouseEvent(x: number, y: number, buttons: number) {
 		if (this.Connected()) {
 			let size = this.displayVnc.Size() as Size;

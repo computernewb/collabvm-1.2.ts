@@ -123,11 +123,11 @@ impl Client {
 		self.out_tx.send(VncThreadMessageOutput::Connect).await?;
 
 		loop {
-			// Pull a event and act on it. If none are there, it's fine and we can just move on to
-			// advancing the vnc client, but if the channel is closed, that means we are to disconnect
+			// Pull a input message and act on it. If none are there, it's fine and we can just move on to
+			// advancing the VNC client, but if the channel is closed, that means we are to disconnect.
 			//
-			// Note that we do not timeout because we will eventually wait for a event later
-			// either way.
+			// Note that we do not timeout because we will eventually wait for a event,
+			// and additionally the thread sleeps later either way.
 			match self.in_rx.try_recv() {
 				Ok(val) => match val {
 					VncThreadMessageInput::KeyEvent { keysym, pressed } => {
@@ -242,7 +242,7 @@ impl Client {
 				}
 			}
 
-			// pull events until there is no more event to pull
+			// Pull events until no more are available
 			match vnc.poll_event().await {
 				Ok(Some(e)) => {
 					match e {
@@ -261,20 +261,18 @@ impl Client {
 									height: res.height as u32,
 								}))
 								.await?;
+
+							// Would it be a good idea to request a fullscreen here?
 						}
 
-						// TODO: implement copyrect support in Surface
-						//VncEvent::Copy(dest_rect, src_rect) => {
-						// TODO copy rect
-						//}
 						VncEvent::RawImage(rects) => {
-							let mut lk = self.surf.lock().expect("couldn't lock Surface");
+							let mut locked_surface = self.surf.lock().expect("couldn't lock Surface");
 
 							for rect in rects.iter() {
 								let cvm_rect = Rect::from(rect.rect);
 
 								// blit onto the surface
-								lk.blit_buffer(cvm_rect.clone(), unsafe {
+								locked_surface.blit_buffer(cvm_rect.clone(), unsafe {
 									std::slice::from_raw_parts(
 										rect.data.as_ptr() as *const u32,
 										rect.data.len() / core::mem::size_of::<u32>(),
