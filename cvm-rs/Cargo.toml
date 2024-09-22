@@ -1,6 +1,6 @@
 [package]
 name = "cvm-rs"
-description = "Rust utility library for cvmts. Runs all the high performance code"
+description = "Rust utility library for cvmts. Runs performance-sensitive code."
 version = "0.3.0"
 edition = "2021"
 exclude = ["index.node"]
@@ -10,32 +10,31 @@ crate-type = ["cdylib"]
 
 [dependencies]
 libc = "0.2.155"
-
-# Required for JPEG
-once_cell = "1.19.0"
-turbojpeg-sys = "1.0.0"
-
-# node sex
-neon = "1"
 anyhow = "1.0.86"
+once_cell = "1.19.0"
+
+# async/threading stuff
+tokio = { version = "1.40.0", features = ["full"] }
+rayon = "1.10.0"
+futures = "0.3.30"
+
+# node bindings
+neon = "1"
+
+# JPEG
+turbojpeg-sys = "1.0.0"
 
 # vnc
 vnc-rs = { git = "https://github.com/computernewb/vnc-rs.git" }
-tokio = { version = "1.40.0", features = ["full"] }
 
 # vnc thumbnails
 resize = "0.8.7"
 rgb = "0.8.50"
-rayon = "1.10.0"
-futures = "0.3.30"
 
-[build-dependencies]
-napi-build = "2.1.3"
-
-[features]
-# Enables splatting batcher rects into multiple tiles, allowing for multithreaded/
-# parallel processing of rects (which should increase performance).
-# Currently only explicitly enabled because it's buggy.
-# To explicitly use this:
-# `cargo build --release -F multi_splat && cp target/release/libcvm_rs.so index.node`
-multi_splat = []
+[profile.release]
+opt-level = 3
+strip = true
+# TODO: turbojpeg-sys currently doesn't use clang I don't think,
+# or LTO for that matter. Not that it matters because cross-LTO
+# between Clang -> Rust is a bit... messy atm. Oh well!
+lto = "thin"
