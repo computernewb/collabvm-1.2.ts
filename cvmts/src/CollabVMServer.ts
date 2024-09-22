@@ -20,6 +20,7 @@ import { CollabVMProtocolMessage, CollabVMProtocolMessageType } from '@cvmts/col
 import { Size, Rect } from './Utilities.js';
 import pino from 'pino';
 import { BanManager } from './BanManager.js';
+import { TheAuditLog } from './AuditLog.js';
 
 // Instead of strange hacks we can just use nodejs provided
 // import.meta properties, which have existed since LTS if not before
@@ -526,18 +527,21 @@ export default class CollabVMServer {
 							// QEMU Monitor
 							if (client.rank !== Rank.Admin) return;
 							if (msgArr.length !== 4 || msgArr[2] !== this.Config.collabvm.node) return;
+							TheAuditLog.onMonitorCommand(client, msgArr[3]);
 							let output = await this.VM.MonitorCommand(msgArr[3]);
 							client.sendMsg(cvm.guacEncode('admin', '2', String(output)));
 							break;
 						case '8':
 							// Restore
 							if (client.rank !== Rank.Admin && (client.rank !== Rank.Moderator || !this.Config.collabvm.moderatorPermissions.restore)) return;
+							TheAuditLog.onReset(client);
 							this.VM.Reset();
 							break;
 						case '10':
 							// Reboot
 							if (client.rank !== Rank.Admin && (client.rank !== Rank.Moderator || !this.Config.collabvm.moderatorPermissions.reboot)) return;
 							if (msgArr.length !== 3 || msgArr[2] !== this.Config.collabvm.node) return;
+							TheAuditLog.onReboot(client);
 							await this.VM.Reboot();
 							break;
 						case '12':
@@ -545,7 +549,7 @@ export default class CollabVMServer {
 							if (client.rank !== Rank.Admin && (client.rank !== Rank.Moderator || !this.Config.collabvm.moderatorPermissions.ban)) return;
 							var user = this.clients.find((c) => c.username === msgArr[2]);
 							if (!user) return;
-							this.logger.info(`Banning ${user.username!} (${user.IP.address}) by request of ${client.username!}`);
+							TheAuditLog.onBan(client, user);
 							user.ban(this.banmgr);
 						case '13':
 							// Force Vote
@@ -578,6 +582,7 @@ export default class CollabVMServer {
 								default:
 									return;
 							}
+							//TheAdminLogger.onMute(client, user, permamute);
 							user.mute(permamute);
 							break;
 						case '15':
@@ -585,6 +590,7 @@ export default class CollabVMServer {
 							if (client.rank !== Rank.Admin && (client.rank !== Rank.Moderator || !this.Config.collabvm.moderatorPermissions.kick)) return;
 							var user = this.clients.find((c) => c.username === msgArr[2]);
 							if (!user) return;
+							TheAuditLog.onKick(client, user);
 							user.kick();
 							break;
 						case '16':
