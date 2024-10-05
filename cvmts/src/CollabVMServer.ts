@@ -30,6 +30,9 @@ const kCVMTSAssetsRoot = path.resolve(__dirname, '../../assets');
 
 const kRestartTimeout = 5000;
 
+// Rate in milliseconds that the 'sync' instruction should be sent to users.
+const kSyncRateMs = 500;
+
 type ChatHistory = {
 	user: string;
 	msg: string;
@@ -85,6 +88,8 @@ export default class CollabVMServer {
 	private ModPerms: number;
 	private VM: VM;
 
+	private lastSync: number = Date.now();
+
 	// Authentication manager
 	private auth: AuthManager | null;
 
@@ -93,9 +98,6 @@ export default class CollabVMServer {
 
 	// Ban manager
 	private banmgr: BanManager;
-
-	// queue of rects, reset every frame
-	private rectQueue: Rect[] = [];
 
 	private logger = pino({ name: 'CVMTS.Server' });
 
@@ -139,7 +141,6 @@ export default class CollabVMServer {
 					// add events
 					self.VM.GetDisplay()?.on('resize', (size: Size) => self.OnDisplayResized(size));
 					self.VM.GetDisplay()?.on('rect', (rect: Rect) => self.OnDisplayRectangle(rect));
-					self.VM.GetDisplay()?.on('frame', () => self.OnDisplayFrame());
 				}
 			}
 
@@ -849,20 +850,7 @@ export default class CollabVMServer {
 		}
 	}
 
-	private OnDisplayRectangle(rect: Rect) {
-		this.rectQueue.push(rect);
-	}
-
-	private OnDisplayResized(size: Size) {
-		this.clients
-			.filter((c) => c.connectedToNode || c.viewMode == 1)
-			.forEach((c) => {
-				if (this.screenHidden && c.rank == Rank.Unregistered) return;
-				c.sendMsg(cvm.guacEncode('size', '0', size.width.toString(), size.height.toString()));
-			});
-	}
-
-	private async OnDisplayFrame() {
+	private async OnDisplayRectangle(rect: Rect) {
 		let self = this;
 
 		let doRect = async (rect: Rect) => {
@@ -887,20 +875,35 @@ export default class CollabVMServer {
 						c.socket.sendBinary(encodedbin);
 					} else {
 						c.sendMsg(cvm.guacEncode('png', '0', '0', rect.x.toString(), rect.y.toString(), encodedb64));
-						c.sendMsg(cvm.guacEncode('sync', Date.now().toString()));
 					}
 				});
 		};
 
-		let promises: Promise<void>[] = [];
+		await Promise.all([doRect(rect)]);
 
-		for (let rect of self.rectQueue) promises.push(doRect(rect));
+		// Send a sync if the time since the last sync has hit or went above the rate
+		// to send one
+		let syncDeltaMs = Date.now() - self.lastSync;
+		if (syncDeltaMs >= kSyncRateMs) {
+			let syncNow = Date.now();
+			self.clients
+				.filter((c) => c.connectedToNode || c.viewMode == 1)
+				.forEach((c) => {
+					if (self.screenHidden && c.rank == Rank.Unregistered) return;
+					c.sendMsg(cvm.guacEncode('sync', syncNow.toString()));
+				});
 
-		// javascript is a very solidly designed language with no holes
-		// or usability traps inside of it whatsoever
-		this.rectQueue.length = 0;
+			self.lastSync = syncNow;
+		}
+	}
 
-		await Promise.all(promises);
+	private OnDisplayResized(size: Size) {
+		this.clients
+			.filter((c) => c.connectedToNode || c.viewMode == 1)
+			.forEach((c) => {
+				if (this.screenHidden && c.rank == Rank.Unregistered) return;
+				c.sendMsg(cvm.guacEncode('size', '0', size.width.toString(), size.height.toString()));
+			});
 	}
 
 	private async SendFullScreenWithSize(client: User) {
