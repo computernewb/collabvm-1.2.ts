@@ -42,6 +42,8 @@ pub async fn jpeg_encode_rs(
 ) -> anyhow::Result<Box<[u8]>> {
 	// SAFETY: The slice invariants are still upheld, we just cast to &[u8] since
 	// that's what we want here.
+	//
+	// FIXME: use util::slice_primitive_cast() here. I can't seem to currently because of a compile error
 	let buf = unsafe {
 		std::slice::from_raw_parts(
 			src.as_ptr() as *const u8,
@@ -49,12 +51,11 @@ pub async fn jpeg_encode_rs(
 		)
 	};
 
-	// maybe using a mpsc channel would be better but it's Probably Fineeeee..
 	let (tx, rx) = oneshot::channel();
 
 	rayon_pool().spawn(move || {
 		let image: Image = Image {
-			buffer: &buf,
+			buffer: buf,
 			width: width as u32,
 			height: height as u32,
 

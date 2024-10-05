@@ -1,5 +1,7 @@
 //! Native-side VNC client. This is usually run in another OS thread.
 
+use crate::util;
+
 use super::surface::Surface;
 use super::types::*;
 
@@ -113,9 +115,6 @@ impl Client {
 		// the builder pattern should have stayed in java
 		let vnc = VncConnector::new(stream)
 			.set_auth_method(async move { Ok("".into()) })
-			//.add_encoding(vnc::VncEncoding::Tight)
-			//.add_encoding(vnc::VncEncoding::Zrle)
-			//.add_encoding(vnc::VncEncoding::CopyRect)
 			.add_encoding(vnc::VncEncoding::DesktopSizePseudo)
 			.add_encoding(vnc::VncEncoding::Raw)
 			.allow_shared(true)
@@ -159,13 +158,7 @@ impl Client {
 						let surf_size = surf.size.clone();
 						let surf_data = surf.get_buffer();
 
-						// SAFETY: Slice invariants are still held.
-						let surf_slice = unsafe {
-							std::slice::from_raw_parts(
-								surf_data.as_ptr() as *const u8,
-								surf_data.len() * 4,
-							)
-						};
+						let surf_slice = util::slice_primitive_cast::<u8, _>(&surf_data[..]);
 
 						// would it be wise to make a new Surface for this? or run it on a thread? Probably not
 						let mut new_data: Vec<u8> =
@@ -183,15 +176,7 @@ impl Client {
 						resizer.resize(surf_slice.as_rgba(), new_data.as_rgba_mut())?;
 
 						let data = jpeg_js::jpeg_encode_rs(
-							// SAFETY: Like above, slice invariants are still held,
-							// and this does not allow access to uninitalized
-							// heap memory that is not a part of the Vec.
-							unsafe {
-								std::slice::from_raw_parts(
-									new_data.as_ptr() as *const u32,
-									new_data.len() / 4,
-								)
-							},
+							&util::slice_primitive_cast::<u32, _>(&new_data[..]),
 							THUMB_WIDTH,
 							THUMB_HEIGHT,
 							THUMB_WIDTH,
@@ -263,8 +248,6 @@ impl Client {
 									height: res.height as u32,
 								}))
 								.await?;
-
-							// Would it be a good idea to request a fullscreen here?
 						}
 
 						VncEvent::RawImage(rects) => {
@@ -275,12 +258,10 @@ impl Client {
 								let cvm_rect = Rect::from(rect.rect);
 
 								// blit onto the surface
-								locked_surface.blit_buffer(cvm_rect.clone(), unsafe {
-									std::slice::from_raw_parts(
-										rect.data.as_ptr() as *const u32,
-										rect.data.len() / core::mem::size_of::<u32>(),
-									)
-								});
+								locked_surface.blit_buffer(
+									cvm_rect.clone(),
+									util::slice_primitive_cast(&rect.data[..]),
+								);
 
 								self.rects_in_frame.push(cvm_rect);
 							}
