@@ -4,6 +4,8 @@ import { QemuVM, QemuVmDefinition, VMState } from '@computernewb/superqemu';
 import { VMDisplay } from '../display/interface.js';
 import { VncDisplay } from '../display/vnc.js';
 import pino from 'pino';
+import { CgroupLimits, QemuResourceLimitedLauncher } from './qemu_launcher.js';
+
 
 // shim over superqemu because it diverges from the VM interface
 export class QemuVMShim implements VM {
@@ -11,9 +13,22 @@ export class QemuVMShim implements VM {
 	private display: VncDisplay | null = null;
 	private logger;
 
-	constructor(def: QemuVmDefinition) {
-		this.vm = new QemuVM(def);
+	constructor(def: QemuVmDefinition, resourceLimits?: CgroupLimits) {
 		this.logger = pino({ name: `CVMTS.QemuVMShim/${def.id}` });
+
+		if (resourceLimits) {
+			if (process.platform == 'linux') {
+				this.vm = new QemuVM(def, new QemuResourceLimitedLauncher(def.id, resourceLimits));
+			} else {
+				// Just use the default Superqemu launcher on non-Linux platforms,
+				// .. regardless of if resource control is (somehow) enabled.
+				this.logger.warn({platform: process.platform}, 'Resource control is not supported on this platform. Please remove or comment it out from your configuration.');
+				this.vm = new QemuVM(def);
+			}
+		} else {
+			this.vm = new QemuVM(def);
+		}
+
 	}
 
 	Start(): Promise<void> {

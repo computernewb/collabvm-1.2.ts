@@ -57,6 +57,17 @@ qemuArgs = "qemu-system-x86_64"
 vncPort = 5900
 snapshots = true
 
+# Resource limits. Only works on Linux, with `Delegate=yes` set in your .service file.
+#
+# cpuUsageMax specifies CPU usage limits in the common top notation, so 200% means 2 CPUs, so on so forth.
+# runOnCpus specifies what CPUs the VM is allowed to run on.
+#
+# Either can be omitted or specified; however, if you want to disable it entirely,
+# it's a better idea to just comment this inline table out, 
+# since the inline table existing is used to enable cgroup support.
+resourceLimits = { cpuUsageMax = 100, runOnCpus = [ 2, 4 ] }
+
+
 # VNC options
 # Only used if vm.type is set to "vncvm"
 [vncvm]

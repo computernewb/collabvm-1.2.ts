@@ -81,7 +81,7 @@ async function start() {
 				vncPort: Config.qemu.vncPort,
 			};
 
-			VM = new QemuVMShim(def);
+			VM = new QemuVMShim(def, Config.qemu.resourceLimits);
 			break;
 		}
 		case 'vncvm': {
