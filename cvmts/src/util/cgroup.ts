@@ -29,6 +29,7 @@ export class CGroup {
 		// Configure this "root" cgroup to provide cpu and cpuset controllers to the leaf
 		// QEMU cgroups. A bit iffy but whatever.
 		writeFileSync(path.join(this.path, 'cgroup.subtree_control'), '+cpu +cpuset');
+		//writeFileSync(path.join(this.path, 'cgroup.subtree_control'), '+cpu');
 	}
 
 	GetController(controller: string) {
@@ -61,6 +62,11 @@ export class CGroup {
 	// Attaches a process to this cgroup.
 	AttachProcess(pid: number) {
 		appendFileSync(path.join(this.path, 'cgroup.procs'), pid.toString());
+	}
+
+	// Attaches a thread to this cgroup. (The CGroup is a threaded one. See above)
+	AttachThread(tid: number) {
+		appendFileSync(path.join(this.path, 'cgroup.threads'), tid.toString());
 	}
 
 	// Returns a CGroup instance for the process' current cgroup, prepared for subgroup usage.

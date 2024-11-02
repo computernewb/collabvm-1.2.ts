@@ -61,6 +61,9 @@ snapshots = true
 #
 # cpuUsageMax specifies CPU usage limits in the common top notation, so 200% means 2 CPUs, so on so forth.
 # runOnCpus specifies what CPUs the VM is allowed to run on.
+# limitProcess is optional (default false) and determines if only qemu vCPU threads are put into the cgroup,
+# or the entire QEMU process (incl. all its threads). This is rarely what you want, so the example does not
+# provide it.
 #
 # Either can be omitted or specified; however, if you want to disable it entirely,
 # it's a better idea to just comment this inline table out, 

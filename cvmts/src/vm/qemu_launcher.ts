@@ -7,6 +7,7 @@ import { CGroup } from '../util/cgroup.js';
 export interface CgroupLimits {
 	cpuUsageMax?: number;
 	runOnCpus?: number[];
+	limitProcess?: boolean;
 }
 
 interface CGroupValue {
@@ -47,10 +48,15 @@ class CGroupLimitedProcess extends EventEmitter implements IProcess {
 	stdout: Readable | null = null;
 	stderr: Readable | null = null;
 	private cgroup: CGroup;
+	private limits;
 
-	constructor(cg: CGroup, command: string, opts?: ProcessLaunchOptions) {
+	constructor(cg: CGroup, limits: CgroupLimits, command: string, opts?: ProcessLaunchOptions) {
 		super();
 		this.cgroup = cg;
+		this.limits = limits;
+
+		if(!this.limits.limitProcess)
+			this.limits.limitProcess = false;
 
 		this.process = execaCommand(command, opts);
 
@@ -60,8 +66,10 @@ class CGroupLimitedProcess extends EventEmitter implements IProcess {
 
 		let self = this;
 		this.process.on('spawn', () => {
-			// it should have one!
-			self.cgroup.AttachProcess(self.process.pid!);
+			if(self.limits.limitProcess) {
+				// it should have one!
+				self.cgroup.AttachProcess(self.process.pid!);
+			}
 			self.emit('spawn');
 		});
 
@@ -85,11 +93,13 @@ class CGroupLimitedProcess extends EventEmitter implements IProcess {
 }
 
 export class QemuResourceLimitedLauncher implements IProcessLauncher {
-	private group;
+	public group;
+	private limits;
 
 	constructor(name: string, limits: CgroupLimits) {
 		let root = CGroup.Self();
 		this.group = root.GetSubgroup(name);
+		this.limits = limits;
 
 		// Set cgroup keys.
 		for(const val of MakeValuesFromLimits(limits)) {
@@ -99,6 +109,6 @@ export class QemuResourceLimitedLauncher implements IProcessLauncher {
 	}
 
 	launch(command: string, opts?: ProcessLaunchOptions | undefined): IProcess {
-		return new CGroupLimitedProcess(this.group, command, opts);
+		return new CGroupLimitedProcess(this.group, this.limits, command, opts);
 	}
 }
