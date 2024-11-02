@@ -47,12 +47,16 @@ class CGroupLimitedProcess extends EventEmitter implements IProcess {
 	stdin: Writable | null = null;
 	stdout: Readable | null = null;
 	stderr: Readable | null = null;
+	private cgroup_root: CGroup;
 	private cgroup: CGroup;
+	private id;
 	private limits;
 
-	constructor(cg: CGroup, limits: CgroupLimits, command: string, opts?: ProcessLaunchOptions) {
+	constructor(cgroup_root: CGroup, id: string, limits: CgroupLimits, command: string, opts?: ProcessLaunchOptions) {
 		super();
-		this.cgroup = cg;
+		this.cgroup_root = cgroup_root;
+		this.cgroup = cgroup_root.GetSubgroup(id);
+		this.id = id;
 		this.limits = limits;
 
 		if(!this.limits.limitProcess)
@@ -87,6 +91,7 @@ class CGroupLimitedProcess extends EventEmitter implements IProcess {
 		this.stdout = null;
 		this.stderr = null;
 
+		this.cgroup_root.DeleteSubgroup(this.id);
 		this.process.removeAllListeners();
 		this.removeAllListeners();
 	}
@@ -95,9 +100,11 @@ class CGroupLimitedProcess extends EventEmitter implements IProcess {
 export class QemuResourceLimitedLauncher implements IProcessLauncher {
 	public group;
 	private limits;
+	private name;
 
 	constructor(name: string, limits: CgroupLimits) {
 		let root = CGroup.Self();
+		this.name = name;
 		this.group = root.GetSubgroup(name);
 		this.limits = limits;
 
@@ -109,6 +116,6 @@ export class QemuResourceLimitedLauncher implements IProcessLauncher {
 	}
 
 	launch(command: string, opts?: ProcessLaunchOptions | undefined): IProcess {
-		return new CGroupLimitedProcess(this.group, this.limits, command, opts);
+		return new CGroupLimitedProcess(CGroup.Self(), this.name, this.limits, command, opts);
 	}
 }

@@ -1,7 +1,7 @@
 // Cgroup management code
 // this sucks, ill mess with it later
 
-import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, readFileSync, rmdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
 export class CGroupController {
@@ -44,6 +44,16 @@ export class CGroup {
 		let subgroup_root = path.join(this.path, name);
 		if (existsSync(subgroup_root)) return true;
 		return false;
+	}
+
+	DeleteSubgroup(name: string): void {
+		let subgroup_root = path.join(this.path, name);
+		if (!this.HasSubgroup(name)) {
+			throw new Error(`Subgroup ${name} does not exist`);
+		}
+
+		//console.log("Deleting subgroup", name);
+		rmdirSync(subgroup_root);
 	}
 
 	// Gets a CGroup inside of this cgroup.
