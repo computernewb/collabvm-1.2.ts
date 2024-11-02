@@ -31,6 +31,12 @@ export class QemuVMShim implements VM {
 		} else {
 			this.vm = new QemuVM(def);
 		}
+
+		this.vm.on('statechange', async (newState) => {
+			if(newState == VMState.Started) {
+				await this.PlaceVCPUThreadsIntoCGroup();
+			}
+		});
 	}
 
 	Start(): Promise<void> {
@@ -70,10 +76,6 @@ export class QemuVMShim implements VM {
 	}
 
 	StartDisplay(): void {
-		// HACK: We should probably use another subscribed eventemitter for this. For now,
-		// this "works". I guess.
-		this.PlaceVCPUThreadsIntoCGroup();
-
 		// boot it up
 		let info = this.vm.GetDisplayInfo();
 
