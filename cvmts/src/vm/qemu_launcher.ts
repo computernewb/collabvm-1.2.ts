@@ -23,7 +23,7 @@ function MakeValuesFromLimits(limits: CgroupLimits): CGroupValue[] {
 		option_array.push({
 			controller: 'cpu',
 			key: 'max',
-			value: `${(limits.cpuUsageMax / 100) * 10000} 10000`
+			value: `${(limits.cpuUsageMax / 100) * 100000} 100000`
 		});
 	}
 
