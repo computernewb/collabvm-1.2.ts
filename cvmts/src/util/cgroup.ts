@@ -3,6 +3,9 @@
 
 import { appendFileSync, existsSync, mkdirSync, readFileSync, rmdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
+import pino from 'pino';
+
+let logger = pino({ name: 'CVMTS/CGroup' });
 
 export class CGroupController {
 	private controller;
@@ -14,7 +17,11 @@ export class CGroupController {
 	}
 
 	WriteValue(key: string, value: string) {
-		writeFileSync(path.join(this.cg.Path(), `${this.controller}.${key}`), value);
+		try {
+			writeFileSync(path.join(this.cg.Path(), `${this.controller}.${key}`), value);
+		} catch(e) {
+			logger.error({error: e, controller_key: `${this.controller}.${key}`, value: value }, 'Failed to set CGroup controller value')
+		}
 	}
 }
 
@@ -25,11 +32,20 @@ export class CGroup {
 		this.path = path;
 	}
 
-	private InitControllers() {
+	InitControllers(wants_cpuset: boolean) {
 		// Configure this "root" cgroup to provide cpu and cpuset controllers to the leaf
 		// QEMU cgroups. A bit iffy but whatever.
-		writeFileSync(path.join(this.path, 'cgroup.subtree_control'), '+cpu +cpuset');
-		//writeFileSync(path.join(this.path, 'cgroup.subtree_control'), '+cpu');
+		if(wants_cpuset) {
+			try {
+				writeFileSync(path.join(this.path, 'cgroup.subtree_control'), '+cpu +cpuset');
+			} catch(err) {
+				logger.error({error: err}, 'Could not provide cpuset controller to subtree');
+				// just give up if this fails
+				writeFileSync(path.join(this.path, 'cgroup.subtree_control'), '+cpu');
+			}
+		} else {
+			writeFileSync(path.join(this.path, 'cgroup.subtree_control'), '+cpu');
+		}
 	}
 
 	GetController(controller: string) {
@@ -94,9 +110,6 @@ export class CGroup {
 		let cg_path = res.substring(3, res.indexOf('\n'));
 
 		let cg = new CGroup(path.join('/sys/fs/cgroup', cg_path));
-
-		// Do root level group initalization
-		cg.InitControllers();
 
 		return cg;
 	}

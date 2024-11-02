@@ -57,17 +57,20 @@ qemuArgs = "qemu-system-x86_64"
 vncPort = 5900
 snapshots = true
 
-# Resource limits. Only works on Linux, with `Delegate=yes` set in your .service file.
+# Resource limits. Only works on Linux, with `Delegate=yes` set in your .service file. No-op on other platforms.
 #
-# cpuUsageMax specifies CPU usage limits in the common top notation, so 200% means 2 CPUs, so on so forth.
-# runOnCpus specifies what CPUs the VM is allowed to run on.
+# cpuUsageMax optionally specifies the max CPU usage as percentage in the common top notation, so 200% means 2 CPUs, 400% is 4 CPUs, 
+# so on.
+#
+# runOnCpus is an optional array that specifies what CPUs the VM is allowed to run on.
+# Systemd user slices can not delegate the cpuset controller, meaning this option will *not* work if you do not use a system service.
+# (effectively, it will be a loud no-op that logs an error on startup)
+#
 # limitProcess is optional (default false) and determines if only qemu vCPU threads are put into the cgroup,
-# or the entire QEMU process (incl. all its threads). This is rarely what you want, so the example does not
-# provide it.
+# or the entire QEMU process (incl. all its threads). The default behaviour of only limiting vCPU threads
+# is more than likely what you want, so the example configuration omits specifying this key.
 #
-# Either can be omitted or specified; however, if you want to disable it entirely,
-# it's a better idea to just comment this inline table out, 
-# since the inline table existing is used to enable cgroup support.
+# Commenting this inline table from the configuration disables resource limiting entirely.
 resourceLimits = { cpuUsageMax = 100, runOnCpus = [ 2, 4 ] }
 
 

@@ -47,14 +47,14 @@ class CGroupLimitedProcess extends EventEmitter implements IProcess {
 	stdin: Writable | null = null;
 	stdout: Readable | null = null;
 	stderr: Readable | null = null;
-	private cgroup_root: CGroup;
+	private root_cgroup: CGroup;
 	private cgroup: CGroup;
 	private id;
 	private limits;
 
 	constructor(cgroup_root: CGroup, id: string, limits: CgroupLimits, command: string, opts?: ProcessLaunchOptions) {
 		super();
-		this.cgroup_root = cgroup_root;
+		this.root_cgroup = cgroup_root;
 		this.cgroup = cgroup_root.GetSubgroup(id);
 		this.id = id;
 		this.limits = limits;
@@ -70,6 +70,8 @@ class CGroupLimitedProcess extends EventEmitter implements IProcess {
 
 		let self = this;
 		this.process.on('spawn', () => {
+			self.initCgroup();
+
 			if(self.limits.limitProcess) {
 				// it should have one!
 				self.cgroup.AttachProcess(self.process.pid!);
@@ -82,6 +84,14 @@ class CGroupLimitedProcess extends EventEmitter implements IProcess {
 		});
 	}
 
+	initCgroup() {
+		// Set cgroup keys.
+		for(const val of MakeValuesFromLimits(this.limits)) {
+			let controller = this.cgroup.GetController(val.controller);
+			controller.WriteValue(val.key, val.value);
+		}
+	}
+
 	kill(signal?: number | NodeJS.Signals): boolean {
 		return this.process.kill(signal);
 	}
@@ -91,31 +101,36 @@ class CGroupLimitedProcess extends EventEmitter implements IProcess {
 		this.stdout = null;
 		this.stderr = null;
 
-		this.cgroup_root.DeleteSubgroup(this.id);
+		this.root_cgroup.DeleteSubgroup(this.id);
 		this.process.removeAllListeners();
 		this.removeAllListeners();
 	}
 }
 
 export class QemuResourceLimitedLauncher implements IProcessLauncher {
-	public group;
 	private limits;
 	private name;
+	private root;
+	public group;
 
 	constructor(name: string, limits: CgroupLimits) {
-		let root = CGroup.Self();
+		this.root = CGroup.Self();
+
+		// Make sure
+		if(limits.runOnCpus) {
+			this.root.InitControllers(true);
+		} else {
+			this.root.InitControllers(false);
+		}
+
 		this.name = name;
-		this.group = root.GetSubgroup(name);
 		this.limits = limits;
 
-		// Set cgroup keys.
-		for(const val of MakeValuesFromLimits(limits)) {
-			let controller = this.group.GetController(val.controller);
-			controller.WriteValue(val.key, val.value);
-		}
+		// XXX figure something better out
+		this.group = this.root.GetSubgroup(this.name);
 	}
 
 	launch(command: string, opts?: ProcessLaunchOptions | undefined): IProcess {
-		return new CGroupLimitedProcess(CGroup.Self(), this.name, this.limits, command, opts);
+		return new CGroupLimitedProcess(this.root, this.name, this.limits, command, opts);
 	}
 }
