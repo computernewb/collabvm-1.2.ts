@@ -33,7 +33,7 @@ export class QemuVMShim implements VM {
 		}
 
 		this.vm.on('statechange', async (newState) => {
-			if(newState == VMState.Started) {
+			if (newState == VMState.Started) {
 				await this.PlaceVCPUThreadsIntoCGroup();
 			}
 		});
@@ -63,8 +63,16 @@ export class QemuVMShim implements VM {
 	}
 
 	async PlaceVCPUThreadsIntoCGroup() {
+		let pin_vcpu_threads = false;
 		if (this.cg_launcher) {
-			if (!this.resource_limits?.limitProcess) {
+			// messy as all hell but oh well
+			if (this.resource_limits?.limitProcess == undefined) {
+				pin_vcpu_threads = true;
+			} else {
+				pin_vcpu_threads = !this.resource_limits?.limitProcess;
+			}
+
+			if (pin_vcpu_threads) {
 				// Get all vCPUs and pin them to the CGroup.
 				let cpu_res = await this.vm.QmpCommand('query-cpus-fast', {});
 				for (let cpu of cpu_res) {
