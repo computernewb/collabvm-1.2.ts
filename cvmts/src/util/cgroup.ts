@@ -19,8 +19,8 @@ export class CGroupController {
 	WriteValue(key: string, value: string) {
 		try {
 			writeFileSync(path.join(this.cg.Path(), `${this.controller}.${key}`), value);
-		} catch(e) {
-			logger.error({error: e, controller_key: `${this.controller}.${key}`, value: value }, 'Failed to set CGroup controller value')
+		} catch (e) {
+			logger.error({ error: e, controller_name: this.controller, controller_key: `${this.controller}.${key}`, value: value }, 'Failed to set CGroup controller value');
 		}
 	}
 }
@@ -35,11 +35,11 @@ export class CGroup {
 	InitControllers(wants_cpuset: boolean) {
 		// Configure this "root" cgroup to provide cpu and cpuset controllers to the leaf
 		// QEMU cgroups. A bit iffy but whatever.
-		if(wants_cpuset) {
+		if (wants_cpuset) {
 			try {
 				writeFileSync(path.join(this.path, 'cgroup.subtree_control'), '+cpu +cpuset');
-			} catch(err) {
-				logger.error({error: err}, 'Could not provide cpuset controller to subtree');
+			} catch (err) {
+				logger.error({ error: err }, 'Could not provide cpuset controller to subtree. runOnCpus will not function.');
 				// just give up if this fails
 				writeFileSync(path.join(this.path, 'cgroup.subtree_control'), '+cpu');
 			}

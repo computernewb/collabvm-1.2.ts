@@ -7,6 +7,7 @@ import { CGroup } from '../util/cgroup.js';
 export interface CgroupLimits {
 	cpuUsageMax?: number;
 	runOnCpus?: number[];
+	periodMs?: number;
 	limitProcess?: boolean;
 }
 
@@ -19,12 +20,19 @@ interface CGroupValue {
 function MakeValuesFromLimits(limits: CgroupLimits): CGroupValue[] {
 	let option_array = [];
 
+	// The default period is 100 ms, which matches cgroups2 defaults.
+	let periodUs = 100 * 1000;
+
+	// Convert a user-configured period to us, since that's what cgroups2 expects.
+	if(limits.periodMs)
+		periodUs = limits.periodMs * 1000;
+
 	if (limits.cpuUsageMax) {
 		// cpu.max
 		option_array.push({
 			controller: 'cpu',
 			key: 'max',
-			value: `${(limits.cpuUsageMax / 100) * 100000} 100000`
+			value: `${(limits.cpuUsageMax / 100) * periodUs} ${periodUs}`
 		});
 	}
 
