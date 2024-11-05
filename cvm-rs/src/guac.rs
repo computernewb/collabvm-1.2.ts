@@ -34,6 +34,8 @@ impl fmt::Display for DecodeError {
 	}
 }
 
+impl std::error::Error for DecodeError {}
+
 // this decode policy abstraction would in theory be useful,
 // but idk how to do this kind of thing in rust very well
 

@@ -31,6 +31,11 @@ vnc-rs = { git = "https://github.com/computernewb/vnc-rs.git" }
 resize = "0.8.7"
 rgb = "0.8.50"
 
+# Tracing
+tracing = "0.1.40"
+tracing_sprout = "0.1.0-alpha.6"
+tracing-subscriber = { version = "0.3.18", features = ["env-filter", "json", "chrono"] }
+
 [profile.release]
 opt-level = 3
 strip = true

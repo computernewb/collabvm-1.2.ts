@@ -10,16 +10,16 @@ use tokio::sync::oneshot;
 
 /// Gives a Rayon thread pool we use for parallelism
 fn rayon_pool() -> &'static ThreadPool {
-	static RUNTIME: OnceCell<ThreadPool> = OnceCell::new();
+	static RAYON_THREAD_POOL: OnceCell<ThreadPool> = OnceCell::new();
 
-	RUNTIME.get_or_init(|| {
+	RAYON_THREAD_POOL.get_or_init(|| {
 		// spawn at least 4 threads for JPEG work
 		let mut nr_threads = std::thread::available_parallelism().expect("??").get() / 8;
 		if nr_threads == 0 {
 			nr_threads = 4;
 		}
 
-		println!("cvm-rs: Using {nr_threads} Rayon threads for JPEG encoding pool");
+		tracing::info!("Using {nr_threads} Rayon threads for JPEG encoding pool");
 
 		ThreadPoolBuilder::new()
 			.num_threads(nr_threads)

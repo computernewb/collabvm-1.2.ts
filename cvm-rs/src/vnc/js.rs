@@ -239,7 +239,7 @@ impl JsClient {
 
 						Err(e) => {
 							// TODO: Marshal to javascript the error
-							//println!("Error {:?}", e);
+							tracing::error!("Error in VNC client: {:?}", e);
 							let _ = tx_clone.send(VncThreadMessageOutput::Disconnect).await?;
 							return Err(e);
 						}

@@ -21,6 +21,7 @@ fn guac_decode_impl<'a>(cx: &mut FunctionContext<'a>) -> JsResult<'a, JsArray> {
 		}
 
 		Err(e) => {
+			tracing::error!("Guac decode error: {:?}", e);
 			return cx.throw_error(format!("{}", e));
 		}
 	}
