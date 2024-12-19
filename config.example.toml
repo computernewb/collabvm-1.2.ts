@@ -57,6 +57,32 @@ qemuArgs = "qemu-system-x86_64"
 vncPort = 5900
 snapshots = true
 
+# Resource limits. 
+# Only works on Linux, with `Delegate=yes` set in your .service file. No-op on other platforms.
+#
+# cpuUsageMax is an optional value specifies the max CPU usage as percentage in the common top notation. 
+# 200% means 2 CPUs, 400% is 4 CPUs.
+#
+# A general reccomendation is to set this to 100*[vCPU count].
+# For example, if your QEMU command line contains -smp cores=2, then cpuUsageMax should be 200.
+# For an overcomitted host, you can use lower values, 
+# but it *can* get noticable if you throttle CPU too low.
+#
+# runOnCpus is an optional array that specifies what CPUs the VM is allowed to run on.
+# This option will *not* work if you do not use a system service. (effectively, it will be a loud no-op that logs an error on startup).
+#
+# periodMs is an optional value in milliseconds that specifies the cgroup's CPU accounting period.
+# The default is 100 ms (which matches the cgroups2 defaults), and should work in pretty much all cases, but
+# it's a knob provided for any addl. tuning purposes.
+#
+# limitProcess is an optional boolean (default false) that determines if only qemu vCPU threads are put into the cgroup,
+# or the entire QEMU process (incl. all its threads). The default behaviour of only limiting vCPU threads
+# is more than likely what you want, so the example configuration omits specifying this key.
+#
+# Commenting or removing this table from the configuration disables resource limiting entirely.
+resourceLimits = { cpuUsageMax = 100, runOnCpus = [ 2, 4 ] }
+
+
 # VNC options
 # Only used if vm.type is set to "vncvm"
 [vncvm]

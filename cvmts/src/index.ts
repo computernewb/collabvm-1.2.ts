@@ -34,7 +34,7 @@ try {
 	var configRaw = fs.readFileSync(confFile).toString();
 	Config = toml.parse(configRaw);
 } catch (e) {
-	logger.error('Fatal error: Failed to read or parse the config file: {0}', (e as Error).message);
+	logger.error({err: e}, 'Fatal error: Failed to read or parse the config file');
 	process.exit(1);
 }
 
@@ -82,7 +82,7 @@ async function start() {
 				vncPort: Config.qemu.vncPort,
 			};
 
-			VM = new QemuVMShim(def);
+			VM = new QemuVMShim(def, Config.qemu.resourceLimits);
 			break;
 		}
 		case 'vncvm': {
