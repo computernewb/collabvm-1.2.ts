@@ -708,9 +708,14 @@ export default class CollabVMServer {
 					break;
 			}
 		} catch (err) {
-			// No
-			this.logger.error(`User ${user?.IP.address} ${user?.username ? `with username ${user?.username}` : ''} sent broken Guacamole: ${err as Error}`);
-			user?.kick();
+			this.logger.error({
+				ip: client.IP.address,
+				username: client.username,
+				error_message: (err as Error).message
+			}, 'Error in CollabVMServer#onMessage.');
+
+			// should probably only do this for protocol errors
+			client.kick();
 		}
 	}
 
