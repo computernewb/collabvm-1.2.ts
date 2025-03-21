@@ -92,6 +92,12 @@ pub fn decode_instruction(element_string: &String) -> DecodeResult<Elements> {
 		// We bound this anyways and do quite the checks, so even though it's not great,
 		// it should be generally fine (TM).
 		loop {
+			// Make sure scanning the element length does not try to 
+			// go out of bounds.
+			if current_position >= chars.len() {
+				return Err(DecodeError::InvalidFormat);
+			}
+
 			let c = chars[current_position];
 
 			if c >= '0' && c <= '9' {
@@ -103,6 +109,7 @@ pub fn decode_instruction(element_string: &String) -> DecodeResult<Elements> {
 
 				return Err(DecodeError::InvalidFormat);
 			}
+
 			current_position += 1;
 		}
 
@@ -188,5 +195,12 @@ mod tests {
 
 		assert!(res.is_ok());
 		assert_eq!(res.unwrap(), vec);
+	}
+
+	#[test]
+	fn out_of_bounds_element_does_not_panic() {
+		let element_string = "0".into();
+		let res = decode_instruction(&element_string);
+		assert!(res.is_err());
 	}
 }

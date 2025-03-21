@@ -1,3 +1,4 @@
+import { CgroupLimits } from './vm/qemu_launcher';
 import VNCVMDef from './vm/vnc/VNCVMDef';
 
 export default interface IConfig {
@@ -38,6 +39,7 @@ export default interface IConfig {
 		qemuArgs: string;
 		vncPort: number;
 		snapshots: boolean;
+		resourceLimits?: CgroupLimits
 	};
 	vncvm: VNCVMDef;
 	mysql: MySQLConfig;

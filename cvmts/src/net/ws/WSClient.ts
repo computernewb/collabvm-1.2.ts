@@ -1,11 +1,13 @@
 import { WebSocket } from 'ws';
 import { NetworkClient } from '../NetworkClient.js';
 import EventEmitter from 'events';
+import pino from 'pino';
 
 export default class WSClient extends EventEmitter implements NetworkClient {
 	socket: WebSocket;
 	ip: string;
 	enforceTextOnly = true
+	private logger = pino({ name: "CVMTS.WebsocketClient" });
 
 	constructor(ws: WebSocket, ip: string) {
 		super();
@@ -22,6 +24,10 @@ export default class WSClient extends EventEmitter implements NetworkClient {
 			this.emit('msg', buf, isBinary);
 		});
 
+		this.socket.on('error', (err: Error) => {
+			this.logger.error(err, 'WebSocket recv error');
+		})
+
 		this.socket.on('close', () => {
 			this.emit('disconnect');
 		});
@@ -37,11 +43,13 @@ export default class WSClient extends EventEmitter implements NetworkClient {
 
 	send(msg: string): Promise<void> {
 		return new Promise((res, rej) => {
-			if (!this.isOpen()) res();
+			if (!this.isOpen()) return res();
 
 			this.socket.send(msg, (err) => {
 				if (err) {
-					rej(err);
+					this.logger.error(err, 'WebSocket send error');
+					this.close();
+					res();
 					return;
 				}
 				res();
@@ -51,11 +59,13 @@ export default class WSClient extends EventEmitter implements NetworkClient {
 
 	sendBinary(msg: Uint8Array): Promise<void> {
 		return new Promise((res, rej) => {
-			if (!this.isOpen()) res();
+			if (!this.isOpen()) return res();
 
 			this.socket.send(msg, (err) => {
 				if (err) {
-					rej(err);
+					this.logger.error(err, 'WebSocket send error');
+					this.close();
+					res();
 					return;
 				}
 				res();

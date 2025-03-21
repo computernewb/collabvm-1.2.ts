@@ -128,17 +128,17 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 			if (newState == VMState.Started) {
 				self.logger.info('VM started');
 
-				// start the display
+				// start the display and add the events once
 				if (self.VM.GetDisplay() == null) {
 					self.VM.StartDisplay();
-				}
 
-				self.VM.GetDisplay()?.on('connected', () => {
-					// well aware this sucks but whatever
+					self.logger.info('started display, adding events now');
+
+					// add events
 					self.VM.GetDisplay()?.on('resize', (size: Size) => self.OnDisplayResized(size));
 					self.VM.GetDisplay()?.on('rect', (rect: Rect) => self.OnDisplayRectangle(rect));
 					self.VM.GetDisplay()?.on('frame', () => self.OnDisplayFrame());
-				});
+				}
 			}
 
 			if (newState == VMState.Stopped) {
@@ -900,7 +900,9 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 
 		for (let rect of self.rectQueue) promises.push(doRect(rect));
 
-		this.rectQueue = [];
+		// javascript is a very solidly designed language with no holes
+		// or usability traps inside of it whatsoever
+		this.rectQueue.length = 0;
 
 		await Promise.all(promises);
 	}
