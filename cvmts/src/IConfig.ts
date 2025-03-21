@@ -16,11 +16,6 @@ export default interface IConfig {
 		accountID: string;
 		licenseKey: string;
 	};
-	tcp: {
-		enabled: boolean;
-		host: string;
-		port: number;
-	};
 	auth: {
 		enabled: boolean;
 		apiEndpoint: string;

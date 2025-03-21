@@ -8,7 +8,6 @@ import { QemuVmDefinition } from '@computernewb/superqemu';
 import AuthManager from './AuthManager.js';
 import WSServer from './net/ws/WSServer.js';
 import { User } from './User.js';
-import TCPServer from './net/tcp/TCPServer.js';
 import VM from './vm/interface.js';
 import VNCVM from './vm/vnc/VNCVM.js';
 import GeoIPDownloader from './GeoIPDownloader.js';
@@ -111,11 +110,5 @@ async function start() {
 	var WS = new WSServer(Config, banmgr);
 	WS.on('connect', (client: User) => CVM.connectionOpened(client));
 	WS.start();
-
-	if (Config.tcp.enabled) {
-		var TCP = new TCPServer(Config, banmgr);
-		TCP.on('connect', (client: User) => CVM.connectionOpened(client));
-		TCP.start();
-	}
 }
 start();
