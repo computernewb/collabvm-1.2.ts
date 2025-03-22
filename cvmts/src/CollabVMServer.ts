@@ -17,6 +17,7 @@ import { ReaderModel } from '@maxmind/geoip2-node';
 import { Size, Rect } from './Utilities.js';
 import pino from 'pino';
 import { BanManager } from './BanManager.js';
+import { TheAuditLog } from './AuditLog.js';
 import { IProtocolMessageHandler, ListEntry, ProtocolAddUser, ProtocolFlag, ProtocolRenameStatus, ProtocolUpgradeCapability } from './protocol/Protocol.js';
 import { TheProtocolManager } from './protocol/Manager.js';
 
@@ -552,28 +553,31 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 	async onAdminMonitor(user: User, node: string, command: string) {
 		if (user.rank !== Rank.Admin) return;
 		if (node !== this.Config.collabvm.node) return;
+		TheAuditLog.onMonitorCommand(user, command);
 		let output = await this.VM.MonitorCommand(command);
 		user.protocol.sendAdminMonitorResponse(String(output));
 	}
 
 	onAdminRestore(user: User, node: string): void {
 		if (user.rank !== Rank.Admin && (user.rank !== Rank.Moderator || !this.Config.collabvm.moderatorPermissions.restore)) return;
+		TheAuditLog.onReset(user);
 		this.VM.Reset();
 	}
 
 	async onAdminReboot(user: User, node: string) {
 		if (user.rank !== Rank.Admin && (user.rank !== Rank.Moderator || !this.Config.collabvm.moderatorPermissions.reboot)) return;
 		if (node !== this.Config.collabvm.node) return;
+		TheAuditLog.onReboot(user);
 		await this.VM.Reboot();
 	}
 
-	onAdminBanUser(user: User, username: string): void {
+	async onAdminBanUser(user: User, username: string) {
 		// Ban
 		if (user.rank !== Rank.Admin && (user.rank !== Rank.Moderator || !this.Config.collabvm.moderatorPermissions.ban)) return;
-		let otherUser = this.clients.find((c) => c.username === username);
-		if (!otherUser) return;
-		this.logger.info(`Banning ${otherUser.username!} (${otherUser.IP.address}) by request of ${otherUser.username!}`);
-		user.ban(this.banmgr);
+		let target = this.clients.find((c) => c.username === username);
+		if (!target) return;
+		TheAuditLog.onBan(user, target);
+		await target.ban(this.banmgr);
 	}
 
 	onAdminForceVote(user: User, choice: number): void {
@@ -594,6 +598,7 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 		if (user.rank !== Rank.Admin && (user.rank !== Rank.Moderator || !this.Config.collabvm.moderatorPermissions.kick)) return;
 		var target = this.clients.find((c) => c.username === username);
 		if (!target) return;
+		TheAuditLog.onKick(user, target);
 		target.kick();
 	}
 
