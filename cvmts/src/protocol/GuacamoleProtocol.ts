@@ -292,11 +292,11 @@ export class GuacamoleProtocol extends ProtocolBase implements IProtocol {
 	}
 
 	sendSelfRename(status: ProtocolRenameStatus, newUsername: string, rank: Rank): void {
-		this.user?.sendMsg(cvm.guacEncode('rename', '0', status.toString(), newUsername, rank.toString()));
+		this.user?.sendMsg(cvm.guacEncode('rename', '0', status.toString(), newUsername));
 	}
 
 	sendRename(oldUsername: string, newUsername: string, rank: Rank): void {
-		this.user?.sendMsg(cvm.guacEncode('rename', '1', oldUsername, newUsername, rank.toString()));
+		this.user?.sendMsg(cvm.guacEncode('rename', '1', oldUsername, newUsername));
 	}
 
 	sendListResponse(list: ListEntry[]): void {

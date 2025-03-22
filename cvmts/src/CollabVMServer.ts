@@ -477,7 +477,7 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 			this.renameUser(user, undefined);
 			return;
 		}
-		this.renameUser(user, newName!);
+		this.renameUser(user, newName);
 	}
 
 	onChat(user: User, message: string): void {
@@ -719,6 +719,8 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 		let oldname: any;
 		if (hadName) oldname = client.username;
 
+		let status = ProtocolRenameStatus.Ok;
+
 		if (!newName) {
 			client.assignGuestName(this.getUsernameList());
 		} else {
@@ -727,8 +729,6 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 				client.protocol.sendSelfRename(ProtocolRenameStatus.Ok, client.username!, client.rank);
 				return;
 			}
-
-			let status = ProtocolRenameStatus.Ok;
 
 			if (this.getUsernameList().indexOf(newName) !== -1) {
 				client.assignGuestName(this.getUsernameList());
@@ -742,9 +742,9 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 				client.assignGuestName(this.getUsernameList());
 				status = ProtocolRenameStatus.UsernameNotAllowed;
 			} else client.username = newName;
-
-			client.protocol.sendSelfRename(status, client.username!, client.rank);
 		}
+
+		client.protocol.sendSelfRename(status, client.username!, client.rank);
 
 		if (hadName) {
 			this.logger.info(`Rename ${client.IP.address} from ${oldname} to ${client.username}`);
