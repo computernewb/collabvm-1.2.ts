@@ -179,6 +179,11 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 			try {
 				user.protocol.processMessage(buf);
 			} catch (err) {
+				this.logger.error({
+					ip: user.IP.address,
+					username: user.username,
+					error_message: (err as Error).message
+				}, 'Error in %s#processMessage.', Object.getPrototypeOf(user.protocol).constructor?.name);
 				user.kick();
 			}
 		});
