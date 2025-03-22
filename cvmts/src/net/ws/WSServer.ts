@@ -11,6 +11,10 @@ import { User } from '../../User.js';
 import pino from 'pino';
 import { BanManager } from '../../BanManager.js';
 
+const kAllowedProtocols = [
+	"guacamole" // Regular ol' collabvm1 protocol
+]
+
 export default class WSServer extends EventEmitter implements NetworkServer {
 	private httpServer: http.Server;
 	private wsServer: WebSocketServer;
@@ -50,7 +54,9 @@ export default class WSServer extends EventEmitter implements NetworkServer {
 			socket.destroy();
 		};
 
-		if (req.headers['sec-websocket-protocol'] !== 'guacamole') {
+		let protocol = req.headers['sec-websocket-protocol'];
+
+		if (!protocol || kAllowedProtocols.indexOf(protocol) === -1) {
 			killConnection();
 			return;
 		}
@@ -131,14 +137,14 @@ export default class WSServer extends EventEmitter implements NetworkServer {
 
 		this.wsServer.handleUpgrade(req, socket, head, (ws: WebSocket) => {
 			this.wsServer.emit('connection', ws, req);
-			this.onConnection(ws, req, ip);
+			this.onConnection(ws, req, ip, protocol);
 		});
 	}
 
-	private onConnection(ws: WebSocket, req: http.IncomingMessage, ip: string) {
+	private onConnection(ws: WebSocket, req: http.IncomingMessage, ip: string, protocol: string) {
 		let client = new WSClient(ws, ip);
 		this.clients.push(client);
-		let user = new User(client, IPDataManager.GetIPData(ip), this.Config);
+		let user = new User(client, protocol, IPDataManager.GetIPData(ip), this.Config);
 
 		this.emit('connect', user);
 

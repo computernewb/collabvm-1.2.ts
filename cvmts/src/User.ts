@@ -37,7 +37,7 @@ export class User {
 
 	private logger = pino({ name: 'CVMTS.User' });
 
-	constructor(socket: NetworkClient, ip: IPData, config: IConfig, username?: string, node?: string) {
+	constructor(socket: NetworkClient, protocol: string, ip: IPData, config: IConfig, username?: string, node?: string) {
 		this.IP = ip;
 		this.connectedToNode = false;
 		this.viewMode = -1;
@@ -47,7 +47,7 @@ export class User {
 		this.Capabilities = new CollabVMCapabilities();
 
 		// All clients default to the Guacamole protocol.
-		this.protocol = TheProtocolManager.createProtocol('guacamole', this);
+		this.protocol = TheProtocolManager.createProtocol(protocol, this);
 
 		this.socket.on('disconnect', () => {
 			// Unref the ip data for this connection
