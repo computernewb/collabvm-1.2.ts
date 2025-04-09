@@ -3,9 +3,9 @@ This is a drop-in replacement for the dying CollabVM 1.2.11. Currently in beta
 
 ## Compatibility
 
-The CollabVM server will run on any Operating System that can run Node.JS and Rust. This means modern Linux distributions and Windows versions.
+The CollabVM server is officially supported on modern Linux distributions, using latest NodeJS LTS and Rust
 
-We do not recommend or support running CollabVM Server on Windows due to very poor support for QEMU on that platform.
+We do not support running directly on Microsoft Windows. If you want to run CollabVM on Windows, we recommend using the Windows Subsystem for Linux. We will close any issues related to running the server directly on windows.
 
 ## Dependencies
 
