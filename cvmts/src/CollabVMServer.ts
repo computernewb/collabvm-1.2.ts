@@ -670,7 +670,7 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 	}
 
 	onAdminIndefiniteTurn(user: User): void {
-		if (user.rank !== Rank.Admin) return;
+		if (user.rank !== Rank.Admin && (user.rank !== Rank.Moderator || !this.Config.collabvm.moderatorPermissions.infiniteturn)) return;
 		this.indefiniteTurn = user;
 		this.TurnQueue = Queue.from([user, ...this.TurnQueue.toArray().filter((c) => c !== user)]);
 		this.sendTurnUpdate();
