@@ -563,10 +563,10 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 		user.protocol.sendAdminMonitorResponse(String(output));
 	}
 
-	onAdminRestore(user: User, node: string): void {
+	async onAdminRestore(user: User, node: string) {
 		if (user.rank !== Rank.Admin && (user.rank !== Rank.Moderator || !this.Config.collabvm.moderatorPermissions.restore)) return;
 		TheAuditLog.onReset(user);
-		this.VM.Reset();
+		await this.VM.Reset();
 	}
 
 	async onAdminReboot(user: User, node: string) {

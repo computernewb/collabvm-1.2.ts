@@ -83,7 +83,19 @@ async function start() {
 				vncPort: Config.qemu.vncPort,
 			};
 
-			VM = new QemuVMShim(def, Config.qemu.resourceLimits);
+			// messy but it works I guess
+			switch(Config.qemu.display) {
+				case 'vnc':
+					VM = new QemuVMShim(def, Config.qemu.resourceLimits, undefined);
+				case 'hazelnut':
+					if(!Config.qemu.hazelnut)
+						throw new Error('You must provide Hazelnut configuration if you are to use Hazelnut...');
+					VM = new QemuVMShim(def, Config.qemu.resourceLimits, Config.qemu.hazelnut);
+					break;
+				default:
+					throw new Error(`invalid display ${Config.qemu.display} provided`);
+			}
+
 			break;
 		}
 		case 'vncvm': {

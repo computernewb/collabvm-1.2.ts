@@ -5,16 +5,20 @@ import { VMDisplay } from '../display/interface.js';
 import { VncDisplay } from '../display/vnc.js';
 import pino from 'pino';
 import { CgroupLimits, QemuResourceLimitedLauncher } from './qemu_launcher.js';
+import { HazelnutOptions } from '../display/hazelnut_client.js';
+import { HazelnutDisplay } from '../display/hazelnut.js';
 
 // shim over superqemu because it diverges from the VM interface
 export class QemuVMShim implements VM {
 	private vm;
-	private display: VncDisplay | null = null;
+	private display: VncDisplay | HazelnutDisplay | null = null;
 	private logger;
 	private cg_launcher: QemuResourceLimitedLauncher | null = null;
 	private resource_limits: CgroupLimits | null = null;
+	private hazelnut = false;
+	private hazelnutOpts?;
 
-	constructor(def: QemuVmDefinition, resourceLimits?: CgroupLimits) {
+	constructor(def: QemuVmDefinition, resourceLimits?: CgroupLimits, hazelnutOpts? : HazelnutOptions) {
 		this.logger = pino({ name: `CVMTS.QemuVMShim/${def.id}` });
 
 		if (resourceLimits) {
@@ -30,6 +34,11 @@ export class QemuVMShim implements VM {
 			}
 		} else {
 			this.vm = new QemuVM(def);
+		}
+
+		if(hazelnutOpts) {
+			this.hazelnut = true;
+			this.hazelnutOpts = hazelnutOpts;
 		}
 
 		this.vm.on('statechange', async (newState) => {
@@ -98,9 +107,16 @@ export class QemuVMShim implements VM {
 				});
 				break;
 			case 'vnc-uds':
-				this.display = new VncDisplay({
-					path: info.path
-				});
+				if(this.hazelnut && this.hazelnutOpts) {
+					this.logger.info('Using hazelnut display')
+					this.display = new HazelnutDisplay({
+						path: info.path
+					}, this.hazelnutOpts);
+				} else {
+					this.display = new VncDisplay({
+						path: info.path
+					});
+				}
 				break;
 		}
 

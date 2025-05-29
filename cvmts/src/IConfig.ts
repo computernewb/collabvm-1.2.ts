@@ -1,3 +1,4 @@
+import { HazelnutOptions } from './display/hazelnut_client';
 import { CgroupLimits } from './vm/qemu_launcher';
 import VNCVMDef from './vm/vnc/VNCVMDef';
 
@@ -31,10 +32,12 @@ export default interface IConfig {
 		type: 'qemu' | 'vncvm';
 	};
 	qemu: {
+		display: 'vnc' | 'hazelnut';
 		qemuArgs: string;
 		vncPort: number;
 		snapshots: boolean;
 		resourceLimits?: CgroupLimits
+		hazelnut?: HazelnutOptions;
 	};
 	vncvm: VNCVMDef;
 	mysql: MySQLConfig;

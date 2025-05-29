@@ -45,10 +45,14 @@ type = "qemu"
 # QEMU options
 # Only used if vm.type is set to "qemu"
 [qemu]
+display = "vnc"
 qemuArgs = "qemu-system-x86_64"
 # VNC port to be used for this VM. Must be unique among all VMs. Only used on Windows, as unix sockets are used on Linux.
 vncPort = 5900
 snapshots = true
+
+# Used when display is hazelnut.
+hazelnut = { listen_address = "10.128.0.1", channel = 0 }
 
 # Resource limits. 
 # Only works on Linux, with `Delegate=yes` set in your .service file. No-op on other platforms.
