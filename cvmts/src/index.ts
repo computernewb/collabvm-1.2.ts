@@ -86,7 +86,8 @@ async function start() {
 				vncPort: Config.qemu.vncPort,
 				audioEnabled: Config.qemu.audioEnabled,
 				audioId: Config.qemu.audioId,
-				audioFrequency: Config.qemu.audioFrequency
+				audioFrequency: Config.qemu.audioFrequency,
+				audioDevice: Config.qemu.audioDevice
 			};
 
 			VM = new QemuVMShim(def, Config.qemu.resourceLimits);
