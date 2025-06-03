@@ -1,5 +1,16 @@
 import pino from 'pino';
-import { IProtocol, IProtocolMessageHandler, ListEntry, ProtocolAddUser, ProtocolBase, ProtocolChatHistory, ProtocolFlag, ProtocolRenameStatus, ProtocolUpgradeCapability, ScreenRect } from './Protocol.js';
+import {
+	IProtocol,
+	IProtocolMessageHandler,
+	ListEntry,
+	ProtocolAddUser,
+	ProtocolBase,
+	ProtocolChatHistory,
+	ProtocolFlag,
+	ProtocolRenameStatus,
+	ProtocolUpgradeCapability,
+	ScreenRect
+} from './Protocol.js';
 import { Rank, User } from '../User.js';
 
 import * as cvm from '@cvmts/cvm-rs';
@@ -111,7 +122,6 @@ export class GuacamoleProtocol extends ProtocolBase implements IProtocol {
 	processMessage(buffer: Buffer): boolean {
 		let decodedElements = cvm.guacDecode(buffer.toString('utf-8'));
 		if (decodedElements.length < 1) return false;
-
 		// The first element is the "opcode".
 		switch (decodedElements[0]) {
 			case 'nop':
@@ -186,6 +196,10 @@ export class GuacamoleProtocol extends ProtocolBase implements IProtocol {
 				if (choice == undefined) return false;
 				this.handlers?.onVote(this.user!, choice);
 				break;
+			case 'audioMute':
+				if (decodedElements.length !== 1) return false;
+				this.handlers?.onAudioMute(this.user!);
+			break;
 
 			case 'admin':
 				if (decodedElements.length < 2) return false;
@@ -345,7 +359,12 @@ export class GuacamoleProtocol extends ProtocolBase implements IProtocol {
 	}
 
 	sendScreenUpdate(rect: ScreenRect): void {
+		console.log(`{SERVER} Sending rect: x=${rect.x} y=${rect.y} dataLen=${rect.data ? rect.data.length : 0}`);
 		this.user?.sendMsg(cvm.guacEncode('png', '0', '0', rect.x.toString(), rect.y.toString(), rect.data.toString('base64')));
 		this.sendSync(Date.now());
+	}
+
+	sendAudioOpus(data: Buffer): void {
+		// dummy definition
 	}
 }

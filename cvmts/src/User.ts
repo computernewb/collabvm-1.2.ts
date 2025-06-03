@@ -36,6 +36,7 @@ export class User {
 	VoteRateLimit: RateLimiter;
 
 	private logger = pino({ name: 'CVMTS.User' });
+	audioMute: boolean | undefined;
 
 	constructor(socket: NetworkClient, protocol: string, ip: IPData, config: IConfig, username?: string, node?: string) {
 		this.IP = ip;
@@ -44,6 +45,7 @@ export class User {
 		this.Config = config;
 		this.socket = socket;
 		this.msgsSent = 0;
+		this.audioMute = true;
 		this.Capabilities = new CollabVMCapabilities();
 
 		// All clients default to the Guacamole protocol.

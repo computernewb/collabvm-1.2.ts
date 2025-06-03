@@ -20,6 +20,8 @@ import { BanManager } from './BanManager.js';
 import { TheAuditLog } from './AuditLog.js';
 import { IProtocolMessageHandler, ListEntry, ProtocolAddUser, ProtocolFlag, ProtocolRenameStatus, ProtocolUpgradeCapability } from './protocol/Protocol.js';
 import { TheProtocolManager } from './protocol/Manager.js';
+import pkg from '@discordjs/opus';
+const { OpusEncoder } = pkg;
 
 // Instead of strange hacks we can just use nodejs provided
 // import.meta properties, which have existed since LTS if not before
@@ -96,6 +98,129 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 	// queue of rects, reset every frame
 	private rectQueue: Rect[] = [];
 
+	private opusEncoder: InstanceType<typeof OpusEncoder>;
+	private readonly frameSize = 480;                           // 10 ms @ 48 kHz
+	private readonly FRAME_BYTES = this.frameSize * 2 * 2;      // = 480 × 4 = 1920 bytes
+	private readonly MAX_PCM_QUEUE_BYTES = this.FRAME_BYTES * 50;
+	private pcmQueueBuffers: Buffer[] = [];
+	private pcmQueueLength = 0;
+	private processingAudio = false;
+	
+	private readonly kernelRadius = 8;
+	private historyLeft = new Float64Array(this.kernelRadius);
+	private historyRight = new Float64Array(this.kernelRadius);
+	private partial44Buffer: Buffer | null = null;
+	
+
+	// Streaming windowed‐sinc resampler (44.1 kHz -> 48 kHz, stereo 16-bit):
+	// qemu only sends 44.1 khz audio for whatever reason so this is necessary
+	private resampleChunk(pcm44: Buffer): Buffer {
+	  const inBytes = pcm44.length;
+	  if (inBytes % 4 !== 0) return Buffer.alloc(0);
+	
+	  const neededInFrames = 441;           // 10 ms @ 44.1 kHz
+	  const neededBytes = neededInFrames * 4;
+	  if (inBytes < neededBytes) return Buffer.alloc(0);
+	
+	  const { kernelRadius } = this;
+	  const filterWidth = kernelRadius * 2;
+	
+	  const block44 = pcm44.slice(0, neededBytes);
+	
+	  const paddedLen = neededInFrames + kernelRadius * 2;
+	  const paddedLeft = new Float64Array(paddedLen);
+	  const paddedRight = new Float64Array(paddedLen);
+	
+	  for (let i = 0; i < kernelRadius; i++) {
+		paddedLeft[i] = this.historyLeft[i];
+		paddedRight[i] = this.historyRight[i];
+	  }
+	  for (let i = 0; i < neededInFrames; i++) {
+		const b = i * 4;
+		paddedLeft[i + kernelRadius] = block44.readInt16LE(b);
+		paddedRight[i + kernelRadius] = block44.readInt16LE(b + 2);
+	  }
+	  // Last kernelRadius samples remain zero.
+	
+	  const window: number[] = new Array(filterWidth + 1);
+	  for (let n = 0; n <= filterWidth; n++) {
+		window[n] = 0.54 - 0.46 * Math.cos((2 * Math.PI * n) / filterWidth);
+	  }
+	  const sinc = (x: number) => (x === 0 ? 1 : Math.sin(Math.PI * x) / (Math.PI * x));
+	
+	  const ratio = 48000 / 44100;
+	  const outFrames = 480;                   // 10 ms @ 48 kHz
+	  const outBuf = Buffer.alloc(outFrames * 4);
+	
+	  for (let iOut = 0; iOut < outFrames; iOut++) {
+		const center = iOut / ratio + kernelRadius;
+		const baseIndex = Math.floor(center);
+	
+		for (let ch = 0; ch < 2; ch++) {
+		  const arr = ch === 0 ? paddedLeft : paddedRight;
+		  let acc = 0, wSum = 0;
+	
+		  for (let tap = 0; tap <= filterWidth; tap++) {
+			const tapIndex = baseIndex - kernelRadius + tap;
+			const dist = tapIndex - center;
+			const coeff = sinc(dist) * window[tap];
+			wSum += coeff;
+			acc += arr[tapIndex] * coeff;
+		  }
+	
+		  const val = wSum !== 0 ? acc / wSum : 0;
+		  const clipped = Math.max(-32768, Math.min(32767, Math.round(val)));
+		  outBuf.writeInt16LE(clipped, iOut * 4 + ch * 2);
+		}
+	  }
+	
+	  const firstIdxOfLast8 = kernelRadius + neededInFrames - kernelRadius; // = 441
+	  for (let i = 0; i < kernelRadius; i++) {
+		this.historyLeft[i] = paddedLeft[firstIdxOfLast8 + i];
+		this.historyRight[i] = paddedRight[firstIdxOfLast8 + i];
+	  }
+	
+	  return outBuf;
+	}
+	
+	// Accumulate 44.1 kHz data in 441-frame blocks -> 480-frame @ 48 kHz, then queue for Opus:
+	private enqueuePCM(pcm44: Buffer) {
+	  this.partial44Buffer = Buffer.concat([this.partial44Buffer || Buffer.alloc(0), pcm44]);
+	  const needed44Bytes = 441 * 4;
+	
+	  while ((this.partial44Buffer?.length || 0) >= needed44Bytes) {
+		const block44 = this.partial44Buffer.slice(0, needed44Bytes);
+		this.partial44Buffer = this.partial44Buffer.slice(needed44Bytes);
+	
+		const pcm48 = this.resampleChunk(block44);
+		if (pcm48.length === 0) continue;
+	
+		if (this.pcmQueueLength + this.FRAME_BYTES <= this.MAX_PCM_QUEUE_BYTES) {
+		  this.pcmQueueBuffers.push(pcm48);
+		  this.pcmQueueLength += this.FRAME_BYTES;
+		}
+	  }
+	
+	  if (!this.processingAudio && this.pcmQueueLength >= this.FRAME_BYTES) {
+		this.processingAudio = true;
+		this.processAudioQueue();
+	  }
+	}
+	
+	private processAudioQueue() {
+	  while (this.pcmQueueLength >= this.FRAME_BYTES) {
+		const frame = this.pcmQueueBuffers.shift()!;
+		this.pcmQueueLength -= this.FRAME_BYTES;
+		const opusPacket = this.opusEncoder.encode(frame);
+		for (const user of this.clients) {
+		  if (user.socket.isOpen() && user.audioMute == false) {
+			user.protocol.sendAudioOpus(opusPacket);
+		  }
+		}
+	  }
+	  this.processingAudio = false;
+	}
+
 	private logger = pino({ name: 'CVMTS.Server' });
 
 	constructor(config: IConfig, vm: VM, banmgr: BanManager, auth: AuthManager | null, geoipReader: ReaderModel | null) {
@@ -112,9 +237,10 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 		this.screenHiddenImg = readFileSync(path.join(kCVMTSAssetsRoot, 'screenhidden.jpeg'));
 		this.screenHiddenThumb = readFileSync(path.join(kCVMTSAssetsRoot, 'screenhiddenthumb.jpeg'));
 
+		this.opusEncoder = new OpusEncoder(48000, 2);
+
 		this.indefiniteTurn = null;
 		this.ModPerms = Utilities.MakeModPerms(this.Config.collabvm.moderatorPermissions);
-
 		// No size initially, since there usually won't be a display connected at all during initalization
 		this.OnDisplayResized({
 			width: 0,
@@ -133,12 +259,18 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 				if (self.VM.GetDisplay() == null) {
 					self.VM.StartDisplay();
 
+					const disp = this.VM.GetDisplay()!;
+
 					self.logger.info('started display, adding events now');
 
 					// add events
-					self.VM.GetDisplay()?.on('resize', (size: Size) => self.OnDisplayResized(size));
-					self.VM.GetDisplay()?.on('rect', (rect: Rect) => self.OnDisplayRectangle(rect));
-					self.VM.GetDisplay()?.on('frame', () => self.OnDisplayFrame());
+					disp.on('resize', (size: Size) => self.OnDisplayResized(size));
+					disp.on('rect', (rect: Rect) => self.OnDisplayRectangle(rect));
+					disp.on('frame', () => self.OnDisplayFrame());
+
+					disp.on('audioStream', (pcm: Buffer) => {
+						this.enqueuePCM(pcm);
+					});
 				}
 			}
 
@@ -179,11 +311,15 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 			try {
 				user.protocol.processMessage(buf);
 			} catch (err) {
-				this.logger.error({
-					ip: user.IP.address,
-					username: user.username,
-					error_message: (err as Error).message
-				}, 'Error in %s#processMessage.', Object.getPrototypeOf(user.protocol).constructor?.name);
+				this.logger.error(
+					{
+						ip: user.IP.address,
+						username: user.username,
+						error_message: (err as Error).message
+					},
+					'Error in %s#processMessage.',
+					Object.getPrototypeOf(user.protocol).constructor?.name
+				);
 				user.kick();
 			}
 		});
@@ -364,6 +500,10 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 			this.endTurn(user);
 		}
 		this.sendTurnUpdate();
+	}
+
+	onAudioMute(user: User) {
+		user.audioMute = !user.audioMute;
 	}
 
 	onVote(user: User, choice: number): void {
@@ -684,8 +824,7 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 			this.screenHidden = false;
 			let displaySize = this.VM.GetDisplay()?.Size();
 
-			if(displaySize == undefined)
-				return;
+			if (displaySize == undefined) return;
 
 			let encoded = await this.MakeRectData({
 				x: 0,

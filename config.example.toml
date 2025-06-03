@@ -49,6 +49,11 @@ qemuArgs = "qemu-system-x86_64"
 # VNC port to be used for this VM. Must be unique among all VMs. Only used on Windows, as unix sockets are used on Linux.
 vncPort = 5900
 snapshots = true
+# Sound options
+audioEnabled = false
+audioFrequency = 48000 # only 48 khz is supported at this time
+audioId = ""
+audioDevice = "" # ex: hda, ac97, es1370 (you may have to add secondary devices to the args on your own)
 
 # Resource limits. 
 # Only works on Linux, with `Delegate=yes` set in your .service file. No-op on other platforms.

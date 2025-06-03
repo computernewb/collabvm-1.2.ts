@@ -34,6 +34,10 @@ export default interface IConfig {
 		qemuArgs: string;
 		vncPort: number;
 		snapshots: boolean;
+		audioId: any;
+		audioEnabled: any;
+		audioFrequency: any,
+		audioDevice: any;
 		resourceLimits?: CgroupLimits
 	};
 	vncvm: VNCVMDef;

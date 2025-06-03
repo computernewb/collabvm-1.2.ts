@@ -58,6 +58,7 @@ export interface IProtocolMessageHandler {
 	onList(user: User): void;
 	onConnect(user: User, node: string): void;
 	onView(user: User, node: string, viewMode: number): void;
+	onAudioMute(user: User) : void;
 
 	// Admin handlers
 	onAdminLogin(user: User, password: string): void;
@@ -148,6 +149,8 @@ export interface IProtocol {
 
 	// Sends a rectangle update to the user.
 	sendScreenUpdate(rect: ScreenRect): void;
+
+	sendAudioOpus(data: Buffer): void;
 }
 
 // Base mixin for all concrete protocols to use. Inherit from this!

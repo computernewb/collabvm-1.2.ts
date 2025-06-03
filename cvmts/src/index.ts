@@ -74,6 +74,9 @@ async function start() {
 	switch (Config.vm.type) {
 		case 'qemu': {
 			// Fire up the VM
+			if (Config.qemu.audioEnabled) {
+				Config.qemu.qemuArgs += ` -audiodev none,id=${Config.qemu.audioId},out.frequency=${Config.qemu.audioFrequency},in.frequency=${Config.qemu.audioFrequency} -device ${Config.qemu.audioDevice},audiodev=${Config.qemu.audioId}`;
+			}
 			let def: QemuVmDefinition = {
 				id: Config.collabvm.node,
 				command: Config.qemu.qemuArgs,
@@ -81,6 +84,9 @@ async function start() {
 				forceTcp: false,
 				vncHost: '127.0.0.1',
 				vncPort: Config.qemu.vncPort,
+				audioEnabled: Config.qemu.audioEnabled,
+				audioId: Config.qemu.audioId,
+				audioFrequency: Config.qemu.audioFrequency
 			};
 
 			VM = new QemuVMShim(def, Config.qemu.resourceLimits);

@@ -30,7 +30,7 @@ export class VncDisplay extends EventEmitter implements VMDisplay {
 		encodings: [
 			VncClient.consts.encodings.raw,
 
-			//VncClient.consts.encodings.pseudoQemuAudio,
+			VncClient.consts.encodings.pseudoQemuAudio,
 			VncClient.consts.encodings.pseudoDesktopSize
 			// For now?
 			//VncClient.consts.encodings.pseudoCursor
@@ -59,6 +59,10 @@ export class VncDisplay extends EventEmitter implements VMDisplay {
 
 		this.displayVnc.on('closed', () => {
 			this.Reconnect();
+		});
+
+		this.displayVnc.on('audioStream', (pcm: Buffer) => {
+			this.emit('audioStream', pcm);
 		});
 
 		this.displayVnc.on('firstFrameUpdate', () => {
