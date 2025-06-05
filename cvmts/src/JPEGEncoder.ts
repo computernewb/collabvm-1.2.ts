@@ -32,7 +32,7 @@ export class JPEGEncoder {
 			desiredWidth: kThumbnailSize.width,
 			desiredHeight: kThumbnailSize.height,
 			buffer: buffer,
-			quality: Math.floor(gJpegQuality / 1.5)
+			quality: gJpegQuality
 		});
 	}
 }
