@@ -103,9 +103,9 @@ async function start() {
 	TheProtocolManager.registerProtocol("guacamole", () => new GuacamoleProtocol);
 	TheProtocolManager.registerProtocol("binary1", () => new BinRectsProtocol);
 
-	await VM.Start();
 	// Start up the server
 	var CVM = new CollabVMServer(Config, VM, banmgr, auth, geoipReader);
+	await VM.Start();
 
 	var WS = new WSServer(Config, banmgr);
 	WS.on('connect', (client: User) => CVM.connectionOpened(client));

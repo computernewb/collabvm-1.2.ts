@@ -34,10 +34,13 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@computernewb/nodejs-rfb@npm:^0.3.0":
-  version: 0.3.0
-  resolution: "@computernewb/nodejs-rfb@npm:0.3.0"
-  checksum: 10c0/915a76118011a4a64e28fcc91fafcffe659e5e86db2505554578f1e5dff4883dbaf5fcc013ac377719fe9c798e730b178aa5030027da0f5a9583355ec2ac8af2
+"@computernewb/nodejs-rfb@npm:^0.4.2":
+  version: 0.4.2
+  resolution: "@computernewb/nodejs-rfb@npm:0.4.2"
+  dependencies:
+    des.js: "npm:^1.1.0"
+    js-md4: "npm:^0.3.2"
+  checksum: 10c0/749839702dcc7c85613a9060a01cc0f808804a6ac40c6dc088504186f7481bd429bf6f7f0161992bcbf28162b8d0557e9fe93f59fe2f72533254cf6bdd3f4026
   languageName: node
   linkType: hard
 
@@ -74,7 +77,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@cvmts/cvmts@workspace:cvmts"
   dependencies:
-    "@computernewb/nodejs-rfb": "npm:^0.3.0"
+    "@computernewb/nodejs-rfb": "npm:^0.4.2"
     "@computernewb/superqemu": "npm:^0.3.0"
     "@cvmts/cvm-rs": "npm:*"
     "@maxmind/geoip2-node": "npm:^5.0.0"
@@ -2013,6 +2016,16 @@ __metadata:
   languageName: node
   linkType: hard
 
+"des.js@npm:^1.1.0":
+  version: 1.1.0
+  resolution: "des.js@npm:1.1.0"
+  dependencies:
+    inherits: "npm:^2.0.1"
+    minimalistic-assert: "npm:^1.0.0"
+  checksum: 10c0/671354943ad67493e49eb4c555480ab153edd7cee3a51c658082fcde539d2690ed2a4a0b5d1f401f9cde822edf3939a6afb2585f32c091f2d3a1b1665cd45236
+  languageName: node
+  linkType: hard
+
 "detect-libc@npm:^1.0.3":
   version: 1.0.3
   resolution: "detect-libc@npm:1.0.3"
@@ -2529,6 +2542,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"inherits@npm:^2.0.1":
+  version: 2.0.4
+  resolution: "inherits@npm:2.0.4"
+  checksum: 10c0/4e531f648b29039fb7426fb94075e6545faa1eb9fe83c29f0b6d9e7263aceb4289d2d4557db0d428188eeb449cc7c5e77b0a0b2c4e248ff2a65933a0dee49ef2
+  languageName: node
+  linkType: hard
+
 "ip-address@npm:^9.0.5":
   version: 9.0.5
   resolution: "ip-address@npm:9.0.5"
@@ -2667,6 +2687,13 @@ __metadata:
   version: 3.1.1
   resolution: "joycon@npm:3.1.1"
   checksum: 10c0/131fb1e98c9065d067fd49b6e685487ac4ad4d254191d7aa2c9e3b90f4e9ca70430c43cad001602bdbdabcf58717d3b5c5b7461c1bd8e39478c8de706b3fe6ae
+  languageName: node
+  linkType: hard
+
+"js-md4@npm:^0.3.2":
+  version: 0.3.2
+  resolution: "js-md4@npm:0.3.2"
+  checksum: 10c0/8313e00c45f710a53bdadc199c095b48ebaf54ea7b8cdb67a3f1863c270a5e9d0f89f204436b73866002af8c7ac4cacc872fdf271fc70e26614e424c7685b577
   languageName: node
   linkType: hard
 
@@ -2957,6 +2984,13 @@ __metadata:
   version: 4.0.0
   resolution: "mimic-fn@npm:4.0.0"
   checksum: 10c0/de9cc32be9996fd941e512248338e43407f63f6d497abe8441fa33447d922e927de54d4cc3c1a3c6d652857acd770389d5a3823f311a744132760ce2be15ccbf
+  languageName: node
+  linkType: hard
+
+"minimalistic-assert@npm:^1.0.0":
+  version: 1.0.1
+  resolution: "minimalistic-assert@npm:1.0.1"
+  checksum: 10c0/96730e5601cd31457f81a296f521eb56036e6f69133c0b18c13fe941109d53ad23a4204d946a0d638d7f3099482a0cec8c9bb6d642604612ce43ee536be3dddd
   languageName: node
   linkType: hard
 
