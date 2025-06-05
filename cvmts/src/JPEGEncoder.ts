@@ -20,7 +20,8 @@ export class JPEGEncoder {
 			width: rect.width,
 			height: rect.height,
 			stride: displaySize.width,
-			buffer: canvas.subarray(offset)
+			buffer: canvas.subarray(offset),
+			quality: gJpegQuality
 		});
 	}
 
@@ -30,7 +31,8 @@ export class JPEGEncoder {
 			height: size.height,
 			desiredWidth: kThumbnailSize.width,
 			desiredHeight: kThumbnailSize.height,
-			buffer: buffer
+			buffer: buffer,
+			quality: Math.floor(gJpegQuality / 1.5)
 		});
 	}
 }

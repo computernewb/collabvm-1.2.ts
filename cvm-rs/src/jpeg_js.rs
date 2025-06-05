@@ -47,6 +47,7 @@ pub struct JpegInputArgs {
 	pub height: u32,
 	pub stride: u32,
 	pub buffer: napi::JsBuffer,
+	pub quality: u32,
 }
 
 #[napi(js_name = "jpegEncode")]
@@ -69,7 +70,7 @@ pub fn jpeg_encode(env: Env, input: JpegInputArgs) -> napi::Result<napi::JsObjec
 
 		let vec = COMPRESSOR.with(|lazy| {
 			let mut b = lazy.borrow_mut();
-			b.set_quality(35);
+			b.set_quality(input.quality);
 			b.set_subsamp(turbojpeg_sys::TJSAMP_TJSAMP_420);
 			b.compress_buffer(&image)
 		});
@@ -94,6 +95,7 @@ pub struct JpegResizeInputArgs {
 	pub desired_width: u32,
 	pub desired_height: u32,
 	pub buffer: napi::JsBuffer,
+	pub quality: u32,
 }
 
 #[napi(js_name = "jpegResizeEncode")]
@@ -136,7 +138,7 @@ pub fn jpeg_resize_and_encode(
 
 		let vec = COMPRESSOR.with(|lazy| {
 			let mut b = lazy.borrow_mut();
-			b.set_quality(35);
+			b.set_quality(input.quality);
 			b.set_subsamp(turbojpeg_sys::TJSAMP_TJSAMP_420);
 			b.compress_buffer(&image)
 		});

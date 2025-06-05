@@ -9,6 +9,7 @@ interface JpegInputArgs {
 	height: number;
 	stride: number; // The width of your input framebuffer OR your image width (if encoding a full image)
 	buffer: Buffer;
+	quality: number;
 
 	// TODO: Allow different formats, or export a boxed ffi object which can store a format
 	// (i.e: new JpegEncoder(FORMAT_xxx)).
@@ -20,6 +21,7 @@ interface JpegResizeInputArgs {
 	desiredWidth: number; // dest width
 	desiredHeight: number; // dest height
 	buffer: Buffer; // source raw pixel buffer
+	quality: number;
 }
 
 /// Performs JPEG encoding.
