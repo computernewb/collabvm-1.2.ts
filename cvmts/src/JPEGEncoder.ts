@@ -1,5 +1,4 @@
 import { Size, Rect } from './Utilities';
-import sharp from 'sharp';
 import * as cvm from '@cvmts/cvm-rs';
 
 // A good balance. TODO: Configurable?
@@ -9,17 +8,6 @@ const kThumbnailSize: Size = {
 	width: 400,
 	height: 300
 };
-
-// this returns appropiate Sharp options to deal with CVMTS raw framebuffers
-// (which are RGBA bitmaps, essentially. We probably should abstract that out but
-// that'd mean having to introduce that to rfb and oihwekjtgferklds;./tghnredsltg;erhds)
-function GetRawSharpOptions(size: Size): sharp.CreateRaw {
-	return {
-		width: size.width,
-		height: size.height,
-		channels: 4
-	};
-}
 
 export class JPEGEncoder {
 	static SetQuality(quality: number) {
@@ -37,16 +25,12 @@ export class JPEGEncoder {
 	}
 
 	static async EncodeThumbnail(buffer: Buffer, size: Size): Promise<Buffer> {
-		let { data, info } = await sharp(buffer, { raw: GetRawSharpOptions(size) })
-			.resize(kThumbnailSize.width, kThumbnailSize.height, { fit: 'fill' })
-			.raw()
-			.toBuffer({ resolveWithObject: true });
-
-		return cvm.jpegEncode({
-			width: kThumbnailSize.width,
-			height: kThumbnailSize.height,
-			stride: kThumbnailSize.width,
-			buffer: data
+		return cvm.jpegResizeEncode({
+			width: size.width,
+			height: size.height,
+			desiredWidth: kThumbnailSize.width,
+			desiredHeight: kThumbnailSize.height,
+			buffer: buffer
 		});
 	}
 }

@@ -14,10 +14,20 @@ interface JpegInputArgs {
 	// (i.e: new JpegEncoder(FORMAT_xxx)).
 }
 
+interface JpegResizeInputArgs {
+	width: number; // source width
+	height: number; // source height
+	desiredWidth: number; // dest width
+	desiredHeight: number; // dest height
+	buffer: Buffer; // source raw pixel buffer
+}
+
 /// Performs JPEG encoding.
 export function jpegEncode(input: JpegInputArgs): Promise<Buffer>;
 
-// TODO: Version that can downscale?
+/// Performs JPEG encoding with resizing.
+export function jpegResizeEncode(input: JpegResizeInputArgs): Promise<Buffer>;
+
 
 /* remoting API?
 

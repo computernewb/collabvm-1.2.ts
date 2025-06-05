@@ -20,6 +20,8 @@ rayon = "1.10.0"
 napi =  { version = "2.16.9", features = [ "async", "napi8", "error_anyhow" ] }
 napi-derive = "2.16.11"
 anyhow = "1.0.86"
+resize = "0.8.8"
+rgb = "0.8.50"
 
 [build-dependencies]
 napi-build = "2.1.3"
