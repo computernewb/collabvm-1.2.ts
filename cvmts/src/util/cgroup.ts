@@ -104,13 +104,27 @@ export class CGroup {
 		if (!existsSync(kCgroupSelfPath)) throw new Error('This process is not in a CGroup.');
 		let res = readFileSync(kCgroupSelfPath, { encoding: 'utf-8' });
 
-		// Make sure the first/only line is a cgroups2 0::/path/to/cgroup entry.
-		// Legacy cgroups1 is not supported.
-		if (res[0] != '0') throw new Error('CGroup.Self() does not work with cgroups 1 systems. Please do not the cgroups 1.');
-		let cg_path = res.substring(3, res.indexOf('\n'));
+		for (let item of res.split('\n')) {
+			switch (item[0]) {
+				// This is techinically cgroupsv1. However, on a unified system
+				// `systemd-nspawn` by default will mount /sys/fs/cgroup/systemd in the container,
+				// and this leaks out slightly to the host with `1:name=systemd:/`.. for some reason.
+				// Therefore we can allow this. Other controllers not so much.
+				case '1':
+					continue;
+					break;
+				case '0': // cgroups2
+					let cg_path = item.substring(3);
+					let cg = new CGroup(path.join('/sys/fs/cgroup', cg_path));
+					return cg;
+					break;
 
-		let cg = new CGroup(path.join('/sys/fs/cgroup', cg_path));
+				// Legacy CGroups 1 is not supported.
+				default:
+					throw new Error('CGroup.Self() does not work with cgroups 1 systems. Please do not the cgroups 1.');
+			}
+		}
 
-		return cg;
+		throw new Error('1 2 3 5 4 6');
 	}
 }
