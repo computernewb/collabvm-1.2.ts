@@ -90,6 +90,7 @@ export interface Permissions {
 	mute: boolean;
 	kick: boolean;
 	bypassturn: boolean;
+	infiniteturn: boolean;
 	rename: boolean;
 	grabip: boolean;
 	xss: boolean;
