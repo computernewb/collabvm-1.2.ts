@@ -1,6 +1,6 @@
 import EventEmitter from 'events';
 import VM from './interface.js';
-import { QemuVM, QemuVmDefinition, VMState } from '@computernewb/superqemu';
+import { QemuVM, QemuVmDefinition, VMState } from '@wize-logic/superqemu';
 import { VMDisplay } from '../display/interface.js';
 import { VncDisplay } from '../display/vnc.js';
 import pino from 'pino';

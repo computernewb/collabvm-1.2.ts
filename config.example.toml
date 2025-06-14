@@ -50,6 +50,12 @@ qemuArgs = "qemu-system-x86_64"
 vncPort = 5900
 snapshots = true
 
+# Sound options
+audioEnabled = false
+audioFrequency = 48000 # only 48 khz is supported at this time
+audioId = "audio0" # you can change this to whatever you want, must be unique
+audioDevice = "" # example: ac97, es1370, sb16
+
 # Resource limits. 
 # Only works on Linux, with `Delegate=yes` set in your .service file. No-op on other platforms.
 #

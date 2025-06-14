@@ -13,9 +13,10 @@
 	"license": "GPL-3.0",
 	"dependencies": {
 		"@computernewb/nodejs-rfb": "^0.4.2",
-		"@computernewb/superqemu": "^0.3.0",
 		"@cvmts/cvm-rs": "*",
+		"@discordjs/opus": "^0.10.0",
 		"@maxmind/geoip2-node": "^5.0.0",
+		"@wize-logic/superqemu": "^0.3.2",
 		"execa": "^8.0.1",
 		"ip-address": "^9.0.5",
 		"mariadb": "^3.3.1",

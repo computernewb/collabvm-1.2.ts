@@ -5,7 +5,7 @@ import { User, Rank } from './User.js';
 import CircularBuffer from 'mnemonist/circular-buffer.js';
 import Queue from 'mnemonist/queue.js';
 import { createHash } from 'crypto';
-import { VMState, QemuVM, QemuVmDefinition } from '@computernewb/superqemu';
+import { VMState, QemuVM, QemuVmDefinition } from '@wize-logic/superqemu';
 import { IPDataManager } from './IPData.js';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -20,6 +20,8 @@ import { BanManager } from './BanManager.js';
 import { TheAuditLog } from './AuditLog.js';
 import { IProtocolMessageHandler, ListEntry, ProtocolAddUser, ProtocolFlag, ProtocolRenameStatus, ProtocolUpgradeCapability } from './protocol/Protocol.js';
 import { TheProtocolManager } from './protocol/Manager.js';
+import pkg from '@discordjs/opus';
+const { OpusEncoder } = pkg;
 
 // Instead of strange hacks we can just use nodejs provided
 // import.meta properties, which have existed since LTS if not before
@@ -96,6 +98,21 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 	// queue of rects, reset every frame
 	private rectQueue: Rect[] = [];
 
+	// Opus encoder and PCM queue configuration
+	private opusEncoder: InstanceType<typeof OpusEncoder>;
+	private readonly frameSize = 480;
+	private readonly FRAME_BYTES = this.frameSize * 2 * 2;
+	private readonly MAX_PCM_QUEUE_BYTES = this.FRAME_BYTES * 50;
+	private pcmQueueBuffers: Buffer[] = [];
+	private pcmQueueLength = 0;
+	private processingAudio = false;
+	
+	// Resampling filter history
+	private readonly kernelRadius = 8;
+	private historyLeft = new Float64Array(this.kernelRadius);
+	private historyRight = new Float64Array(this.kernelRadius);
+	private partial44Buffer: Buffer | null = null;
+
 	private logger = pino({ name: 'CVMTS.Server' });
 
 	constructor(config: IConfig, vm: VM, banmgr: BanManager, auth: AuthManager | null, geoipReader: ReaderModel | null) {
@@ -111,6 +128,7 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 		this.screenHidden = false;
 		this.screenHiddenImg = readFileSync(path.join(kCVMTSAssetsRoot, 'screenhidden.jpeg'));
 		this.screenHiddenThumb = readFileSync(path.join(kCVMTSAssetsRoot, 'screenhiddenthumb.jpeg'));
+		this.opusEncoder = new OpusEncoder(48000, 2); // initiate opus encoder
 
 		this.indefiniteTurn = null;
 		this.ModPerms = Utilities.MakeModPerms(this.Config.collabvm.moderatorPermissions);
@@ -139,6 +157,7 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 					self.VM.GetDisplay()?.on('resize', (size: Size) => self.OnDisplayResized(size));
 					self.VM.GetDisplay()?.on('rect', (rect: Rect) => self.OnDisplayRectangle(rect));
 					self.VM.GetDisplay()?.on('frame', () => self.OnDisplayFrame());
+					self.VM.GetDisplay()?.on('audioStream', (pcm: Buffer) => self.enqueuePCM(pcm));
 				}
 			}
 
@@ -364,6 +383,10 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 			this.endTurn(user);
 		}
 		this.sendTurnUpdate();
+	}
+
+	onAudioMute(user: User) {
+		user.audioMute = !user.audioMute;
 	}
 
 	onVote(user: User, choice: number): void {
@@ -1012,4 +1035,115 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 		});
 		return { yes: yes, no: no };
 	}
+	
+	// Convert 44.1 kHz PCM to 48 kHz PCM
+	private resampleChunk(pcm44: Buffer): Buffer {
+		const inBytes = pcm44.length;
+		if (inBytes % 4 !== 0) return Buffer.alloc(0);
+	
+		const neededInFrames = 441; // 10 ms @ 44.1 kHz
+		const neededBytes = neededInFrames * 4;
+		if (inBytes < neededBytes) return Buffer.alloc(0);
+	
+		const { kernelRadius } = this;
+		const filterWidth = kernelRadius * 2;
+	
+		const block44 = pcm44.slice(0, neededBytes);
+	
+		const paddedLen = neededInFrames + kernelRadius * 2;
+		const paddedLeft = new Float64Array(paddedLen);
+		const paddedRight = new Float64Array(paddedLen);
+	
+		for (let i = 0; i < kernelRadius; i++) {
+			paddedLeft[i] = this.historyLeft[i];
+			paddedRight[i] = this.historyRight[i];
+		}
+		for (let i = 0; i < neededInFrames; i++) {
+			const b = i * 4;
+			paddedLeft[i + kernelRadius] = block44.readInt16LE(b);
+			paddedRight[i + kernelRadius] = block44.readInt16LE(b + 2);
+		}
+		// Last kernelRadius samples remain zero.
+	
+		const window: number[] = new Array(filterWidth + 1);
+		for (let n = 0; n <= filterWidth; n++) {
+			window[n] = 0.54 - 0.46 * Math.cos((2 * Math.PI * n) / filterWidth);
+		}
+		const sinc = (x: number) => (x === 0 ? 1 : Math.sin(Math.PI * x) / (Math.PI * x));
+	
+		const ratio = 48000 / 44100;
+		const outFrames = 480; // 10 ms @ 48 kHz
+		const outBuf = Buffer.alloc(outFrames * 4);
+	
+		for (let iOut = 0; iOut < outFrames; iOut++) {
+			const center = iOut / ratio + kernelRadius;
+			const baseIndex = Math.floor(center);
+	
+			for (let ch = 0; ch < 2; ch++) {
+				const arr = ch === 0 ? paddedLeft : paddedRight;
+				let acc = 0,
+					wSum = 0;
+	
+				for (let tap = 0; tap <= filterWidth; tap++) {
+					const tapIndex = baseIndex - kernelRadius + tap;
+					const dist = tapIndex - center;
+					const coeff = sinc(dist) * window[tap];
+					wSum += coeff;
+					acc += arr[tapIndex] * coeff;
+				}
+	
+				const val = wSum !== 0 ? acc / wSum : 0;
+				const clipped = Math.max(-32768, Math.min(32767, Math.round(val)));
+				outBuf.writeInt16LE(clipped, iOut * 4 + ch * 2);
+			}
+		}
+	
+		const firstIdxOfLast8 = kernelRadius + neededInFrames - kernelRadius;
+		for (let i = 0; i < kernelRadius; i++) {
+			this.historyLeft[i] = paddedLeft[firstIdxOfLast8 + i];
+			this.historyRight[i] = paddedRight[firstIdxOfLast8 + i];
+		}
+	
+		return outBuf;
+	}
+	
+	// Accumulate 44.1 kHz data in 441-frame blocks, convert to 480-frame @ 48 kHz, then queue for Opus:
+	private enqueuePCM(pcm44: Buffer) {
+		this.partial44Buffer = Buffer.concat([this.partial44Buffer || Buffer.alloc(0), pcm44]);
+		const needed44Bytes = 441 * 4;
+	
+		while ((this.partial44Buffer?.length || 0) >= needed44Bytes) {
+			const block44 = this.partial44Buffer.slice(0, needed44Bytes);
+			this.partial44Buffer = this.partial44Buffer.slice(needed44Bytes);
+	
+			const pcm48 = this.resampleChunk(block44);
+			if (pcm48.length === 0) continue;
+	
+			if (this.pcmQueueLength + this.FRAME_BYTES <= this.MAX_PCM_QUEUE_BYTES) {
+				this.pcmQueueBuffers.push(pcm48);
+				this.pcmQueueLength += this.FRAME_BYTES;
+			}
+		}
+	
+		if (!this.processingAudio && this.pcmQueueLength >= this.FRAME_BYTES) {
+			this.processingAudio = true;
+			this.processAudioQueue();
+		}
+	}
+	
+	// Encode queued PCM to Opus and send to clients
+	private processAudioQueue() {
+		while (this.pcmQueueLength >= this.FRAME_BYTES) {
+			const frame = this.pcmQueueBuffers.shift()!;
+			this.pcmQueueLength -= this.FRAME_BYTES;
+			const opusPacket = this.opusEncoder.encode(frame);
+			for (const user of this.clients) {
+				if (user.socket.isOpen() && user.audioMute == false) {
+					user.protocol.sendAudioOpus(opusPacket);
+				}
+			}
+		}
+		this.processingAudio = false;
+	}
+	
 }

@@ -3,7 +3,7 @@ import IConfig from './IConfig.js';
 import * as fs from 'fs';
 import CollabVMServer from './CollabVMServer.js';
 
-import { QemuVmDefinition } from '@computernewb/superqemu';
+import { QemuVmDefinition } from '@wize-logic/superqemu';
 
 import AuthManager from './AuthManager.js';
 import WSServer from './net/ws/WSServer.js';
@@ -73,6 +73,14 @@ async function start() {
 	let banmgr = new BanManager(Config.bans, db);
 	switch (Config.vm.type) {
 		case 'qemu': {
+			// Add QEMU audio args if audio is enabled
+			if (Config.qemu.audioEnabled) {
+				const { audioId, audioFrequency, audioDevice } = Config.qemu;
+				Config.qemu.qemuArgs +=
+					` -audiodev none,id=${audioId},out.frequency=${audioFrequency},in.frequency=${audioFrequency}` +
+					` -device ${audioDevice},audiodev=${audioId}`;
+			}
+
 			// Fire up the VM
 			let def: QemuVmDefinition = {
 				id: Config.collabvm.node,
@@ -81,6 +89,12 @@ async function start() {
 				forceTcp: false,
 				vncHost: '127.0.0.1',
 				vncPort: Config.qemu.vncPort,
+
+				// audio related settings
+				audioEnabled: Config.qemu.audioEnabled,
+				audioId: Config.qemu.audioId,
+				audioFrequency: Config.qemu.audioFrequency,
+				audioDevice: Config.qemu.audioDevice
 			};
 
 			VM = new QemuVMShim(def, Config.qemu.resourceLimits);
