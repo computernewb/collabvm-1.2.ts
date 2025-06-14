@@ -187,6 +187,11 @@ export class GuacamoleProtocol extends ProtocolBase implements IProtocol {
 				this.handlers?.onVote(this.user!, choice);
 				break;
 
+			case 'audioMute':
+				if (decodedElements.length !== 1) return false;
+				this.handlers?.onAudioMute(this.user!);
+			break;
+
 			case 'admin':
 				if (decodedElements.length < 2) return false;
 				return this.__processMessage_admin(decodedElements);
@@ -347,5 +352,9 @@ export class GuacamoleProtocol extends ProtocolBase implements IProtocol {
 	sendScreenUpdate(rect: ScreenRect): void {
 		this.user?.sendMsg(cvm.guacEncode('png', '0', '0', rect.x.toString(), rect.y.toString(), rect.data.toString('base64')));
 		this.sendSync(Date.now());
+	}
+
+	sendAudioOpus(data: Buffer): void {
+		// dummy definition
 	}
 }

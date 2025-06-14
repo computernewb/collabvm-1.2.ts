@@ -34,6 +34,8 @@ export class User {
 	RenameRateLimit: RateLimiter;
 	TurnRateLimit: RateLimiter;
 	VoteRateLimit: RateLimiter;
+	// audio state (muted/unmuted)
+	audioMute: boolean | undefined;
 
 	private logger = pino({ name: 'CVMTS.User' });
 
@@ -73,6 +75,9 @@ export class User {
 		this.TurnRateLimit.on('limit', () => this.closeConnection());
 		this.VoteRateLimit = new RateLimiter(3, 3);
 		this.VoteRateLimit.on('limit', () => this.closeConnection());
+
+		// audio is muted by default
+		this.audioMute = true;
 	}
 
 	assignGuestName(existingUsers: string[]): string {

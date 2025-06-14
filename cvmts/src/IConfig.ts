@@ -35,6 +35,11 @@ export default interface IConfig {
 		vncPort: number;
 		snapshots: boolean;
 		resourceLimits?: CgroupLimits
+		// audio
+		audioId: any;
+		audioEnabled: any;
+		audioFrequency: any,
+		audioDevice: any;
 	};
 	vncvm: VNCVMDef;
 	mysql: MySQLConfig;

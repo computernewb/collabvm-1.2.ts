@@ -2,7 +2,7 @@ import EventEmitter from 'events';
 import VNCVMDef from './VNCVMDef';
 import VM from '../interface.js';
 import { VMDisplay } from '../../display/interface.js';
-import { VMState } from '@computernewb/superqemu';
+import { VMState } from '@wize-logic/superqemu';
 import { execaCommand } from 'execa';
 import pino from 'pino';
 import { VncDisplay } from '../../display/vnc.js';

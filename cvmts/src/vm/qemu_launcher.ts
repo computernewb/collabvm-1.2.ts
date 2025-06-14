@@ -1,5 +1,5 @@
 import EventEmitter from 'events';
-import { IProcess, IProcessLauncher, ProcessLaunchOptions } from '@computernewb/superqemu';
+import { IProcess, IProcessLauncher, ProcessLaunchOptions } from '@wize-logic/superqemu';
 import { execaCommand } from 'execa';
 import { Readable, Writable } from 'stream';
 import { CGroup } from '../util/cgroup.js';

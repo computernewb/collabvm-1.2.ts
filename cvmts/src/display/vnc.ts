@@ -30,7 +30,7 @@ export class VncDisplay extends EventEmitter implements VMDisplay {
 		encodings: [
 			VncClient.consts.encodings.raw,
 
-			//VncClient.consts.encodings.pseudoQemuAudio,
+			VncClient.consts.encodings.pseudoQemuAudio,
 			VncClient.consts.encodings.pseudoDesktopSize
 			// For now?
 			//VncClient.consts.encodings.pseudoCursor
@@ -91,6 +91,10 @@ export class VncDisplay extends EventEmitter implements VMDisplay {
 			rects = [];
 
 			this.emit('frame');
+		});
+
+		this.displayVnc.on('audioStream', (pcm: Buffer) => {
+			this.emit('audioStream', pcm);
 		});
 	}
 
