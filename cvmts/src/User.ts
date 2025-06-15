@@ -7,7 +7,7 @@ import { NetworkClient } from './net/NetworkClient.js';
 import { CollabVMCapabilities } from '@cvmts/collab-vm-1.2-binary-protocol';
 import pino from 'pino';
 import { BanManager } from './BanManager.js';
-import { IProtocol } from './protocol/Protocol.js';
+import { IProtocol, IProtocolMessageHandler, ListEntry, ProtocolAddUser, ProtocolChatHistory, ProtocolFlag, ProtocolRenameStatus, ProtocolUpgradeCapability, ScreenRect } from './protocol/Protocol.js';
 import { TheProtocolManager } from './protocol/Manager.js';
 
 export class User {
@@ -47,7 +47,7 @@ export class User {
 		this.Capabilities = new CollabVMCapabilities();
 
 		// All clients default to the Guacamole protocol.
-		this.protocol = TheProtocolManager.createProtocol(protocol, this);
+		this.protocol = TheProtocolManager.getProtocol(protocol);
 
 		this.socket.on('disconnect', () => {
 			// Unref the ip data for this connection
@@ -88,10 +88,6 @@ export class User {
 		clearTimeout(this.nopRecieveTimeout);
 		clearInterval(this.msgRecieveInterval);
 		this.msgRecieveInterval = setInterval(() => this.onNoMsg(), 10000);
-	}
-
-	sendNop() {
-		this.protocol.sendNop();
 	}
 
 	sendMsg(msg: string) {
@@ -151,6 +147,118 @@ export class User {
 	async kick() {
 		this.sendMsg('10.disconnect;');
 		this.socket.close();
+	}
+
+	// These wrap the currently set IProtocol instance to feed state to them.
+	// This is probably grody, but /shrug. It works, and feels less awful than
+	// manually wrapping state (and probably prevents mixup bugs too.)
+
+	processMessage(handler: IProtocolMessageHandler, buffer: Buffer) {
+		this.protocol.processMessage(this, handler, buffer);
+	}
+
+	sendNop(): void {
+		this.protocol.sendNop(this);
+	}
+	
+	sendSync(now: number): void {
+		this.protocol.sendSync(this, now);
+	}
+
+	sendAuth(authServer: string): void {
+		this.protocol.sendAuth(this, authServer);
+	}
+
+	sendCapabilities(caps: ProtocolUpgradeCapability[]): void {
+		this.protocol.sendCapabilities(this, caps);
+	}
+
+	sendConnectFailResponse(): void {
+		this.protocol.sendConnectFailResponse(this);
+	}
+
+	sendConnectOKResponse(votes: boolean): void {
+		this.protocol.sendConnectOKResponse(this, votes);
+	}
+
+	sendLoginResponse(ok: boolean, message: string | undefined): void {
+		this.protocol.sendLoginResponse(this, ok, message);
+	}
+
+	sendAdminLoginResponse(ok: boolean, modPerms: number | undefined): void {
+		this.protocol.sendAdminLoginResponse(this, ok, modPerms);
+	}
+
+	sendAdminMonitorResponse(output: string): void {
+		this.protocol.sendAdminMonitorResponse(this, output);
+	}
+
+	sendAdminIPResponse(username: string, ip: string): void {
+		this.protocol.sendAdminIPResponse(this, username, ip);
+	}
+
+	sendChatMessage(username: '' | string, message: string): void {
+		this.protocol.sendChatMessage(this, username, message);
+	}
+
+	sendChatHistoryMessage(history: ProtocolChatHistory[]): void {
+		this.protocol.sendChatHistoryMessage(this, history);
+	}
+
+	sendAddUser(users: ProtocolAddUser[]): void {
+		this.protocol.sendAddUser(this, users);
+	}
+
+	sendRemUser(users: string[]): void {
+		this.protocol.sendRemUser(this, users);
+	}
+
+	sendFlag(flag: ProtocolFlag[]): void {
+		this.protocol.sendFlag(this, flag);
+	}
+
+	sendSelfRename(status: ProtocolRenameStatus, newUsername: string, rank: Rank): void {
+		this.protocol.sendSelfRename(this, status, newUsername, rank);
+	}
+
+	sendRename(oldUsername: string, newUsername: string, rank: Rank): void {
+		this.protocol.sendRename(this, oldUsername, newUsername, rank);
+	}
+
+	sendListResponse(list: ListEntry[]): void {
+		this.protocol.sendListResponse(this, list);
+	}
+
+	sendTurnQueue(turnTime: number, users: string[]): void {
+		this.protocol.sendTurnQueue(this, turnTime, users);
+	}
+
+	sendTurnQueueWaiting(turnTime: number, users: string[], waitTime: number): void {
+		this.protocol.sendTurnQueueWaiting(this, turnTime, users, waitTime);
+	}
+
+	sendVoteStarted(): void {
+		this.protocol.sendVoteStarted(this);
+	}
+
+	sendVoteStats(msLeft: number, nrYes: number, nrNo: number): void {
+		this.protocol.sendVoteStats(this, msLeft, nrYes, nrNo);
+	}
+
+	sendVoteEnded(): void {
+		this.protocol.sendVoteEnded(this);
+	}
+
+	sendVoteCooldown(ms: number): void {
+		this.protocol.sendVoteCooldown(this, ms);
+	}
+
+	sendScreenResize(width: number, height: number): void {
+		this.protocol.sendScreenResize(this, width, height);
+	}
+
+	sendScreenUpdate(rect: ScreenRect): void {
+		this.protocol.sendScreenUpdate(this, rect);
 	}
 }
 

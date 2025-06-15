@@ -177,30 +177,27 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 
 		user.socket.on('msg', (buf: Buffer, binary: boolean) => {
 			try {
-				user.protocol.processMessage(buf);
+				user.processMessage(this, buf);
 			} catch (err) {
 				this.logger.error({
 					ip: user.IP.address,
 					username: user.username,
 					error_message: (err as Error).message
-				}, 'Error in %s#processMessage.', Object.getPrototypeOf(user.protocol).constructor?.name);
+				}, 'Error in %s#processMessage.', Object.getPrototypeOf(user).constructor?.name);
 				user.kick();
 			}
 		});
 
 		user.socket.on('disconnect', () => this.connectionClosed(user));
 
-		// Set ourselves as the handler
-		user.protocol.setHandler(this as IProtocolMessageHandler);
-
 		if (this.Config.auth.enabled) {
-			user.protocol.sendAuth(this.Config.auth.apiEndpoint);
+			user.sendAuth(this.Config.auth.apiEndpoint);
 		}
 
-		user.protocol.sendAddUser(this.getAddUser());
+		user.sendAddUser(this.getAddUser());
 		if (this.Config.geoip.enabled) {
 			let flags = this.getFlags();
-			user.protocol.sendFlag(flags);
+			user.sendFlag(flags);
 		}
 	}
 
@@ -217,8 +214,6 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 
 		this.clients.splice(clientIndex, 1);
 
-		user.protocol.dispose();
-
 		this.logger.info(`Disconnect From ${user.IP.address}${user.username ? ` with username ${user.username}` : ''}`);
 		if (!user.username) return;
 		if (this.TurnQueue.toArray().indexOf(user) !== -1) {
@@ -227,7 +222,7 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 			if (hadturn) this.nextTurn();
 		}
 
-		this.clients.forEach((c) => c.protocol.sendRemUser([user.username!]));
+		this.clients.forEach((c) => c.sendRemUser([user.username!]));
 	}
 
 	// Protocol message handlers
@@ -237,7 +232,7 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 		if (!this.Config.auth.enabled) return true;
 
 		if (user.rank === Rank.Unregistered && !guestPermission) {
-			user.protocol.sendChatMessage('', 'You need to login to do that.');
+			user.sendChatMessage('', 'You need to login to do that.');
 			return false;
 		}
 
@@ -252,7 +247,7 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 		if (!this.Config.auth.enabled) return;
 
 		if (!user.connectedToNode) {
-			user.protocol.sendLoginResponse(false, 'You must connect to the VM before logging in.');
+			user.sendLoginResponse(false, 'You must connect to the VM before logging in.');
 			return;
 		}
 
@@ -261,7 +256,7 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 
 			if (res.clientSuccess) {
 				this.logger.info(`${user.IP.address} logged in as ${res.username}`);
-				user.protocol.sendLoginResponse(true, '');
+				user.sendLoginResponse(true, '');
 
 				let old = this.clients.find((c) => c.username === res.username);
 				if (old) {
@@ -274,19 +269,19 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 				if (user.countryCode !== null && user.noFlag) {
 					// privacy
 					for (let cl of this.clients.filter((c) => c !== user)) {
-						cl.protocol.sendRemUser([user.username!]);
+						cl.sendRemUser([user.username!]);
 					}
 					this.renameUser(user, res.username, false);
 				} else this.renameUser(user, res.username, true);
 				// Set rank
 				user.rank = res.rank;
 				if (user.rank === Rank.Admin) {
-					user.protocol.sendAdminLoginResponse(true, undefined);
+					user.sendAdminLoginResponse(true, undefined);
 				} else if (user.rank === Rank.Moderator) {
-					user.protocol.sendAdminLoginResponse(true, this.ModPerms);
+					user.sendAdminLoginResponse(true, this.ModPerms);
 				}
 				this.clients.forEach((c) =>
-					c.protocol.sendAddUser([
+					c.sendAddUser([
 						{
 							username: user.username!,
 							rank: user.rank
@@ -294,7 +289,7 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 					])
 				);
 			} else {
-				user.protocol.sendLoginResponse(false, res.error!);
+				user.sendLoginResponse(false, res.error!);
 				if (res.error === 'You are banned') {
 					user.kick();
 				}
@@ -302,7 +297,7 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 		} catch (err) {
 			this.logger.error(`Error authenticating client ${user.IP.address}: ${(err as Error).message}`);
 
-			user.protocol.sendLoginResponse(false, 'There was an internal error while authenticating. Please let a staff member know as soon as possible');
+			user.sendLoginResponse(false, 'There was an internal error while authenticating. Please let a staff member know as soon as possible');
 		}
 	}
 
@@ -323,16 +318,14 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 				case ProtocolUpgradeCapability.BinRects:
 					enabledCaps.push(cap as ProtocolUpgradeCapability);
 					user.Capabilities.bin = true;
-					user.protocol.dispose();
-					user.protocol = TheProtocolManager.createProtocol('binary1', user);
-					user.protocol.setHandler(this as IProtocolMessageHandler);
+					user.protocol = TheProtocolManager.getProtocol('binary1');
 					break;
 				default:
 					break;
 			}
 		}
 
-		user.protocol.sendCapabilities(enabledCaps);
+		user.sendCapabilities(enabledCaps);
 		return true;
 	}
 
@@ -377,18 +370,18 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 					if (!this.authCheck(user, this.Config.auth.guestPermissions.callForReset)) return;
 
 					if (this.voteCooldown !== 0) {
-						user.protocol.sendVoteCooldown(this.voteCooldown);
+						user.sendVoteCooldown(this.voteCooldown);
 						return;
 					}
 
 					this.startVote();
-					this.clients.forEach((c) => c.protocol.sendChatMessage('', `${user.username} has started a vote to reset the VM.`));
+					this.clients.forEach((c) => c.sendChatMessage('', `${user.username} has started a vote to reset the VM.`));
 				}
 
 				if (!this.authCheck(user, this.Config.auth.guestPermissions.vote)) return;
 
 				if (user.IP.vote !== true) {
-					this.clients.forEach((c) => c.protocol.sendChatMessage('', `${user.username} has voted yes.`));
+					this.clients.forEach((c) => c.sendChatMessage('', `${user.username} has voted yes.`));
 				}
 				user.IP.vote = true;
 				break;
@@ -398,7 +391,7 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 				if (!this.authCheck(user, this.Config.auth.guestPermissions.vote)) return;
 
 				if (user.IP.vote !== false) {
-					this.clients.forEach((c) => c.protocol.sendChatMessage('', `${user.username} has voted no.`));
+					this.clients.forEach((c) => c.sendChatMessage('', `${user.username} has voted no.`));
 				}
 				user.IP.vote = false;
 				break;
@@ -416,13 +409,13 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 		};
 
 		if (this.VM.GetState() == VMState.Started) {
-			user.protocol.sendListResponse([listEntry]);
+			user.sendListResponse([listEntry]);
 		}
 	}
 
 	private async connectViewShared(user: User, node: string, viewMode: number | undefined) {
 		if (!user.username || node !== this.Config.collabvm.node) {
-			user.protocol.sendConnectFailResponse();
+			user.sendConnectFailResponse();
 			return;
 		}
 
@@ -430,23 +423,23 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 
 		if (viewMode !== undefined) {
 			if (viewMode !== 0 && viewMode !== 1) {
-				user.protocol.sendConnectFailResponse();
+				user.sendConnectFailResponse();
 				return;
 			}
 
 			user.viewMode = viewMode;
 		}
 
-		user.protocol.sendConnectOKResponse(this.VM.SnapshotsSupported());
+		user.sendConnectOKResponse(this.VM.SnapshotsSupported());
 
 		if (this.ChatHistory.size !== 0) {
 			let history = this.ChatHistory.toArray() as ChatHistory[];
-			user.protocol.sendChatHistoryMessage(history);
+			user.sendChatHistoryMessage(history);
 		}
-		if (this.Config.collabvm.motd) user.protocol.sendChatMessage('', this.Config.collabvm.motd);
+		if (this.Config.collabvm.motd) user.sendChatMessage('', this.Config.collabvm.motd);
 		if (this.screenHidden) {
-			user?.protocol.sendScreenResize(1024, 768);
-			user?.protocol.sendScreenUpdate({
+			user?.sendScreenResize(1024, 768);
+			user?.sendScreenUpdate({
 				x: 0,
 				y: 0,
 				data: this.screenHiddenImg
@@ -455,7 +448,7 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 			await this.SendFullScreenWithSize(user);
 		}
 
-		user.protocol.sendSync(Date.now());
+		user.sendSync(Date.now());
 
 		if (this.voteInProgress) this.sendVoteUpdate(user);
 		this.sendTurnUpdate(user);
@@ -473,12 +466,12 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 		if (!user.RenameRateLimit.request()) return;
 		if (user.connectedToNode && user.IP.muted) return;
 		if (this.Config.auth.enabled && user.rank !== Rank.Unregistered) {
-			user.protocol.sendChatMessage('', 'Go to your account settings to change your username.');
+			user.sendChatMessage('', 'Go to your account settings to change your username.');
 			return;
 		}
 		if (this.Config.auth.enabled && newName !== undefined) {
 			// Don't send system message to a user without a username since it was likely an automated attempt by the webapp
-			if (user.username) user.protocol.sendChatMessage('', 'You need to log in to do that.');
+			if (user.username) user.sendChatMessage('', 'You need to log in to do that.');
 			if (user.rank !== Rank.Unregistered) return;
 			this.renameUser(user, undefined);
 			return;
@@ -496,7 +489,7 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 		if (msg.length > this.Config.collabvm.maxChatLength) msg = msg.substring(0, this.Config.collabvm.maxChatLength);
 		if (msg.trim().length < 1) return;
 
-		this.clients.forEach((c) => c.protocol.sendChatMessage(user.username!, msg));
+		this.clients.forEach((c) => c.sendChatMessage(user.username!, msg));
 		this.ChatHistory.push({ user: user.username, msg: msg });
 		user.onChatMsgSent();
 	}
@@ -520,23 +513,23 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 
 		if (this.Config.collabvm.turnwhitelist && pwdHash === this.Config.collabvm.turnpass) {
 			user.turnWhitelist = true;
-			user.protocol.sendChatMessage('', 'You may now take turns.');
+			user.sendChatMessage('', 'You may now take turns.');
 			return;
 		}
 
 		if (this.Config.auth.enabled) {
-			user.protocol.sendChatMessage('', 'This server does not support staff passwords. Please log in to become staff.');
+			user.sendChatMessage('', 'This server does not support staff passwords. Please log in to become staff.');
 			return;
 		}
 
 		if (pwdHash === this.Config.collabvm.adminpass) {
 			user.rank = Rank.Admin;
-			user.protocol.sendAdminLoginResponse(true, undefined);
+			user.sendAdminLoginResponse(true, undefined);
 		} else if (this.Config.collabvm.moderatorEnabled && pwdHash === this.Config.collabvm.modpass) {
 			user.rank = Rank.Moderator;
-			user.protocol.sendAdminLoginResponse(true, this.ModPerms);
+			user.sendAdminLoginResponse(true, this.ModPerms);
 		} else {
-			user.protocol.sendAdminLoginResponse(false, undefined);
+			user.sendAdminLoginResponse(false, undefined);
 			return;
 		}
 
@@ -546,7 +539,7 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 
 		// Update rank
 		this.clients.forEach((c) =>
-			c.protocol.sendAddUser([
+			c.sendAddUser([
 				{
 					username: user.username!,
 					rank: user.rank
@@ -560,7 +553,7 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 		if (node !== this.Config.collabvm.node) return;
 		TheAuditLog.onMonitorCommand(user, command);
 		let output = await this.VM.MonitorCommand(command);
-		user.protocol.sendAdminMonitorResponse(String(output));
+		user.sendAdminMonitorResponse(String(output));
 	}
 
 	onAdminRestore(user: User, node: string): void {
@@ -624,7 +617,7 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 	onAdminRename(user: User, target: string, newName: string): void {
 		if (user.rank !== Rank.Admin && (user.rank !== Rank.Moderator || !this.Config.collabvm.moderatorPermissions.rename)) return;
 		if (this.Config.auth.enabled) {
-			user.protocol.sendChatMessage('', 'Cannot rename users on a server that uses authentication.');
+			user.sendChatMessage('', 'Cannot rename users on a server that uses authentication.');
 		}
 		var targetUser = this.clients.find((c) => c.username === target);
 		if (!targetUser) return;
@@ -635,7 +628,7 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 		if (user.rank !== Rank.Admin && (user.rank !== Rank.Moderator || !this.Config.collabvm.moderatorPermissions.grabip)) return;
 		let target = this.clients.find((c) => c.username === username);
 		if (!target) return;
-		user.protocol.sendAdminIPResponse(username, target.IP.address);
+		user.sendAdminIPResponse(username, target.IP.address);
 	}
 
 	onAdminBypassTurn(user: User): void {
@@ -647,14 +640,14 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 		if (user.rank !== Rank.Admin && (user.rank !== Rank.Moderator || !this.Config.collabvm.moderatorPermissions.xss)) return;
 		switch (user.rank) {
 			case Rank.Admin:
-				this.clients.forEach((c) => c.protocol.sendChatMessage(user.username!, message));
+				this.clients.forEach((c) => c.sendChatMessage(user.username!, message));
 
 				this.ChatHistory.push({ user: user.username!, msg: message });
 				break;
 			case Rank.Moderator:
-				this.clients.filter((c) => c.rank !== Rank.Admin).forEach((c) => c.protocol.sendChatMessage(user.username!, message));
+				this.clients.filter((c) => c.rank !== Rank.Admin).forEach((c) => c.sendChatMessage(user.username!, message));
 
-				this.clients.filter((c) => c.rank === Rank.Admin).forEach((c) => c.protocol.sendChatMessage(user.username!, Utilities.HTMLSanitize(message)));
+				this.clients.filter((c) => c.rank === Rank.Admin).forEach((c) => c.sendChatMessage(user.username!, Utilities.HTMLSanitize(message)));
 				break;
 		}
 	}
@@ -700,8 +693,8 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 			this.clients
 				.filter((c) => c.rank == Rank.Unregistered)
 				.forEach((client) => {
-					client.protocol.sendScreenResize(1024, 768);
-					client.protocol.sendScreenUpdate({
+					client.sendScreenResize(1024, 768);
+					client.sendScreenUpdate({
 						x: 0,
 						y: 0,
 						data: this.screenHiddenImg
@@ -712,7 +705,7 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 
 	onAdminSystemMessage(user: User, message: string): void {
 		if (user.rank !== Rank.Admin) return;
-		this.clients.forEach((c) => c.protocol.sendChatMessage('', message));
+		this.clients.forEach((c) => c.sendChatMessage('', message));
 	}
 
 	// end protocol message handlers
@@ -736,7 +729,7 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 		} else {
 			newName = newName.trim();
 			if (hadName && newName === oldname) {
-				client.protocol.sendSelfRename(ProtocolRenameStatus.Ok, client.username!, client.rank);
+				client.sendSelfRename(ProtocolRenameStatus.Ok, client.username!, client.rank);
 				return;
 			}
 
@@ -754,16 +747,16 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 			} else client.username = newName;
 		}
 
-		client.protocol.sendSelfRename(status, client.username!, client.rank);
+		client.sendSelfRename(status, client.username!, client.rank);
 
 		if (hadName) {
 			this.logger.info(`Rename ${client.IP.address} from ${oldname} to ${client.username}`);
-			if (announce) this.clients.forEach((c) => c.protocol.sendRename(oldname, client.username!, client.rank));
+			if (announce) this.clients.forEach((c) => c.sendRename(oldname, client.username!, client.rank));
 		} else {
 			this.logger.info(`Rename ${client.IP.address} to ${client.username}`);
 			if (announce)
 				this.clients.forEach((c) => {
-					c.protocol.sendAddUser([
+					c.sendAddUser([
 						{
 							username: client.username!,
 							rank: client.rank
@@ -771,7 +764,7 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 					]);
 
 					if (client.countryCode !== null) {
-						c.protocol.sendFlag([
+						c.sendFlag([
 							{
 								username: client.username!,
 								countryCode: client.countryCode
@@ -816,7 +809,7 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 		var currentTurningUser = this.TurnQueue.peek();
 
 		if (client) {
-			client.protocol.sendTurnQueue(turntime, users);
+			client.sendTurnQueue(turntime, users);
 			return;
 		}
 
@@ -827,12 +820,12 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 					var time;
 					if (this.indefiniteTurn === null) time = this.TurnTime * 1000 + (turnQueueArr.indexOf(c) - 1) * this.Config.collabvm.turnTime * 1000;
 					else time = 9999999999;
-					c.protocol.sendTurnQueueWaiting(turntime, users, time);
+					c.sendTurnQueueWaiting(turntime, users, time);
 				} else {
-					c.protocol.sendTurnQueue(turntime, users);
+					c.sendTurnQueue(turntime, users);
 				}
 			});
-		if (currentTurningUser) currentTurningUser.protocol.sendTurnQueue(turntime, users);
+		if (currentTurningUser) currentTurningUser.sendTurnQueue(turntime, users);
 	}
 	private nextTurn() {
 		clearInterval(this.TurnInterval);
@@ -883,7 +876,7 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 			.filter((c) => c.connectedToNode || c.viewMode == 1)
 			.forEach((c) => {
 				if (this.screenHidden && c.rank == Rank.Unregistered) return;
-				c.protocol.sendScreenResize(size.width, size.height);
+				c.sendScreenResize(size.width, size.height);
 			});
 	}
 
@@ -898,7 +891,7 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 				.forEach((c) => {
 					if (self.screenHidden && c.rank == Rank.Unregistered) return;
 
-					c.protocol.sendScreenUpdate({
+					c.sendScreenUpdate({
 						x: rect.x,
 						y: rect.y,
 						data: encoded
@@ -930,9 +923,9 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 			height: displaySize.height
 		});
 
-		client.protocol.sendScreenResize(displaySize.width, displaySize.height);
+		client.sendScreenResize(displaySize.width, displaySize.height);
 
-		client.protocol.sendScreenUpdate({
+		client.sendScreenUpdate({
 			x: 0,
 			y: 0,
 			data: encoded
@@ -963,7 +956,7 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 	startVote() {
 		if (this.voteInProgress) return;
 		this.voteInProgress = true;
-		this.clients.forEach((c) => c.protocol.sendVoteStarted());
+		this.clients.forEach((c) => c.sendVoteStarted());
 		this.voteTime = this.Config.collabvm.voteTime;
 		this.voteInterval = setInterval(() => {
 			this.voteTime--;
@@ -978,12 +971,12 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 		this.voteInProgress = false;
 		clearInterval(this.voteInterval);
 		var count = this.getVoteCounts();
-		this.clients.forEach((c) => c.protocol.sendVoteEnded());
+		this.clients.forEach((c) => c.sendVoteEnded());
 		if (result === true || (result === undefined && count.yes >= count.no)) {
-			this.clients.forEach((c) => c.protocol.sendChatMessage('', 'The vote to reset the VM has won.'));
+			this.clients.forEach((c) => c.sendChatMessage('', 'The vote to reset the VM has won.'));
 			this.VM.Reset();
 		} else {
-			this.clients.forEach((c) => c.protocol.sendChatMessage('', 'The vote to reset the VM has lost.'));
+			this.clients.forEach((c) => c.sendChatMessage('', 'The vote to reset the VM has lost.'));
 		}
 		this.clients.forEach((c) => {
 			c.IP.vote = null;
@@ -999,8 +992,8 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 		if (!this.voteInProgress) return;
 		var count = this.getVoteCounts();
 
-		if (client) client.protocol.sendVoteStats(this.voteTime * 1000, count.yes, count.no);
-		else this.clients.forEach((c) => c.protocol.sendVoteStats(this.voteTime * 1000, count.yes, count.no));
+		if (client) client.sendVoteStats(this.voteTime * 1000, count.yes, count.no);
+		else this.clients.forEach((c) => c.sendVoteStats(this.voteTime * 1000, count.yes, count.no));
 	}
 
 	getVoteCounts(): VoteTally {

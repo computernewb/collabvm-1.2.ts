@@ -90,13 +90,6 @@ export interface IProtocolMessageHandler {
 // allowing it to be protocol-independent (as long as the client and server
 // are able to speak the same protocol.)
 export interface IProtocol {
-	// don't implement this yourself, extend from ProtocolBase
-	init(u: User): void;
-	dispose(): void;
-
-	// Sets handler object.
-	setHandler(handlers: IProtocolMessageHandler): void;
-
 	// Protocol implementation stuff
 
 	// Parses a single message and fires the given handler with deserialized arguments.
@@ -104,67 +97,48 @@ export interface IProtocol {
 	// to handle errors. It should, however, catch invalid parameters without failing.
 	//
 	// This function will perform conversion to text if it is required.
-	processMessage(buffer: Buffer): boolean;
+	processMessage(user: User, handler: IProtocolMessageHandler, buffer: Buffer): boolean;
 
 	// Senders
 
-	sendNop(): void;
-	sendSync(now: number): void;
+	sendNop(user: User): void;
+	sendSync(user: User, now: number): void;
 
-	sendAuth(authServer: string): void;
+	sendAuth(user: User, authServer: string): void;
 
-	sendCapabilities(caps: ProtocolUpgradeCapability[]): void;
+	sendCapabilities(user: User, caps: ProtocolUpgradeCapability[]): void;
 
-	sendConnectFailResponse(): void;
-	sendConnectOKResponse(votes: boolean): void;
+	sendConnectFailResponse(user: User): void;
+	sendConnectOKResponse(user: User, votes: boolean): void;
 
-	sendLoginResponse(ok: boolean, message: string | undefined): void;
+	sendLoginResponse(user: User, ok: boolean, message: string | undefined): void;
 
-	sendAdminLoginResponse(ok: boolean, modPerms: number | undefined): void;
-	sendAdminMonitorResponse(output: string): void;
-	sendAdminIPResponse(username: string, ip: string): void;
+	sendAdminLoginResponse(user: User, ok: boolean, modPerms: number | undefined): void;
+	sendAdminMonitorResponse(user: User, output: string): void;
+	sendAdminIPResponse(user: User, username: string, ip: string): void;
 
-	sendChatMessage(username: '' | string, message: string): void;
-	sendChatHistoryMessage(history: ProtocolChatHistory[]): void;
+	sendChatMessage(user: User, username: '' | string, message: string): void;
+	sendChatHistoryMessage(user: User, history: ProtocolChatHistory[]): void;
 
-	sendAddUser(users: ProtocolAddUser[]): void;
-	sendRemUser(users: string[]): void;
-	sendFlag(flag: ProtocolFlag[]): void;
+	sendAddUser(user: User, users: ProtocolAddUser[]): void;
+	sendRemUser(user: User, users: string[]): void;
+	sendFlag(user: User, flag: ProtocolFlag[]): void;
 
-	sendSelfRename(status: ProtocolRenameStatus, newUsername: string, rank: Rank): void;
-	sendRename(oldUsername: string, newUsername: string, rank: Rank): void;
+	sendSelfRename(user: User, status: ProtocolRenameStatus, newUsername: string, rank: Rank): void;
+	sendRename(user: User, oldUsername: string, newUsername: string, rank: Rank): void;
 
-	sendListResponse(list: ListEntry[]): void;
+	sendListResponse(user: User, list: ListEntry[]): void;
 
-	sendTurnQueue(turnTime: number, users: string[]): void;
-	sendTurnQueueWaiting(turnTime: number, users: string[], waitTime: number): void;
+	sendTurnQueue(user: User, turnTime: number, users: string[]): void;
+	sendTurnQueueWaiting(user: User, turnTime: number, users: string[], waitTime: number): void;
 
-	sendVoteStarted(): void;
-	sendVoteStats(msLeft: number, nrYes: number, nrNo: number): void;
-	sendVoteEnded(): void;
-	sendVoteCooldown(ms: number): void;
+	sendVoteStarted(user: User): void;
+	sendVoteStats(user: User, msLeft: number, nrYes: number, nrNo: number): void;
+	sendVoteEnded(user: User): void;
+	sendVoteCooldown(user: User, ms: number): void;
 
-	sendScreenResize(width: number, height: number): void;
+	sendScreenResize(user: User, width: number, height: number): void;
 
 	// Sends a rectangle update to the user.
-	sendScreenUpdate(rect: ScreenRect): void;
-}
-
-// Base mixin for all concrete protocols to use. Inherit from this!
-export class ProtocolBase {
-	protected handlers: IProtocolMessageHandler | null = null;
-	protected user: User | null = null;
-
-	init(u: User): void {
-		this.user = u;
-	}
-
-	dispose(): void {
-		this.user = null;
-		this.handlers = null;
-	}
-
-	setHandler(handlers: IProtocolMessageHandler): void {
-		this.handlers = handlers;
-	}
+	sendScreenUpdate(user: User, rect: ScreenRect): void;
 }

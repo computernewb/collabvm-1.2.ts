@@ -3,14 +3,15 @@ import { CollabVMProtocolMessage, CollabVMProtocolMessageType } from '@cvmts/col
 import { GuacamoleProtocol } from './GuacamoleProtocol.js';
 
 import { ScreenRect } from './Protocol';
+import { User } from '../User.js';
 
 export class BinRectsProtocol extends GuacamoleProtocol {
-	sendScreenUpdate(rect: ScreenRect): void {
+	sendScreenUpdate(user: User, rect: ScreenRect): void {
 		let bmsg: CollabVMProtocolMessage = {
 			type: CollabVMProtocolMessageType.rect,
 			rect: rect
 		};
 
-		this.user?.socket.sendBinary(msgpack.encode(bmsg));
+		user.socket.sendBinary(msgpack.encode(bmsg));
 	}
 }

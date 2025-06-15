@@ -1,24 +1,23 @@
-import { IProtocol } from "./Protocol";
-import { User } from "../User";
+import { IProtocol } from './Protocol';
+import { User } from '../User';
 
-// The protocol manager. Holds protocol factories, and provides the ability
-// to create a protocol by name. Avoids direct dependency on a given list of protocols,
-// and allows (relatively simple) expansion.
+// The protocol manager.
+// Holds protocols, and provides the ability to obtain them by name. 
+//
+// Avoids direct dependency on a given list of protocols,
+// and allows (relatively simple) expansion of the supported protocols.
 export class ProtocolManager {
-	private protocols = new Map<String, () => IProtocol>();
+	private protocols = new Map<String, IProtocol>();
 
-	// Registers a protocol with the given name.
+	// Registers a protocol with the given name, creates it, and stores it for later use.
 	registerProtocol(name: string, protocolFactory: () => IProtocol) {
-		if (!this.protocols.has(name)) this.protocols.set(name, protocolFactory);
+		if (!this.protocols.has(name)) this.protocols.set(name, protocolFactory());
 	}
 
-	// Creates an instance of a given protocol for a user.
-	createProtocol(name: string, user: User): IProtocol {
-		if (!this.protocols.has(name)) throw new Error(`ProtocolManager does not have protocol \"${name}\"`);
-
-		let factory = this.protocols.get(name)!;
-		let proto = factory();
-		proto.init(user);
+	// Gets an instance of a protocol.
+	getProtocol(name: string): IProtocol {
+		let proto = this.protocols.get(name);
+		if (proto == undefined) throw new Error(`ProtocolManager does not have protocol \"${name}\"`);
 		return proto;
 	}
 }
