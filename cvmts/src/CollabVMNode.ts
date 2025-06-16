@@ -122,6 +122,8 @@ export class CollabVMNode {
 
 	private stoppingNode = false;
 
+	private addedDisplayEvents = false;
+
 	constructor(config: IConfig, nodeConfig: NodeConfiguration, server: CollabVMServer) {
 		this.logger = pino({ name: `CVMTS.Node/${nodeConfig.collabvm.node}` });
 		this.Config = config;
@@ -159,27 +161,25 @@ export class CollabVMNode {
 		this.VM.Events().on('statechange', (newState: VMState) => {
 			if (newState == VMState.Started) {
 				self.logger.info('VM started');
+				self.VM.StartDisplay();
 
-				// start the display and add the events once
-				if (self.VM.GetDisplay() == null) {
-					self.VM.StartDisplay();
-
-					self.logger.info('started display, adding events now');
+				// We only need to do this once, since each VM
+				// only uses one display class and doesn't recreate it.
+				if (!self.addedDisplayEvents) {
+					self.addedDisplayEvents = true;
+					self.logger.info('adding events now');
 
 					// add events
 					self.VM.GetDisplay()?.on('resize', (size: Size) => self.OnDisplayResized(size));
 					self.VM.GetDisplay()?.on('rect', (rect: Rect) => self.OnDisplayRectangle(rect));
 					self.VM.GetDisplay()?.on('frame', () => self.OnDisplayFrame());
-				}
-			}
 
-			if (newState == VMState.Stopped) {
-				if (this.stoppingNode == true) {
-					this.stoppingNode = false;
-					setTimeout(async () => {
-						self.logger.info('restarting VM');
-						await self.VM.Start();
-					}, kRestartTimeout);
+					// wasteful but /shrug
+					self.VM.GetDisplay()?.on('disconnect', () => {
+						self.clients.map((c) => {
+							self.SendFullScreenWithSize(c);
+						});
+					});
 				}
 			}
 		});
@@ -366,7 +366,6 @@ export class CollabVMNode {
 		let hasTurnWhitelist = false;
 		if (this.NodeConfig.collabvm.turnwhitelist !== undefined) hasTurnWhitelist = this.NodeConfig.collabvm.turnwhitelist;
 		else hasTurnWhitelist = this.Config.collabvm.turnwhitelist;
-
 
 		if (!this.VM.SnapshotsSupported()) return;
 		if ((!this.turnsAllowed || hasTurnWhitelist) && user.rank !== Rank.Admin && user.rank !== Rank.Moderator && !user.turnWhitelist) return;
@@ -892,34 +891,48 @@ export class CollabVMNode {
 
 	private async SendFullScreenWithSize(client: User) {
 		let display = this.VM.GetDisplay();
-		if (display == null) return;
+		if (display?.Connected()) {
+			let displaySize = display.Size();
 
-		let displaySize = display.Size();
+			let encoded = await this.MakeRectData({
+				x: 0,
+				y: 0,
+				width: displaySize.width,
+				height: displaySize.height
+			});
 
-		let encoded = await this.MakeRectData({
-			x: 0,
-			y: 0,
-			width: displaySize.width,
-			height: displaySize.height
-		});
+			client.sendScreenResize(displaySize.width, displaySize.height);
 
-		client.sendScreenResize(displaySize.width, displaySize.height);
+			client.sendScreenUpdate({
+				x: 0,
+				y: 0,
+				data: encoded
+			});
+		} else {
+			client.sendScreenResize(1024, 768);
 
-		client.sendScreenUpdate({
-			x: 0,
-			y: 0,
-			data: encoded
-		});
+			client.sendScreenUpdate({
+				x: 0,
+				y: 0,
+				data: gScreenHiddenImage
+			});
+		}
 	}
 
 	private async MakeRectData(rect: Rect) {
 		let display = this.VM.GetDisplay();
+		let buffer: Buffer;
+		let displaySize: Size;
 
-		// TODO: actually throw an error here
-		if (display == null) return Buffer.from('no');
+		// hack. Should we provide images for "VM Down"?
+		if (display?.Connected()) {
+			buffer = display?.Buffer();
+			displaySize = display.Size();
+		} else {
+			return gScreenHiddenImage;
+		}
 
-		let displaySize = display.Size();
-		let encoded = await JPEGEncoder.Encode(display.Buffer(), displaySize, rect, this.NodeConfig.vm.jpegQuality);
+		let encoded = await JPEGEncoder.Encode(buffer, displaySize, rect, this.NodeConfig.vm.jpegQuality);
 
 		return encoded;
 	}
@@ -928,7 +941,9 @@ export class CollabVMNode {
 		let display = this.VM.GetDisplay();
 
 		// oh well
-		if (!display?.Connected()) return Buffer.alloc(4);
+		if (!display?.Connected()) {
+			return gScreenHiddenThumbnail;
+		}
 
 		return JPEGEncoder.EncodeThumbnail(display.Buffer(), display.Size(), this.NodeConfig.vm.jpegQuality);
 	}

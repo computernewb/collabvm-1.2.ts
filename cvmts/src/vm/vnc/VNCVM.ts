@@ -39,8 +39,6 @@ export default class VNCVM extends EventEmitter implements VM {
 	private Disconnect() {
 		if (this.vnc) {
 			this.vnc.Disconnect();
-			this.vnc.removeAllListeners();
-			this.vnc = null;
 		}
 	}
 
@@ -52,23 +50,28 @@ export default class VNCVM extends EventEmitter implements VM {
 	StartDisplay(): void {
 		this.logger.info('Connecting to VNC server');
 		let self = this;
+		
+		if (this.vnc == null) {
+			this.vnc = new VncDisplay({
+				host: this.def.vncHost,
+				port: this.def.vncPort,
+				path: null
+			});
 
-		this.vnc = new VncDisplay({
-			host: this.def.vncHost,
-			port: this.def.vncPort,
-			path: null
-		});
+			this.vnc.on('connected', () => {
+				self.logger.info('Connected to VNC server');
+			});
 
-		self.vnc!.on('connected', () => {
-			self.logger.info('Connected to VNC server');
-			self.SetState(VMState.Started);
-		});
+			this.vnc!.on('fail', async () => {
+				self.logger.info('Failed to connect to VNC server');
+				await self.Stop();
+			});
+		}
 
-		self.vnc!.Connect();
+		this.vnc.Connect();
 	}
 
 	async Start(): Promise<void> {
-		this.Disconnect();
 		if (this.def.startCmd) await execaCommand(this.def.startCmd, { shell: true });
 		this.SetState(VMState.Started);
 	}

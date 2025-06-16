@@ -1,8 +1,8 @@
 export default interface VNCVMDef {
 	vncHost: string;
 	vncPort: number;
-	startCmd: string | null;
-	stopCmd: string | null;
-	rebootCmd: string | null;
-	restoreCmd: string | null;
+	startCmd?: string;
+	stopCmd?: string;
+	rebootCmd?: string;
+	restoreCmd?: string;
 }
