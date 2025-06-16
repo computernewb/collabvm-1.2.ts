@@ -69,6 +69,8 @@ const kRestartTimeout = 5000;
 // base64 image to show when the screen is hidden
 let gScreenHiddenImage = readFileSync(path.join(kCVMTSAssetsRoot, 'screenhidden.jpeg'));
 let gScreenHiddenThumbnail = readFileSync(path.join(kCVMTSAssetsRoot, 'screenhiddenthumb.jpeg'));
+let gScreenNoDisplayImage = readFileSync(path.join(kCVMTSAssetsRoot, 'nodisplay.jpeg'));
+let gScreenNoDisplayThumbnail = readFileSync(path.join(kCVMTSAssetsRoot, 'nodisplay_thumbnail.jpeg'));
 
 /// A CollabVM node.
 export class CollabVMNode {
@@ -914,7 +916,7 @@ export class CollabVMNode {
 			client.sendScreenUpdate({
 				x: 0,
 				y: 0,
-				data: gScreenHiddenImage
+				data: gScreenNoDisplayImage
 			});
 		}
 	}
@@ -929,7 +931,7 @@ export class CollabVMNode {
 			buffer = display?.Buffer();
 			displaySize = display.Size();
 		} else {
-			return gScreenHiddenImage;
+			return gScreenNoDisplayImage;
 		}
 
 		let encoded = await JPEGEncoder.Encode(buffer, displaySize, rect, this.NodeConfig.vm.jpegQuality);
@@ -942,7 +944,7 @@ export class CollabVMNode {
 
 		// oh well
 		if (!display?.Connected()) {
-			return gScreenHiddenThumbnail;
+			return gScreenNoDisplayThumbnail;
 		}
 
 		return JPEGEncoder.EncodeThumbnail(display.Buffer(), display.Size(), this.NodeConfig.vm.jpegQuality);
