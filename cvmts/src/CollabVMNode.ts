@@ -241,8 +241,7 @@ export class CollabVMNode {
 		user.sendAddUser(this.getAddUser());
 
 		if (this.Config.geoip.enabled) {
-			let flags = this.getFlags();
-			user.sendFlag(flags);
+			user.sendFlag(this.getFlags());
 		}
 
 		if (this.ChatHistory.size !== 0) {
@@ -758,14 +757,14 @@ export class CollabVMNode {
 	}
 
 	private getFlags(): ProtocolFlag[] {
-		let arr = [];
-		for (let c of this.clients.filter((cl) => cl.countryCode !== null && cl.username && (!cl.noFlag || cl.rank === Rank.Unregistered))) {
-			arr.push({
-				username: c.username!,
-				countryCode: c.countryCode!
+		return this.clients
+			.filter((cl) => cl.countryCode !== null && cl.username && (!cl.noFlag || cl.rank === Rank.Unregistered))
+			.map((c) => {
+				return {
+					username: c.username!,
+					countryCode: c.countryCode!
+				};
 			});
-		}
-		return arr;
 	}
 
 	private sendTurnUpdate(client?: User) {
