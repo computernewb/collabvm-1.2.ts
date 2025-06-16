@@ -363,8 +363,13 @@ export class CollabVMNode {
 	}
 
 	onVote(user: User, choice: number) {
+		let hasTurnWhitelist = false;
+		if (this.NodeConfig.collabvm.turnwhitelist !== undefined) hasTurnWhitelist = this.NodeConfig.collabvm.turnwhitelist;
+		else hasTurnWhitelist = this.Config.collabvm.turnwhitelist;
+
+
 		if (!this.VM.SnapshotsSupported()) return;
-		if ((!this.turnsAllowed || this.Config.collabvm.turnwhitelist) && user.rank !== Rank.Admin && user.rank !== Rank.Moderator && !user.turnWhitelist) return;
+		if ((!this.turnsAllowed || hasTurnWhitelist) && user.rank !== Rank.Admin && user.rank !== Rank.Moderator && !user.turnWhitelist) return;
 		if (!user.VoteRateLimit.request()) return;
 		switch (choice) {
 			case 1:
@@ -404,7 +409,11 @@ export class CollabVMNode {
 	}
 
 	onTurnRequest(user: User, forfeit: boolean) {
-		if ((!this.turnsAllowed || this.Config.collabvm.turnwhitelist) && user.rank !== Rank.Admin && user.rank !== Rank.Moderator && !user.turnWhitelist) return;
+		let hasTurnWhitelist = false;
+		if (this.NodeConfig.collabvm.turnwhitelist !== undefined) hasTurnWhitelist = this.NodeConfig.collabvm.turnwhitelist;
+		else hasTurnWhitelist = this.Config.collabvm.turnwhitelist;
+
+		if ((!this.turnsAllowed || hasTurnWhitelist) && user.rank !== Rank.Admin && user.rank !== Rank.Moderator && !user.turnWhitelist) return;
 		if (!this.authCheck(user, this.Config.auth.guestPermissions.turn)) return;
 		if (!user.TurnRateLimit.request()) return;
 
@@ -479,16 +488,16 @@ export class CollabVMNode {
 		var pwdHash = sha256.digest('hex');
 		sha256.destroy();
 
-		let turnWhitelist = false;
+		let hasTurnWhitelist = false;
 		let turnPass = '';
 
-		if (this.NodeConfig.collabvm.turnwhitelist !== undefined) turnWhitelist = this.NodeConfig.collabvm.turnwhitelist;
-		else turnWhitelist = this.Config.collabvm.turnwhitelist;
+		if (this.NodeConfig.collabvm.turnwhitelist !== undefined) hasTurnWhitelist = this.NodeConfig.collabvm.turnwhitelist;
+		else hasTurnWhitelist = this.Config.collabvm.turnwhitelist;
 
 		if (this.NodeConfig.collabvm.turnpass !== undefined) turnPass = this.NodeConfig.collabvm.turnpass;
 		else turnPass = this.Config.collabvm.turnpass;
 
-		if (turnWhitelist && pwdHash === turnPass) {
+		if (hasTurnWhitelist && pwdHash === turnPass) {
 			user.turnWhitelist = true;
 			user.sendChatMessage('', 'You may now take turns.');
 			return;
