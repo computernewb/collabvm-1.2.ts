@@ -33,18 +33,15 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 	}
 
 	async Start() {
-		let promises = [];
-		for (let [id, node] of this.nodes) {
-			promises.push(node.Start());
-		}
+		let promises = [...this.nodes.values()]
+			.map((node) => node.Start());
 		await Promise.allSettled(promises);
+		this.logger.info('All nodes started');
 	}
 
 	async Stop() {
-		let promises = [];
-		for (let [id, node] of this.nodes) {
-			promises.push(node.Stop());
-		}
+		let promises = [...this.nodes.values()]
+			.map((node) => node.Stop());
 		await Promise.allSettled(promises);
 		this.logger.info('All nodes stopped, shutting down');
 	}
@@ -152,13 +149,13 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 	}
 
 	async onList(user: User) {
-		let listEntries: Array<ListEntry> = [];
+		let listPromises = [...this.nodes.values()]
+			.filter((node) => node.isVMStarted())
+			.map(async (node) => {
+				return await node.getListEntry();
+			});
 
-		for (let [id, node] of this.nodes) {
-			if (node.isVMStarted()) listEntries.push(await node.getListEntry());
-		}
-
-		user.sendListResponse(listEntries);
+		user.sendListResponse(await Promise.all(listPromises));
 	}
 
 	private async connectViewShared(user: User, node: string, viewMode: number | undefined) {
