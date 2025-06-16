@@ -67,15 +67,10 @@ export class VncDisplay extends EventEmitter implements VMDisplay {
 		});
 
 		this.displayVnc.on('disconnect', () => {
-			console.log('disconnect');
 			this.Reconnect();
 		});
 
 		this.displayVnc.on('closed', () => {
-			if(this.doBackoff) {
-				// should kick on the "Screen hidden" image
-				this.emit('disconnect');
-			}
 			this.Reconnect();
 		});
 
@@ -125,8 +120,11 @@ export class VncDisplay extends EventEmitter implements VMDisplay {
 	private Reconnect() {
 		if (this.displayVnc.connected) return;
 		if (!this.vncShouldReconnect) return;
+		
 
 		if (this.doBackoff) {
+			this.emit('disconnect');
+
 			//console.log('reconnecting in %d seconds (%d steps)', this.getReconnectBackoffMs() / 1000, this.nrReconnectBackoffSteps);
 			if (this.nrReconnectBackoffSteps + 1 > kVncMaxTries) {
 				// Failed to connnect
@@ -140,7 +138,9 @@ export class VncDisplay extends EventEmitter implements VMDisplay {
 
 			this.nrReconnectBackoffSteps++;
 		} else {
-			this.displayVnc.connect(this.vncConnectOpts);
+			safeDefer(() => {
+				this.displayVnc.connect(this.vncConnectOpts);
+			}, 0);
 		}
 	}
 
@@ -151,8 +151,8 @@ export class VncDisplay extends EventEmitter implements VMDisplay {
 
 	Disconnect() {
 		this.vncShouldReconnect = false;
-		this.nrReconnectBackoffSteps = 0;
 		this.displayVnc.disconnect();
+		this.emit('finalDisconnect');
 	}
 
 	Connected() {

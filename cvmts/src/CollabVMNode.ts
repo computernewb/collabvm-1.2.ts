@@ -161,28 +161,37 @@ export class CollabVMNode {
 		let self = this;
 
 		this.VM.Events().on('statechange', (newState: VMState) => {
-			if (newState == VMState.Started) {
-				self.logger.info('VM started');
-				self.VM.StartDisplay();
+			switch (newState) {
+				case VMState.Started:
+					{
+						self.logger.info('VM started');
+						self.VM.StartDisplay();
 
-				// We only need to do this once, since each VM
-				// only uses one display class and doesn't recreate it.
-				if (!self.addedDisplayEvents) {
-					self.addedDisplayEvents = true;
-					self.logger.info('adding events now');
+						// We only need to do this once, since each VM
+						// only uses one display class and doesn't recreate it.
+						if (!self.addedDisplayEvents) {
+							self.addedDisplayEvents = true;
+							self.logger.info('adding events now');
 
-					// add events
-					self.VM.GetDisplay()?.on('resize', (size: Size) => self.OnDisplayResized(size));
-					self.VM.GetDisplay()?.on('rect', (rect: Rect) => self.OnDisplayRectangle(rect));
-					self.VM.GetDisplay()?.on('frame', () => self.OnDisplayFrame());
+							// add events
+							self.VM.GetDisplay()?.on('resize', (size: Size) => self.OnDisplayResized(size));
+							self.VM.GetDisplay()?.on('rect', (rect: Rect) => self.OnDisplayRectangle(rect));
+							self.VM.GetDisplay()?.on('frame', () => self.OnDisplayFrame());
 
-					// wasteful but /shrug
-					self.VM.GetDisplay()?.on('disconnect', () => {
-						self.clients.map((c) => {
-							self.SendFullScreenWithSize(c);
-						});
-					});
-				}
+							// wasteful but /shrug
+							self.VM.GetDisplay()?.on('disconnect', () => {
+								self.clients.map((c) => {
+									self.SendFullScreenWithSize(c);
+								});
+							});
+						}
+					}
+					break;
+				case VMState.Stopping:
+					self.VM.GetDisplay()?.Disconnect();
+					break;
+				default:
+					break;
 			}
 		});
 	}

@@ -50,7 +50,7 @@ export default class VNCVM extends EventEmitter implements VM {
 	StartDisplay(): void {
 		this.logger.info('Connecting to VNC server');
 		let self = this;
-		
+
 		if (this.vnc == null) {
 			this.vnc = new VncDisplay({
 				host: this.def.vncHost,
@@ -60,6 +60,10 @@ export default class VNCVM extends EventEmitter implements VM {
 
 			this.vnc.on('connected', () => {
 				self.logger.info('Connected to VNC server');
+			});
+
+			this.vnc.on('finalDisconnect', () => {
+				self.SetState(VMState.Stopped);
 			});
 
 			this.vnc!.on('fail', async () => {
@@ -77,10 +81,8 @@ export default class VNCVM extends EventEmitter implements VM {
 	}
 
 	async Stop(): Promise<void> {
-		this.logger.info('Disconnecting');
-		this.Disconnect();
 		if (this.def.stopCmd) await execaCommand(this.def.stopCmd, { shell: true });
-		this.SetState(VMState.Stopped);
+		this.SetState(VMState.Stopping);
 	}
 
 	async Reboot(): Promise<void> {

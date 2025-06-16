@@ -43,9 +43,8 @@ export class QemuVMShim implements VM {
 		return this.vm.Start();
 	}
 
-	async Stop(): Promise<void> {
-		if (this.display) this.display.Disconnect();
-		await this.vm.Stop();
+	Stop(): Promise<void> {
+		return this.vm.Stop();
 	}
 
 	Reboot(): Promise<void> {
