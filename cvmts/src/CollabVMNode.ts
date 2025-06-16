@@ -26,6 +26,13 @@ import pino from 'pino';
 const __dirname = import.meta.dirname;
 
 const kCVMTSAssetsRoot = path.resolve(__dirname, '../../assets');
+// image(s) to show when the screen is hidden
+let gScreenHiddenImage = readFileSync(path.join(kCVMTSAssetsRoot, 'screenhidden.jpeg'));
+let gScreenHiddenThumbnail = readFileSync(path.join(kCVMTSAssetsRoot, 'screenhiddenthumb.jpeg'));
+
+// image(s) to show when vm display is not connected
+let gScreenNoDisplayImage = readFileSync(path.join(kCVMTSAssetsRoot, 'nodisplay.jpeg'));
+let gScreenNoDisplayThumbnail = readFileSync(path.join(kCVMTSAssetsRoot, 'nodisplay_thumbnail.jpeg'));
 
 type ChatHistory = {
 	user: string;
@@ -63,14 +70,6 @@ function createVMFromConfiguration(nodeConfig: NodeConfiguration): VM {
 		}
 	}
 }
-
-const kRestartTimeout = 5000;
-
-// base64 image to show when the screen is hidden
-let gScreenHiddenImage = readFileSync(path.join(kCVMTSAssetsRoot, 'screenhidden.jpeg'));
-let gScreenHiddenThumbnail = readFileSync(path.join(kCVMTSAssetsRoot, 'screenhiddenthumb.jpeg'));
-let gScreenNoDisplayImage = readFileSync(path.join(kCVMTSAssetsRoot, 'nodisplay.jpeg'));
-let gScreenNoDisplayThumbnail = readFileSync(path.join(kCVMTSAssetsRoot, 'nodisplay_thumbnail.jpeg'));
 
 /// A CollabVM node.
 export class CollabVMNode {
@@ -122,8 +121,6 @@ export class CollabVMNode {
 
 	private logger;
 
-	private stoppingNode = false;
-
 	private addedDisplayEvents = false;
 
 	constructor(config: IConfig, nodeConfig: NodeConfiguration, server: CollabVMServer) {
@@ -152,12 +149,6 @@ export class CollabVMNode {
 	}
 
 	private initNode() {
-		// No size initially, since there usually won't be a display connected at all during initalization
-		this.OnDisplayResized({
-			width: 0,
-			height: 0
-		});
-
 		let self = this;
 
 		this.VM.Events().on('statechange', (newState: VMState) => {
@@ -202,8 +193,6 @@ export class CollabVMNode {
 	}
 
 	async Stop() {
-		// set the flag which tells us "hey we are actually supposed to stop".
-		this.stoppingNode = true;
 		await this.VM.Stop();
 	}
 
@@ -218,7 +207,7 @@ export class CollabVMNode {
 		// user sent a username they requested when initially renaming to the server,
 		// so let's obey that (if we can)
 		// FIXME: it should be possible to make this less janky.
-		if (user.username) {
+		if (!this.Config.auth.enabled && user.username) {
 			if (this.getUsernameList().indexOf(user.username) !== -1) {
 				user.assignGuestName(this.getUsernameList());
 				this.renameUser(user, user.username, false);
@@ -268,18 +257,18 @@ export class CollabVMNode {
 			if (this.Config.collabvm.motd) user.sendChatMessage('', this.Config.collabvm.motd);
 		}
 
-		if (this.screenHidden) {
-			user?.sendScreenResize(1024, 768);
-			user?.sendScreenUpdate({
-				x: 0,
-				y: 0,
-				data: gScreenHiddenImage
-			});
-		} else {
-			await this.SendFullScreenWithSize(user);
+		if (user.shouldRecieveScreenUpdates) {
+			if (this.screenHidden) {
+				user?.sendScreenResize(1024, 768);
+				user?.sendScreenUpdate({
+					x: 0,
+					y: 0,
+					data: gScreenHiddenImage
+				});
+			} else {
+				await this.SendFullScreenWithSize(user);
+			}
 		}
-
-		user.sendSync(Date.now());
 
 		if (this.voteInProgress) this.sendVoteUpdate(user);
 		this.sendTurnUpdate(user);
@@ -637,12 +626,10 @@ export class CollabVMNode {
 		switch (user.rank) {
 			case Rank.Admin:
 				this.clients.forEach((c) => c.sendChatMessage(user.username!, message));
-
 				this.ChatHistory.push({ user: user.username!, msg: message });
 				break;
 			case Rank.Moderator:
 				this.clients.filter((c) => c.rank !== Rank.Admin).forEach((c) => c.sendChatMessage(user.username!, message));
-
 				this.clients.filter((c) => c.rank === Rank.Admin).forEach((c) => c.sendChatMessage(user.username!, Utilities.HTMLSanitize(message)));
 				break;
 		}
@@ -798,7 +785,7 @@ export class CollabVMNode {
 		}
 
 		this.clients
-			.filter((c) => c !== currentTurningUser && c.connectedToNode)
+			.filter((c) => c !== currentTurningUser)
 			.forEach((c) => {
 				if (turnQueueArr.indexOf(c) !== -1) {
 					var time;
@@ -863,7 +850,7 @@ export class CollabVMNode {
 
 	private OnDisplayResized(size: Size) {
 		this.clients
-			.filter((c) => c.connectedToNode || c.viewMode == 1)
+			.filter((c) => c.shouldRecieveScreenUpdates)
 			.forEach((c) => {
 				if (this.screenHidden && c.rank == Rank.Unregistered) return;
 				c.sendScreenResize(size.width, size.height);
@@ -877,7 +864,7 @@ export class CollabVMNode {
 			let encoded = await this.MakeRectData(rect);
 
 			self.clients
-				.filter((c) => c.connectedToNode || c.viewMode == 1)
+				.filter((c) => c.shouldRecieveScreenUpdates)
 				.forEach((c) => {
 					if (self.screenHidden && c.rank == Rank.Unregistered) return;
 
@@ -935,7 +922,6 @@ export class CollabVMNode {
 		let buffer: Buffer;
 		let displaySize: Size;
 
-		// hack. Should we provide images for "VM Down"?
 		if (display?.Connected()) {
 			buffer = display?.Buffer();
 			displaySize = display.Size();
@@ -950,8 +936,6 @@ export class CollabVMNode {
 
 	async getThumbnail(): Promise<Buffer> {
 		let display = this.VM.GetDisplay();
-
-		// oh well
 		if (!display?.Connected()) {
 			return gScreenNoDisplayThumbnail;
 		}

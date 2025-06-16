@@ -167,8 +167,7 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 
 		if (viewMode !== undefined) {
 			if (viewMode !== 0 && viewMode !== 1) {
-				user.sendConnectFailResponse();
-				return;
+				return user.sendConnectFailResponse();
 			}
 
 			user.viewMode = viewMode;

@@ -81,6 +81,13 @@ export class User {
 		return this.Node != null;
 	}
 
+	get shouldRecieveScreenUpdates() {
+		// Screen updates should only be sent in the following cases:
+		// - The user connected via `connect` op
+		// - The user connected via `view` op, but set viewmode 1
+		return this.viewMode == -1 || this.viewMode == 1;
+	}
+
 	assignGuestName(existingUsers: string[]): string {
 		var username;
 		do {
