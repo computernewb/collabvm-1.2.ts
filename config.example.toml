@@ -61,7 +61,8 @@ cvmban = false
 # The directory where VM files are expected to be placed.
 vmsDir = "/srv/collabvm/vms"
 
-# VMs that will be started.
+# VMs that will be started. You do not have to always use
+# the node name here, but it is a good practice (to keep consistency).
 vms = [ "acoolvm" ]
 
 # HTML message shown in the chat when a user joins.

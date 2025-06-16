@@ -96,7 +96,7 @@ async function start() {
 		}
 
 		let nodeConfig = parseTomlFile<NodeConfiguration>(nodeVMTomlPath);
-		nodes.set(node, new CollabVMNode(Config, nodeConfig, CVM));
+		nodes.set(nodeConfig.collabvm.node, new CollabVMNode(Config, nodeConfig, CVM));
 	}
 
 	await CVM.Start();
