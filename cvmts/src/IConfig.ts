@@ -27,22 +27,21 @@ export default interface IConfig {
 			vote: boolean;
 		};
 	};
-	vm: {
-		type: 'qemu' | 'vncvm';
-	};
-	qemu: {
-		qemuArgs: string;
-		vncPort: number;
-		snapshots: boolean;
-		resourceLimits?: CgroupLimits
-	};
-	vncvm: VNCVMDef;
+	
 	mysql: MySQLConfig;
 	bans: BanConfig;
+
 	collabvm: {
-		node: string;
-		displayname: string;
-		motd: string;
+		// Where VMs are located.
+		vmsDir: string;
+
+		// all vms to look for.
+		// this uses a currently hardcoded `${vmsDir}/${name}/vm.toml` pattern basically
+		vms: string[]; 
+
+		motd: string; // default. other tomls can overide this
+
+		// cant override these
 		maxConnections: number;
 		moderatorEnabled: boolean;
 		usernameblacklist: string[];
@@ -58,14 +57,20 @@ export default interface IConfig {
 			messages: number;
 		};
 		tempMuteTime: number;
+
+		// defaults
 		turnTime: number;
 		voteTime: number;
 		voteCooldown: number;
+
+		// CAN NOT OVERRIDE THESE IN A TOML
 		adminpass: string;
 		modpass: string;
+		moderatorPermissions: Permissions;
+
+		// these though you can ig
 		turnwhitelist: boolean;
 		turnpass: string;
-		moderatorPermissions: Permissions;
 	};
 }
 
@@ -93,4 +98,36 @@ export interface Permissions {
 	rename: boolean;
 	grabip: boolean;
 	xss: boolean;
+}
+
+/// an individual node's configuration
+export interface NodeConfiguration {
+	vm: {
+		type: 'qemu' | 'vncvm';
+		qemu: {
+			qemuArgs: string;
+			vncPort: number;
+			snapshots: boolean;
+			resourceLimits?: CgroupLimits
+		};
+		vncvm: VNCVMDef;
+		jpegQuality: number;
+	};
+	
+	// any ? fields can be left undefined,
+	// and the CollabVMNode class will handle that
+	// by fetching from config.toml
+	collabvm: {
+		node: string;
+		displayname: string;
+		
+		motd?: string;
+
+		turnTime?: number;
+		voteTime?: number;
+		voteCooldown?: number;
+
+		turnwhitelist?: boolean;
+		turnpass?: string
+	};
 }

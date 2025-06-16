@@ -1,23 +1,19 @@
 import * as toml from 'toml';
-import IConfig from './IConfig.js';
+import IConfig, { NodeConfiguration } from './IConfig.js';
 import * as fs from 'fs';
 import CollabVMServer from './CollabVMServer.js';
-
-import { QemuVmDefinition } from '@computernewb/superqemu';
-
 import AuthManager from './AuthManager.js';
 import WSServer from './net/ws/WSServer.js';
 import { User } from './User.js';
-import VM from './vm/interface.js';
-import VNCVM from './vm/vnc/VNCVM.js';
 import GeoIPDownloader from './GeoIPDownloader.js';
 import pino from 'pino';
 import { Database } from './Database.js';
 import { BanManager } from './BanManager.js';
-import { QemuVMShim } from './vm/qemu.js';
 import { TheProtocolManager } from './protocol/Manager.js';
 import { GuacamoleProtocol } from './protocol/GuacamoleProtocol.js';
 import { BinRectsProtocol } from './protocol/BinRectsProtocol.js';
+import { CollabVMNode } from './CollabVMNode.js';
+import path from 'path';
 
 let logger = pino();
 
@@ -26,30 +22,37 @@ logger.info('CollabVM Server starting up');
 // Parse the config file
 
 let Config: IConfig;
+let CVM: CollabVMServer;
 
 if (!fs.existsSync('config.toml')) {
 	logger.error('Fatal error: Config.toml not found. Please copy config.example.toml and fill out fields');
 	process.exit(1);
 }
-try {
-	var configRaw = fs.readFileSync('config.toml').toString();
-	Config = toml.parse(configRaw);
-} catch (e) {
-	logger.error({err: e}, 'Fatal error: Failed to read or parse the config file');
-	process.exit(1);
+
+function parseTomlFile<T>(path: string) {
+	try {
+		var configRaw = fs.readFileSync(path).toString();
+		return toml.parse(configRaw) as T;
+	} catch (e) {
+		logger.error({ err: e }, 'Fatal error: Failed to read or parse the config file');
+		process.exit(1);
+	}
 }
 
 let exiting = false;
-let VM: VM;
+let nodes = new Map<String, CollabVMNode>();
 
 async function stop() {
 	if (exiting) return;
 	exiting = true;
-	await VM.Stop();
+
+	await CVM.Stop();
 	process.exit(0);
 }
 
 async function start() {
+	Config = parseTomlFile<IConfig>('config.toml');
+
 	let geoipReader = null;
 	if (Config.geoip.enabled) {
 		let downloader = new GeoIPDownloader(Config.geoip.directory, Config.geoip.accountID, Config.geoip.licenseKey);
@@ -71,41 +74,32 @@ async function start() {
 		await db.init();
 	}
 	let banmgr = new BanManager(Config.bans, db);
-	switch (Config.vm.type) {
-		case 'qemu': {
-			// Fire up the VM
-			let def: QemuVmDefinition = {
-				id: Config.collabvm.node,
-				command: Config.qemu.qemuArgs,
-				snapshot: Config.qemu.snapshots,
-				forceTcp: false,
-				vncHost: '127.0.0.1',
-				vncPort: Config.qemu.vncPort,
-			};
 
-			VM = new QemuVMShim(def, Config.qemu.resourceLimits);
-			break;
-		}
-		case 'vncvm': {
-			VM = new VNCVM(Config.vncvm);
-			break;
-		}
-		default: {
-			logger.error(`Invalid VM type in config: ${Config.vm.type}`);
-			process.exit(1);
-			return;
-		}
-	}
 	process.on('SIGINT', async () => await stop());
 	process.on('SIGTERM', async () => await stop());
 
 	// Register protocol(s) that the server supports
-	TheProtocolManager.registerProtocol("guacamole", () => new GuacamoleProtocol);
-	TheProtocolManager.registerProtocol("binary1", () => new BinRectsProtocol);
+	TheProtocolManager.registerProtocol('guacamole', () => new GuacamoleProtocol());
+	TheProtocolManager.registerProtocol('binary1', () => new BinRectsProtocol());
 
 	// Start up the server
-	var CVM = new CollabVMServer(Config, VM, banmgr, auth, geoipReader);
-	await VM.Start();
+	CVM = new CollabVMServer(Config, banmgr, auth, geoipReader, nodes);
+
+	// make nodes.
+	for (let node of Config.collabvm.vms) {
+		let nodePath = path.join(Config.collabvm.vmsDir, node);
+		let nodeVMTomlPath = path.join(nodePath, 'vm.toml');
+
+		if (!fs.existsSync(nodeVMTomlPath)) {
+			logger.error({ node, expectedPath: nodeVMTomlPath }, 'Failed to find vm.toml for the following node. Please create it.');
+			process.exit(0);
+		}
+
+		let nodeConfig = parseTomlFile<NodeConfiguration>(nodeVMTomlPath);
+		nodes.set(node, new CollabVMNode(Config, nodeConfig, CVM));
+	}
+
+	await CVM.Start();
 
 	var WS = new WSServer(Config, banmgr);
 	WS.on('connect', (client: User) => CVM.connectionOpened(client));

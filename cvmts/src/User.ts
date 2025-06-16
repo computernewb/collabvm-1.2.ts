@@ -9,6 +9,7 @@ import pino from 'pino';
 import { BanManager } from './BanManager.js';
 import { IProtocol, IProtocolMessageHandler, ListEntry, ProtocolAddUser, ProtocolChatHistory, ProtocolFlag, ProtocolRenameStatus, ProtocolUpgradeCapability, ScreenRect } from './protocol/Protocol.js';
 import { TheProtocolManager } from './protocol/Manager.js';
+import { CollabVMNode } from './CollabVMNode.js';
 
 export class User {
 	socket: NetworkClient;
@@ -16,7 +17,7 @@ export class User {
 	msgRecieveInterval: NodeJS.Timeout;
 	nopRecieveTimeout?: NodeJS.Timeout;
 	username?: string;
-	connectedToNode: boolean;
+	public Node: CollabVMNode | null;
 	viewMode: number;
 	rank: Rank;
 	msgsSent: number;
@@ -37,9 +38,9 @@ export class User {
 
 	private logger = pino({ name: 'CVMTS.User' });
 
-	constructor(socket: NetworkClient, protocol: string, ip: IPData, config: IConfig, username?: string, node?: string) {
+	constructor(socket: NetworkClient, protocol: string, ip: IPData, config: IConfig, username?: string) {
 		this.IP = ip;
-		this.connectedToNode = false;
+		this.Node = null;
 		this.viewMode = -1;
 		this.Config = config;
 		this.socket = socket;
@@ -73,6 +74,11 @@ export class User {
 		this.TurnRateLimit.on('limit', () => this.closeConnection());
 		this.VoteRateLimit = new RateLimiter(3, 3);
 		this.VoteRateLimit.on('limit', () => this.closeConnection());
+	}
+
+	get connectedToNode(){ 
+		// Compatibility hack
+		return this.Node != null;
 	}
 
 	assignGuestName(existingUsers: string[]): string {
