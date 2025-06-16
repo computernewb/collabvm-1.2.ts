@@ -5,6 +5,7 @@ import { BatchRects } from './batch.js';
 import { VMDisplay } from './interface.js';
 
 import { Size, Rect } from '../Utilities.js';
+import pino from 'pino';
 
 // the FPS to run the VNC client at
 // This only affects internal polling,
@@ -27,7 +28,7 @@ let safeDefer = (fn: () => void, timeout: number) => {
 };
 
 // The max amount of tries before the client will give up.
-const kVncMaxTries = 5;
+const kVncMaxTries = 3;
 
 // TODO: replace with a non-asshole VNC client (prefably one implemented
 // as a part of cvm-rs)
@@ -49,6 +50,8 @@ export class VncDisplay extends EventEmitter implements VMDisplay {
 	private vncShouldReconnect: boolean = false;
 	private vncConnectOpts: any;
 	private nrReconnectBackoffSteps = 0;
+
+	private logger = pino({ name: `CVMTS/VncDisplay` });
 
 	private doBackoff;
 
@@ -120,23 +123,26 @@ export class VncDisplay extends EventEmitter implements VMDisplay {
 	private Reconnect() {
 		if (this.displayVnc.connected) return;
 		if (!this.vncShouldReconnect) return;
-		
 
 		if (this.doBackoff) {
 			this.emit('disconnect');
 
-			//console.log('reconnecting in %d seconds (%d steps)', this.getReconnectBackoffMs() / 1000, this.nrReconnectBackoffSteps);
-			if (this.nrReconnectBackoffSteps + 1 > kVncMaxTries) {
-				// Failed to connnect
-				this.emit('fail');
-				return;
-			}
+			this.logger.info(
+				{
+					reconnect_time_seconds: this.getReconnectBackoffMs() / 1000,
+					backoff_steps: this.nrReconnectBackoffSteps+1
+				},
+				'Reconnecting to VNC client with backoff'
+			);
 
 			safeDefer(() => {
 				this.displayVnc.connect(this.vncConnectOpts);
 			}, this.getReconnectBackoffMs());
+			
+			if (this.nrReconnectBackoffSteps + 1 < kVncMaxTries) {
+				this.nrReconnectBackoffSteps++;				
+			}
 
-			this.nrReconnectBackoffSteps++;
 		} else {
 			safeDefer(() => {
 				this.displayVnc.connect(this.vncConnectOpts);

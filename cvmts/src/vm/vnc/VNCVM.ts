@@ -65,11 +65,6 @@ export default class VNCVM extends EventEmitter implements VM {
 			this.vnc.on('finalDisconnect', () => {
 				self.SetState(VMState.Stopped);
 			});
-
-			this.vnc!.on('fail', async () => {
-				self.logger.info('Failed to connect to VNC server');
-				await self.Stop();
-			});
 		}
 
 		this.vnc.Connect();
