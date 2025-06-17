@@ -78,7 +78,6 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 						},
 						'Soft error processing a protocol message.'
 					);
-					user.kick();
 				}
 			} catch (err) {
 				this.logger.error(

@@ -204,18 +204,19 @@ export class CollabVMNode {
 		}
 
 		// user sent a username they requested when initially renaming to the server,
-		// so let's obey that (if we can)
-		// FIXME: it should be possible to make this less janky.
+		// so let's obey that (if we can). otherwise we just give a guest username
+		// like before.
+		//
+		// for cvmauth we just ignore this entirely, since it doesn't matter
 		if (!this.Config.auth.enabled && user.username) {
 			if (this.getUsernameList().indexOf(user.username) !== -1) {
-				user.assignGuestName(this.getUsernameList());
-				this.renameUser(user, user.username, false);
+				this.renameUser(user, undefined, false);
 			} else {
-				this.renameUser(user, user.username, true);
+				this.renameUser(user, user.username, false);
 			}
 		} else {
 			// ok then
-			this.renameUser(user, undefined, true);
+			this.renameUser(user, undefined, false);
 		}
 
 		this.clients.push(user);
@@ -223,53 +224,30 @@ export class CollabVMNode {
 		// set the node.
 		user.Node = this;
 
-		user.sendConnectOKResponse(this.VM.SnapshotsSupported());
+		// Send inital state to the user
+		await this.userSendInit(user);
 
-		// broadcast we exist to everyone
+		// send an initial adduser/flag to everyone other than us
+		// telling them that we exist now.
 		this.clients
-			.filter((c) => c !== user)
-			.map((c) =>
-				c.sendAddUser([
+			.filter((cl) => cl !== user)
+			.forEach((cl) => {
+				cl.sendAddUser([
 					{
 						username: user.username!,
 						rank: user.rank
 					}
-				])
-			);
+				]);
 
-		user.sendAddUser(this.getAddUser());
-
-		if (this.Config.geoip.enabled) {
-			user.sendFlag(this.getFlags());
-		}
-
-		if (this.ChatHistory.size !== 0) {
-			let history = this.ChatHistory.toArray() as ChatHistory[];
-			user.sendChatHistoryMessage(history);
-		}
-
-		// fallback
-		if (this.NodeConfig.collabvm.motd) {
-			user.sendChatMessage('', this.NodeConfig.collabvm.motd);
-		} else {
-			if (this.Config.collabvm.motd) user.sendChatMessage('', this.Config.collabvm.motd);
-		}
-
-		if (user.shouldRecieveScreenUpdates) {
-			if (this.screenHidden) {
-				user?.sendScreenResize(1024, 768);
-				user?.sendScreenUpdate({
-					x: 0,
-					y: 0,
-					data: gScreenHiddenImage
-				});
-			} else {
-				await this.SendFullScreenWithSize(user);
-			}
-		}
-
-		if (this.voteInProgress) this.sendVoteUpdate(user);
-		this.sendTurnUpdate(user);
+				if (user.countryCode !== null && !user.noFlag) {
+					cl.sendFlag([
+						{
+							username: user.username!,
+							countryCode: user.countryCode
+						}
+					]);
+				}
+			});
 	}
 
 	removeUser(user: User) {
@@ -298,6 +276,42 @@ export class CollabVMNode {
 		}
 
 		this.clients.forEach((c) => c.sendRemUser([user.username!]));
+	}
+
+	private async userSendInit(user: User) {
+		user.sendConnectOKResponse(this.VM.SnapshotsSupported());
+		user.sendAddUser(this.getAddUser());
+
+		if (this.Config.geoip.enabled) {
+			user.sendFlag(this.getFlags());
+		}
+
+		if (this.ChatHistory.size !== 0) {
+			user.sendChatHistoryMessage(this.ChatHistory.toArray() as ChatHistory[]);
+		}
+
+		// fallback
+		if (this.NodeConfig.collabvm.motd) {
+			user.sendChatMessage('', this.NodeConfig.collabvm.motd);
+		} else {
+			if (this.Config.collabvm.motd) user.sendChatMessage('', this.Config.collabvm.motd);
+		}
+
+		if (user.shouldRecieveScreenUpdates) {
+			if (this.screenHidden) {
+				user?.sendScreenResize(1024, 768);
+				user?.sendScreenUpdate({
+					x: 0,
+					y: 0,
+					data: gScreenHiddenImage
+				});
+			} else {
+				await this.SendFullScreenWithSize(user);
+			}
+		}
+
+		if (this.voteInProgress) this.sendVoteUpdate(user);
+		this.sendTurnUpdate(user);
 	}
 
 	// does auth check
@@ -738,28 +752,10 @@ export class CollabVMNode {
 
 		if (hadName) {
 			this.logger.info(`Rename ${client.IP.address} from ${oldname} to ${client.username}`);
-			if (announce) this.clients.forEach((c) => c.sendRename(oldname!, client.username!, client.rank));
-		} else {
-			this.logger.info(`Rename ${client.IP.address} to ${client.username}`);
-			if (announce) {
+			if (announce)
 				this.clients.forEach((c) => {
-					c.sendAddUser([
-						{
-							username: client.username!,
-							rank: client.rank
-						}
-					]);
-
-					if (client.countryCode !== null) {
-						c.sendFlag([
-							{
-								username: client.username!,
-								countryCode: client.countryCode
-							}
-						]);
-					}
+					c.sendRename(oldname!, client.username!, client.rank);
 				});
-			}
 		}
 	}
 
