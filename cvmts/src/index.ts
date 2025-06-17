@@ -14,10 +14,13 @@ import { GuacamoleProtocol } from './protocol/GuacamoleProtocol.js';
 import { BinRectsProtocol } from './protocol/BinRectsProtocol.js';
 import { CollabVMNode } from './CollabVMNode.js';
 import path from 'path';
+import { NetworkServer } from './net/NetworkServer.js';
 
 let logger = pino();
 let Config: IConfig;
 let CVM: CollabVMServer;
+// This is an array to allow support for other layers again later, if desired
+let networkLayers: NetworkServer[] = [];
 let exiting = false;
 let nodes = new Map<String, CollabVMNode>();
 
@@ -35,7 +38,10 @@ async function stop() {
 	if (exiting) return;
 	exiting = true;
 
+	networkLayers.forEach((netLayer) => netLayer.stop());
 	await CVM.Stop();
+
+	logger.info('CollabVM Server stopped');
 	process.exit(0);
 }
 
@@ -50,7 +56,7 @@ async function start() {
 	Config = parseTomlFile<IConfig>('config.toml');
 
 	let geoipReader = null;
-	
+
 	if (Config.geoip.enabled) {
 		let downloader = new GeoIPDownloader(Config.geoip.directory, Config.geoip.accountID, Config.geoip.licenseKey);
 		geoipReader = await downloader.getGeoIPReader();
@@ -88,24 +94,37 @@ async function start() {
 	// Start up the server
 	CVM = new CollabVMServer(Config, banmgr, auth, geoipReader, nodes);
 
-	// make nodes.
+	// Create nodes.
 	for (let node of Config.collabvm.vms) {
 		let nodePath = path.join(Config.collabvm.vmsDir, node);
 		let nodeVMTomlPath = path.join(nodePath, 'vm.toml');
 
 		if (!fs.existsSync(nodeVMTomlPath)) {
 			logger.error({ node, expectedPath: nodeVMTomlPath }, 'Failed to find vm.toml for the following node. Please create it.');
-			process.exit(0);
+			process.exit(1);
 		}
 
 		let nodeConfig = parseTomlFile<NodeConfiguration>(nodeVMTomlPath);
+
+		// Make sure that there can't be a node which collides with an existing one.
+		// If one is detected, we just exit, since it's probably a unintended configuration.
+		if (nodes.has(nodeConfig.collabvm.node)) {
+			logger.error({ collidingName: nodeConfig.collabvm.node, collidingPath: nodeVMTomlPath }, 'A node collision was detected in your configuration. Please review and fix accordingly.');
+			process.exit(1);
+		}
+
 		nodes.set(nodeConfig.collabvm.node, new CollabVMNode(Config, nodeConfig, CVM));
 	}
 
-	await CVM.Start();
+	// Bring up the network interfaces now
+	// TODO: Probably CollabVMServer should do this on its own
+	let wsLayer = new WSServer(Config, banmgr);
+	wsLayer.on('connect', (client: User) => CVM.connectionOpened(client));
+	wsLayer.start();
 
-	var WS = new WSServer(Config, banmgr);
-	WS.on('connect', (client: User) => CVM.connectionOpened(client));
-	WS.start();
+	networkLayers.push(wsLayer);
+
+	// Bring up the server
+	await CVM.Start();
 }
 start();
