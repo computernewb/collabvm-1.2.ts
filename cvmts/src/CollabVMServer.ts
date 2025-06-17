@@ -27,11 +27,9 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 		this.nodes = nodes;
 
 		// assertions are always a good thing to have
-		if(this.Config.auth.enabled == true && auth == null)
-			throw new Error('Authentication manager must not be null if CVMAuth is enabled');
+		if (this.Config.auth.enabled == true && auth == null) throw new Error('Authentication manager must not be null if CVMAuth is enabled');
 
-		if(this.Config.geoip.enabled == true && geoipReader == null)
-			throw new Error('GeoIP reader must not be null if GeoIP is enabled');
+		if (this.Config.geoip.enabled == true && geoipReader == null) throw new Error('GeoIP reader must not be null if GeoIP is enabled');
 
 		// assign managers now that we have them
 		this.auth = auth;
@@ -71,7 +69,17 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 
 		user.socket.on('msg', (buf: Buffer, binary: boolean) => {
 			try {
-				user.processMessage(this, buf);
+				if (user.processMessage(this, buf) == false) {
+					this.logger.error(
+						{
+							ip: user.IP.address,
+							username: user.username,
+							protocol_in_use: Object.getPrototypeOf(user.protocol).constructor?.name
+						},
+						'Soft error processing a protocol message.'
+					);
+					user.kick();
+				}
 			} catch (err) {
 				this.logger.error(
 					{
@@ -94,7 +102,15 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 	}
 
 	private connectionClosed(user: User) {
-		this.logger.info(`Disconnect From ${user.IP.address}${user.username ? ` with username ${user.username}` : ''}`);
+		this.logger.info(
+			{
+				ip: user.IP.address,
+				username: user.username,
+				node: user.Node?.getNodeId()
+			},
+			'User disconnected from server'
+		);
+
 		if (user.connectedToNode) {
 			user.Node?.removeUser(user);
 		}
@@ -125,20 +141,22 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 	onCapabilityUpgrade(user: User, capability: String[]): boolean {
 		if (user.connectedToNode) return false;
 
-		let enabledCaps = [];
+		let enabledCaps: ProtocolUpgradeCapability[] = [];
+
+		let addCap = (cap: ProtocolUpgradeCapability) => {
+			enabledCaps.push(cap);
+			user.negotiatedCapabilities.add(cap);
+		};
 
 		for (let cap of capability) {
 			switch (cap) {
 				// binary 1.0 (msgpack rects)
 				case ProtocolUpgradeCapability.BinRects:
-					enabledCaps.push(cap as ProtocolUpgradeCapability);
-					user.negotiatedCapabilities.add(cap as ProtocolUpgradeCapability);
-					user.Capabilities.bin = true;
+					addCap(cap as ProtocolUpgradeCapability);
 					user.protocol = TheProtocolManager.getProtocol('binary1');
 					break;
 				case ProtocolUpgradeCapability.ExtendedList:
-					enabledCaps.push(cap as ProtocolUpgradeCapability);
-					user.negotiatedCapabilities.add(cap as ProtocolUpgradeCapability);
+					addCap(cap as ProtocolUpgradeCapability);
 					break;
 				default:
 					break;
@@ -188,6 +206,15 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 		}
 
 		maybeNode.addUser(user);
+
+		this.logger.info(
+			{
+				ip: user.IP.address,
+				username: user.username,
+				node: maybeNode.getNodeId()
+			},
+			'User connected to node'
+		);
 	}
 
 	async onConnect(user: User, node: string) {

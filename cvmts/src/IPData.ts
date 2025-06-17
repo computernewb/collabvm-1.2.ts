@@ -64,7 +64,7 @@ export class IPDataManager {
 setInterval(() => {
 	for (let tuple of IPDataManager.ipDatas) {
 		if (tuple[1].refCount == 0) {
-			IPDataManager.logger.info(`Deleted IPData for IP ${tuple[0]}`);
+			IPDataManager.logger.info({ ip: tuple[0] }, 'Found garbage collectable IPData, deleting it');
 			IPDataManager.ipDatas.delete(tuple[0]);
 		}
 	}

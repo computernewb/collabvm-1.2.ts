@@ -160,9 +160,6 @@ export class CollabVMNode {
 						// only uses one display class and doesn't recreate it.
 						if (!self.addedDisplayEvents) {
 							self.addedDisplayEvents = true;
-							self.logger.info('adding events now');
-
-							// add events
 							self.VM.GetDisplay()?.on('resize', (size: Size) => self.OnDisplayResized(size));
 							self.VM.GetDisplay()?.on('rect', (rect: Rect) => self.OnDisplayRectangle(rect));
 							self.VM.GetDisplay()?.on('frame', () => self.OnDisplayFrame());
@@ -192,6 +189,10 @@ export class CollabVMNode {
 
 	async Stop() {
 		await this.VM.Stop();
+	}
+
+	getNodeId() {
+		return this.NodeConfig.collabvm.node;
 	}
 
 	async addUser(user: User) {

@@ -33,10 +33,10 @@ export default class GeoIPDownloader {
 				this.logger.warn('File exists at GeoIP directory path, unlinking...');
 				await fs.unlink(this.directory.substring(0, this.directory.length - 1));
 			} else if (error.code !== 'ENOENT') {
-				this.logger.error('Failed to access GeoIP directory: {0}', error.message);
+				this.logger.error({ error }, 'Failed to access GeoIP directory');
 				process.exit(1);
 			}
-			this.logger.info('Creating GeoIP directory: {0}', this.directory);
+			this.logger.info({ directory: this.directory }, 'Creating GeoIP directory');
 			await fs.mkdir(this.directory, { recursive: true });
 			return;
 		}
@@ -47,13 +47,13 @@ export default class GeoIPDownloader {
 		let dbpath = path.join(this.directory, (await this.getLatestVersion()).replace('.tar.gz', ''), 'GeoLite2-Country.mmdb');
 		try {
 			await fs.access(dbpath, fs.constants.F_OK | fs.constants.R_OK);
-			this.logger.info('Loading cached GeoIP database: {0}', dbpath);
+			this.logger.info({ database_path: dbpath }, 'Loading cached GeoIP database');
 		} catch (ex) {
 			var error = ex as NodeJS.ErrnoException;
 			if (error.code === 'ENOENT') {
 				await this.downloadLatestDatabase();
 			} else {
-				this.logger.error('Failed to access GeoIP database: {0}', error.message);
+				this.logger.error({ error }, 'Failed to access GeoIP directory');
 				process.exit(1);
 			}
 		}

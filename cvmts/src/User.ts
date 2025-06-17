@@ -24,25 +24,27 @@ export class User {
 	Config: IConfig;
 	IP: IPData;
 
-	Capabilities: CollabVMCapabilities;
-
 	// This contains all capabilities which the user has negotiated 
-	// (and we have support for).
+	// (and we have support for). 
+	// Techinically more expensive than boolean flags,
+	// however it probably shouldn't matter since we shouldn't be checking these in a hot path
 	negotiatedCapabilities: Set<ProtocolUpgradeCapability> = new Set<ProtocolUpgradeCapability>();
 
+	// The protocol currently in use.
 	protocol: IProtocol;
+
 	turnWhitelist: boolean = false;
+
 	// Hide flag. Only takes effect if the user is logged in.
 	noFlag: boolean = false;
 	countryCode: string | null = null;
+
 	// Rate limiters
 	ChatRateLimit: RateLimiter;
 	LoginRateLimit: RateLimiter;
 	RenameRateLimit: RateLimiter;
 	TurnRateLimit: RateLimiter;
 	VoteRateLimit: RateLimiter;
-
-	private logger = pino({ name: 'CVMTS.User' });
 
 	constructor(socket: NetworkClient, protocol: string, ip: IPData, config: IConfig, username?: string) {
 		this.IP = ip;
@@ -51,7 +53,6 @@ export class User {
 		this.Config = config;
 		this.socket = socket;
 		this.msgsSent = 0;
-		this.Capabilities = new CollabVMCapabilities();
 
 		// All clients default to the Guacamole protocol.
 		this.protocol = TheProtocolManager.getProtocol(protocol);
@@ -176,7 +177,7 @@ export class User {
 	// manually wrapping state (and probably prevents mixup bugs too.)
 
 	processMessage(handler: IProtocolMessageHandler, buffer: Buffer) {
-		this.protocol.processMessage(this, handler, buffer);
+		return this.protocol.processMessage(this, handler, buffer);
 	}
 
 	sendNop(): void {
