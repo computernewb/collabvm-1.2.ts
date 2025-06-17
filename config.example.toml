@@ -63,6 +63,9 @@ vmsDir = "/srv/collabvm/vms"
 
 # VMs that will be started. You do not have to always use
 # the node name here, but it is a good practice (to keep consistency).
+#
+# The items here are child directories of the VM directory specified above,
+# and must have a `vm.toml` file inside of them. (copy vm.example.toml to vm.toml and edit it accordingly)
 vms = [ "acoolvm" ]
 
 # HTML message shown in the chat when a user joins.
@@ -113,8 +116,8 @@ modpass = "fb8c2e2b85ca81eb4350199faddd983cb26af3064614e737ea9f479621cfa57a"
 turnwhitelist = false
 
 # SHA256 sum for the password to take a turn. Only takes effect if turnwhitelist == true. 
-# If set to an empty string or not provided in config.toml and this node's configuration, 
-# only admins and mods can take turns on this node.
+# If set to an empty string or not provided here, only admins and mods can take turns 
+# on nodes without a turn password defined in their node configuration.
 turnpass = ""
 
 # What a moderator can and can't do

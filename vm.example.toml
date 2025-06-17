@@ -3,7 +3,7 @@
 
 [collabvm]
 
-# Node ID for this server
+# This node's ID.
 # Make sure this is unique among all the other nodes in a webapp
 node = "acoolvm"
 
@@ -11,7 +11,7 @@ node = "acoolvm"
 displayname = "A <b>Really</b> Cool CollabVM Instance"
 
 # HTML message shown in the chat when a user joins.
-# This overrides config.toml if pressent.
+# This overrides config.toml if it is pressent here.
 motd = "welcome!"
 
 # How long a turn lasts, in seconds.
@@ -35,7 +35,7 @@ turnwhitelist = false
 turnpass = ""
 
 [vm]
-# Configures the type of VM this server will use
+# Configures what type of VM this node is
 # Supported values:
 #    "qemu" - Runs a QEMU VM
 #    "vncvm" - Connects to an existing VNC server
@@ -53,8 +53,8 @@ snapshots = true
 # Resource limits. 
 # Only works on Linux, with `Delegate=yes` set in your .service file. No-op on other platforms.
 #
-# cpuUsageMax is an optional value specifies the max CPU usage as percentage in the common top notation. 
-# 200% means 2 CPUs, 400% is 4 CPUs.
+# cpuUsageMax is an optional value which specifies the max CPU usage the VM can use
+# as a percentage in the common top notation (i.e: 200% means 2 CPUs, 400% is 4 CPUs).
 #
 # A general reccomendation is to set this to 100*[vCPU count].
 # For example, if your QEMU command line contains -smp cores=2, then cpuUsageMax should be 200.
@@ -73,7 +73,13 @@ snapshots = true
 # is more than likely what you want, so the example configuration omits specifying this key.
 #
 # Commenting or removing this table from the configuration disables resource limiting entirely.
-resourceLimits = { cpuUsageMax = 100, runOnCpus = [ 2, 4 ] }
+#
+#resourceLimits = { cpuUsageMax = 100, runOnCpus = [ 2, 4 ] }
+
+# You may also specify this like so:
+#
+#[vm.qemu.resourceLimits]
+#cpuUsageMax = 100
 
 
 # VNC options
