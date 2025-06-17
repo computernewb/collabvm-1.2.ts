@@ -16,18 +16,10 @@ import { CollabVMNode } from './CollabVMNode.js';
 import path from 'path';
 
 let logger = pino();
-
-logger.info('CollabVM Server starting up');
-
-// Parse the config file
-
 let Config: IConfig;
 let CVM: CollabVMServer;
-
-if (!fs.existsSync('config.toml')) {
-	logger.error('Fatal error: Config.toml not found. Please copy config.example.toml and fill out fields');
-	process.exit(1);
-}
+let exiting = false;
+let nodes = new Map<String, CollabVMNode>();
 
 function parseTomlFile<T>(path: string) {
 	try {
@@ -39,9 +31,6 @@ function parseTomlFile<T>(path: string) {
 	}
 }
 
-let exiting = false;
-let nodes = new Map<String, CollabVMNode>();
-
 async function stop() {
 	if (exiting) return;
 	exiting = true;
@@ -51,28 +40,42 @@ async function stop() {
 }
 
 async function start() {
+	logger.info('CollabVM Server starting up');
+
+	if (!fs.existsSync('config.toml')) {
+		logger.error('Fatal error: Config.toml not found. Please copy config.example.toml and fill out fields');
+		process.exit(1);
+	}
+
 	Config = parseTomlFile<IConfig>('config.toml');
 
 	let geoipReader = null;
+	
 	if (Config.geoip.enabled) {
 		let downloader = new GeoIPDownloader(Config.geoip.directory, Config.geoip.accountID, Config.geoip.licenseKey);
 		geoipReader = await downloader.getGeoIPReader();
 	}
+
 	// Init the auth manager if enabled
 	let auth = Config.auth.enabled ? new AuthManager(Config.auth.apiEndpoint, Config.auth.secretKey) : null;
+
 	// Database and ban manager
 	if (Config.bans.cvmban && !Config.mysql.enabled) {
 		logger.error('MySQL must be configured to use cvmban.');
 		process.exit(1);
 	}
+
 	if (!Config.bans.cvmban && !Config.bans.bancmd) {
 		logger.warn('Neither cvmban nor ban command are configured. Bans will not function.');
 	}
+
 	let db = undefined;
+
 	if (Config.mysql.enabled) {
 		db = new Database(Config.mysql);
 		await db.init();
 	}
+
 	let banmgr = new BanManager(Config.bans, db);
 
 	process.on('SIGINT', async () => await stop());
