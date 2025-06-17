@@ -127,11 +127,10 @@ export class CollabVMNode {
 		this.logger = pino({ name: `CVMTS.Node/${nodeConfig.collabvm.node}` });
 		this.Config = config;
 		this.NodeConfig = nodeConfig;
-
 		this.Server = server;
-
 		this.VM = createVMFromConfiguration(nodeConfig);
 
+		// Create the state
 		this.ChatHistory = new CircularBuffer<ChatHistory>(Array, this.Config.collabvm.maxChatHistoryLength);
 		this.TurnQueue = new Queue<User>();
 		this.TurnTime = 0;
@@ -140,11 +139,10 @@ export class CollabVMNode {
 		this.voteTime = 0;
 		this.voteCooldown = 0;
 		this.turnsAllowed = true;
-
 		this.screenHidden = false;
-
 		this.indefiniteTurn = null;
 		this.ModPerms = Utilities.MakeModPerms(config.collabvm.moderatorPermissions);
+
 		this.initNode();
 	}
 
@@ -289,10 +287,13 @@ export class CollabVMNode {
 		user.Node = null;
 
 		if (!user.username) return;
+
 		if (this.TurnQueue.toArray().indexOf(user) !== -1) {
-			var hadturn = this.TurnQueue.peek() === user;
+			let hadTurn = this.TurnQueue.peek() === user;
 			this.TurnQueue = Queue.from(this.TurnQueue.toArray().filter((u) => u !== user));
-			if (hadturn) this.nextTurn();
+			if (hadTurn) {
+				this.nextTurn();
+			}
 		}
 
 		this.clients.forEach((c) => c.sendRemUser([user.username!]));
@@ -311,8 +312,11 @@ export class CollabVMNode {
 	}
 
 	async onLogin(user: User, token: string) {
+		if (!this.Config.auth.enabled) return;
+		if (this.Server.auth == null) return;
+
 		try {
-			let res = await this.Server.auth!.Authenticate(token, user);
+			let res = await this.Server.auth.Authenticate(token, user);
 
 			if (res.clientSuccess) {
 				this.logger.info(`${user.IP.address} logged in as ${res.username}`);
@@ -321,10 +325,11 @@ export class CollabVMNode {
 				let old = this.clients.find((c) => c.username === res.username);
 				if (old) {
 					// kick() doesnt wait until the user is actually removed from the list and itd be anal to make it do that
-					// so we call connectionClosed manually here. When it gets called on kick(), it will return because the user isn't in the list
+					// so we call removeUser() manually here. When it gets called on kick(), it will return because the user isn't in the list
 					this.removeUser(old);
 					await old.kick();
 				}
+
 				// Set username
 				if (user.countryCode !== null && user.noFlag) {
 					// privacy
@@ -332,14 +337,19 @@ export class CollabVMNode {
 						cl.sendRemUser([user.username!]);
 					}
 					this.renameUser(user, res.username, false);
-				} else this.renameUser(user, res.username, true);
+				} else {
+					this.renameUser(user, res.username, true);
+				}
+
 				// Set rank
 				user.rank = res.rank;
+
 				if (user.rank === Rank.Admin) {
 					user.sendAdminLoginResponse(true, undefined);
 				} else if (user.rank === Rank.Moderator) {
 					user.sendAdminLoginResponse(true, this.ModPerms);
 				}
+
 				this.clients.forEach((c) =>
 					c.sendAddUser([
 						{
@@ -369,6 +379,7 @@ export class CollabVMNode {
 		if (!this.VM.SnapshotsSupported()) return;
 		if ((!this.turnsAllowed || hasTurnWhitelist) && user.rank !== Rank.Admin && user.rank !== Rank.Moderator && !user.turnWhitelist) return;
 		if (!user.VoteRateLimit.request()) return;
+
 		switch (choice) {
 			case 1:
 				if (!this.voteInProgress) {
@@ -418,32 +429,35 @@ export class CollabVMNode {
 		if (forfeit == false) {
 			var currentQueue = this.TurnQueue.toArray();
 			// If the user is already in the turn queue, ignore the turn request.
-			if (currentQueue.indexOf(user) !== -1) return;
 			// If they're muted, also ignore the turn request.
-			// Send them the turn queue to prevent client glitches
+			if (currentQueue.indexOf(user) !== -1) return;
 			if (user.IP.muted) return;
+
 			if (this.Config.collabvm.turnlimit.enabled) {
 				// Get the amount of users in the turn queue with the same IP as the user requesting a turn.
-				let turns = currentQueue.filter((otheruser) => otheruser.IP.address == user.IP.address);
 				// If it exceeds the limit set in the config, ignore the turn request.
+				let turns = currentQueue.filter((otheruser) => otheruser.IP.address == user.IP.address);
 				if (turns.length + 1 > this.Config.collabvm.turnlimit.maximum) return;
 			}
+
 			this.TurnQueue.enqueue(user);
 			if (this.TurnQueue.size === 1) this.nextTurn();
 		} else {
-			// Not sure why this wasn't using this before
 			this.endTurn(user);
 		}
+
 		this.sendTurnUpdate();
 	}
 
 	onRename(user: User, newName: string | undefined): void {
 		if (!user.RenameRateLimit.request()) return;
 		if (user.IP.muted) return;
+
 		if (this.Config.auth.enabled && user.rank !== Rank.Unregistered) {
 			user.sendChatMessage('', 'Go to your account settings to change your username.');
 			return;
 		}
+
 		if (this.Config.auth.enabled && newName !== undefined) {
 			// Don't send system message to a user without a username since it was likely an automated attempt by the webapp
 			if (user.username) user.sendChatMessage('', 'You need to log in to do that.');
@@ -461,7 +475,10 @@ export class CollabVMNode {
 
 		var msg = Utilities.HTMLSanitize(message);
 		// One of the things I hated most about the old server is it completely discarded your message if it was too long
-		if (msg.length > this.Config.collabvm.maxChatLength) msg = msg.substring(0, this.Config.collabvm.maxChatLength);
+		if (msg.length > this.Config.collabvm.maxChatLength) {
+			msg = msg.substring(0, this.Config.collabvm.maxChatLength);
+		}
+
 		if (msg.trim().length < 1) return;
 
 		this.clients.forEach((c) => c.sendChatMessage(user.username!, msg));
@@ -768,15 +785,19 @@ export class CollabVMNode {
 	}
 
 	private sendTurnUpdate(client?: User) {
-		var turnQueueArr = this.TurnQueue.toArray();
-		var turntime: number;
-		if (this.indefiniteTurn === null) turntime = this.TurnTime * 1000;
-		else turntime = 9999999999;
-		var users: string[] = [];
+		let turnQueueArr = this.TurnQueue.toArray();
+		let turntime: number;
+		let users: string[] = [];
+
+		if (this.indefiniteTurn === null) {
+			turntime = this.TurnTime * 1000;
+		} else {
+			turntime = 9999999999;
+		}
 
 		this.TurnQueue.forEach((c) => users.push(c.username!));
 
-		var currentTurningUser = this.TurnQueue.peek();
+		let currentTurningUser = this.TurnQueue.peek();
 
 		if (client) {
 			client.sendTurnQueue(turntime, users);
@@ -787,16 +808,22 @@ export class CollabVMNode {
 			.filter((c) => c !== currentTurningUser)
 			.forEach((c) => {
 				if (turnQueueArr.indexOf(c) !== -1) {
-					var time;
-					if (this.indefiniteTurn === null) time = this.TurnTime * 1000 + (turnQueueArr.indexOf(c) - 1) * this.Config.collabvm.turnTime * 1000;
-					else time = 9999999999;
+					let time = this.TurnTime * 1000 + (turnQueueArr.indexOf(c) - 1) * this.Config.collabvm.turnTime * 1000;
+					if (this.indefiniteTurn !== null) {
+						time = 9999999999;
+					}
+
 					c.sendTurnQueueWaiting(turntime, users, time);
 				} else {
 					c.sendTurnQueue(turntime, users);
 				}
 			});
-		if (currentTurningUser) currentTurningUser.sendTurnQueue(turntime, users);
+
+		if (currentTurningUser) {
+			currentTurningUser.sendTurnQueue(turntime, users);
+		}
 	}
+
 	private nextTurn() {
 		clearInterval(this.TurnInterval);
 		if (this.TurnQueue.size === 0) {
@@ -944,11 +971,15 @@ export class CollabVMNode {
 
 	startVote() {
 		if (this.voteInProgress) return;
+
 		this.voteInProgress = true;
 		this.clients.forEach((c) => c.sendVoteStarted());
 
-		if (this.NodeConfig.collabvm.voteTime) this.voteTime = this.NodeConfig.collabvm.voteTime;
-		else this.voteTime = this.Config.collabvm.voteTime;
+		if (this.NodeConfig.collabvm.voteTime) {
+			this.voteTime = this.NodeConfig.collabvm.voteTime;
+		} else {
+			this.voteTime = this.Config.collabvm.voteTime;
+		}
 
 		this.voteInterval = setInterval(() => {
 			this.voteTime--;
@@ -978,8 +1009,11 @@ export class CollabVMNode {
 			c.IP.vote = null;
 		});
 
-		if (this.NodeConfig.collabvm.voteCooldown) this.voteCooldown = this.NodeConfig.collabvm.voteCooldown;
-		else this.voteCooldown = this.Config.collabvm.voteCooldown;
+		if (this.NodeConfig.collabvm.voteCooldown) {
+			this.voteCooldown = this.NodeConfig.collabvm.voteCooldown;
+		} else {
+			this.voteCooldown = this.Config.collabvm.voteCooldown;
+		}
 
 		this.voteCooldownInterval = setInterval(() => {
 			this.voteCooldown--;
@@ -989,10 +1023,13 @@ export class CollabVMNode {
 
 	sendVoteUpdate(client?: User) {
 		if (!this.voteInProgress) return;
-		var count = this.getVoteCounts();
+		let voteCounts = this.getVoteCounts();
 
-		if (client) client.sendVoteStats(this.voteTime * 1000, count.yes, count.no);
-		else this.clients.forEach((c) => c.sendVoteStats(this.voteTime * 1000, count.yes, count.no));
+		if (client) {
+			client.sendVoteStats(this.voteTime * 1000, voteCounts.yes, voteCounts.no);
+		} else {
+			this.clients.forEach((c) => c.sendVoteStats(this.voteTime * 1000, voteCounts.yes, voteCounts.no));
+		}
 	}
 
 	getVoteCounts(): VoteTally {
@@ -1013,7 +1050,8 @@ export class CollabVMNode {
 		return {
 			id: this.NodeConfig.collabvm.node,
 			name: this.NodeConfig.collabvm.displayname,
-			thumbnail: this.screenHidden ? gScreenHiddenThumbnail : await this.getThumbnail()
+			thumbnail: this.screenHidden ? gScreenHiddenThumbnail : await this.getThumbnail(),
+			userCount: this.clients.length
 		};
 	}
 }
