@@ -125,8 +125,13 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 				// binary 1.0 (msgpack rects)
 				case ProtocolUpgradeCapability.BinRects:
 					enabledCaps.push(cap as ProtocolUpgradeCapability);
+					user.negotiatedCapabilities.add(cap as ProtocolUpgradeCapability);
 					user.Capabilities.bin = true;
 					user.protocol = TheProtocolManager.getProtocol('binary1');
+					break;
+				case ProtocolUpgradeCapability.ExtendedList:
+					enabledCaps.push(cap as ProtocolUpgradeCapability);
+					user.negotiatedCapabilities.add(cap as ProtocolUpgradeCapability);
 					break;
 				default:
 					break;

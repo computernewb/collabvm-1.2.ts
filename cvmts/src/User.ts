@@ -23,7 +23,13 @@ export class User {
 	msgsSent: number;
 	Config: IConfig;
 	IP: IPData;
+
 	Capabilities: CollabVMCapabilities;
+
+	// This contains all capabilities which the user has negotiated 
+	// (and we have support for).
+	negotiatedCapabilities: Set<ProtocolUpgradeCapability> = new Set<ProtocolUpgradeCapability>();
+
 	protocol: IProtocol;
 	turnWhitelist: boolean = false;
 	// Hide flag. Only takes effect if the user is logged in.
@@ -58,7 +64,6 @@ export class User {
 			clearInterval(this.msgRecieveInterval);
 		});
 
-
 		this.nopSendInterval = setInterval(() => this.sendNop(), 5000);
 		this.msgRecieveInterval = setInterval(() => this.onNoMsg(), 10000);
 		this.sendNop();
@@ -76,7 +81,7 @@ export class User {
 		this.VoteRateLimit.on('limit', () => this.closeConnection());
 	}
 
-	get connectedToNode(){ 
+	get connectedToNode() {
 		// Compatibility hack
 		return this.Node != null;
 	}
@@ -86,6 +91,10 @@ export class User {
 		// - The user connected via `connect` op
 		// - The user connected via `view` op, but set viewmode 1
 		return this.viewMode == -1 || this.viewMode == 1;
+	}
+
+	hasCapability(cap: ProtocolUpgradeCapability) {
+		return this.negotiatedCapabilities.has(cap);
 	}
 
 	assignGuestName(existingUsers: string[]): string {
@@ -173,7 +182,7 @@ export class User {
 	sendNop(): void {
 		this.protocol.sendNop(this);
 	}
-	
+
 	sendSync(now: number): void {
 		this.protocol.sendSync(this, now);
 	}
