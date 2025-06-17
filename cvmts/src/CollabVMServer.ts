@@ -4,7 +4,7 @@ import AuthManager from './AuthManager.js';
 import { ReaderModel } from '@maxmind/geoip2-node';
 import pino from 'pino';
 import { BanManager } from './BanManager.js';
-import { IProtocolMessageHandler, ListEntry, ProtocolUpgradeCapability } from './protocol/Protocol.js';
+import { IProtocolMessageHandler, ProtocolUpgradeCapability } from './protocol/Protocol.js';
 import { TheProtocolManager } from './protocol/Manager.js';
 import { CollabVMNode } from './CollabVMNode.js';
 
@@ -26,31 +26,38 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 		this.Config = config;
 		this.nodes = nodes;
 
-		// authentication manager
+		// assertions are always a good thing to have
+		if(this.Config.auth.enabled == true && auth == null)
+			throw new Error('Authentication manager must not be null if CVMAuth is enabled');
+
+		if(this.Config.geoip.enabled == true && geoipReader == null)
+			throw new Error('GeoIP reader must not be null if GeoIP is enabled');
+
+		// assign managers now that we have them
 		this.auth = auth;
 		this.geoipReader = geoipReader;
 		this.banmgr = banmgr;
 	}
 
 	async Start() {
-		let promises = [...this.nodes.values()]
-			.map((node) => node.Start());
+		let promises = [...this.nodes.values()].map((node) => node.Start());
 		await Promise.allSettled(promises);
 		this.logger.info('All nodes started');
 	}
 
 	async Stop() {
-		let promises = [...this.nodes.values()]
-			.map((node) => node.Stop());
+		let promises = [...this.nodes.values()].map((node) => node.Stop());
 		await Promise.allSettled(promises);
 		this.logger.info('All nodes stopped, shutting down');
 	}
 
 	public connectionOpened(user: User) {
-		// Try to get geoip code first.
-		if (this.Config.geoip.enabled) {
+		if (this.Config.geoip.enabled && this.geoipReader) {
 			try {
-				user.countryCode = this.geoipReader!.country(user.IP.address).country!.isoCode;
+				let countryModel = this.geoipReader.country(user.IP.address);
+				if (countryModel.country == null) throw new Error('Country model has no country record for this IP address');
+
+				user.countryCode = countryModel.country.isoCode;
 			} catch (error) {
 				this.logger.warn(
 					{

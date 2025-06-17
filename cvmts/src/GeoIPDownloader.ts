@@ -83,7 +83,7 @@ export default class GeoIPDownloader {
 
 	async downloadLatestDatabase(): Promise<void> {
 		let filename = await this.getLatestVersion();
-		this.logger.info('Downloading latest GeoIP database: {0}', filename);
+		this.logger.info({ database_filename: filename }, 'Downloading latest GeoIP database');
 		let dbpath = path.join(this.directory, filename);
 		let file = await fs.open(dbpath, fs.constants.O_CREAT | fs.constants.O_TRUNC | fs.constants.O_WRONLY);
 		let stream = file.createWriteStream();
@@ -95,8 +95,8 @@ export default class GeoIPDownloader {
 		});
 		await finished(Readable.fromWeb(res.body as ReadableStream<any>).pipe(stream));
 		await file.close();
-		this.logger.info('Finished downloading latest GeoIP database: {0}', filename);
-		this.logger.info('Extracting GeoIP database: {0}', filename);
+		this.logger.info({ database_filename: filename }, 'Finished downloading latest GeoIP database');
+		this.logger.info({ database_filename: filename }, 'Extracting GeoIP database');
 		// yeah whatever
 		await execa('tar', ['xzf', filename], { cwd: this.directory });
 		this.logger.info('Unlinking GeoIP tarball');
