@@ -7,6 +7,7 @@ import { BanManager } from './BanManager.js';
 import { IProtocolMessageHandler, ProtocolUpgradeCapability } from './protocol/Protocol.js';
 import { TheProtocolManager } from './protocol/Manager.js';
 import { CollabVMNode } from './CollabVMNode.js';
+import { NetworkServer } from './net/NetworkServer.js';
 
 export default class CollabVMServer implements IProtocolMessageHandler {
 	private Config: IConfig;
@@ -22,9 +23,13 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 
 	private nodes;
 
-	constructor(config: IConfig, banmgr: BanManager, auth: AuthManager | null, geoipReader: ReaderModel | null, nodes: Map<String, CollabVMNode>) {
+	private networkLayers;
+
+	constructor(config: IConfig, banmgr: BanManager, auth: AuthManager | null, geoipReader: ReaderModel | null, nodes: Map<String, CollabVMNode>, networkLayers: NetworkServer[]) {
 		this.Config = config;
 		this.nodes = nodes;
+
+		this.networkLayers = networkLayers;
 
 		// assertions are always a good thing to have
 		if (this.Config.auth.enabled == true && auth == null) throw new Error('Authentication manager must not be null if CVMAuth is enabled');
@@ -38,6 +43,12 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 	}
 
 	async Start() {
+		// Bring up all supported network layers
+		for(let layer of this.networkLayers) {
+			layer.on('connect', (client: User) => this.connectionOpened(client));
+			layer.start();
+		}
+
 		let promises = [...this.nodes.values()].map((node) => node.Start());
 		await Promise.allSettled(promises);
 		this.logger.info('All nodes started');
@@ -47,6 +58,12 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 		let promises = [...this.nodes.values()].map((node) => node.Stop());
 		await Promise.allSettled(promises);
 		this.logger.info('All nodes stopped, shutting down');
+
+		// Shut down all supported network layers
+		for(let layer of this.networkLayers) {
+			layer.removeAllListeners('connect');
+			layer.stop();
+		}
 	}
 
 	public connectionOpened(user: User) {

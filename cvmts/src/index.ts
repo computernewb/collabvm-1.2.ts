@@ -4,7 +4,6 @@ import * as fs from 'fs';
 import CollabVMServer from './CollabVMServer.js';
 import AuthManager from './AuthManager.js';
 import WSServer from './net/ws/WSServer.js';
-import { User } from './User.js';
 import GeoIPDownloader from './GeoIPDownloader.js';
 import pino from 'pino';
 import { Database } from './Database.js';
@@ -38,7 +37,6 @@ async function stop() {
 	if (exiting) return;
 	exiting = true;
 
-	networkLayers.forEach((netLayer) => netLayer.stop());
 	await CVM.Stop();
 
 	logger.info('CollabVM Server stopped');
@@ -92,7 +90,7 @@ async function start() {
 	TheProtocolManager.registerProtocol('binary1', () => new BinRectsProtocol());
 
 	// Start up the server
-	CVM = new CollabVMServer(Config, banmgr, auth, geoipReader, nodes);
+	CVM = new CollabVMServer(Config, banmgr, auth, geoipReader, nodes, networkLayers);
 
 	// Create nodes.
 	for (let node of Config.collabvm.vms) {
@@ -117,12 +115,7 @@ async function start() {
 	}
 
 	// Bring up the network interfaces now
-	// TODO: Probably CollabVMServer should do this on its own
-	let wsLayer = new WSServer(Config, banmgr);
-	wsLayer.on('connect', (client: User) => CVM.connectionOpened(client));
-	wsLayer.start();
-
-	networkLayers.push(wsLayer);
+	networkLayers.push(new WSServer(Config, banmgr));
 
 	// Bring up the server
 	await CVM.Start();
