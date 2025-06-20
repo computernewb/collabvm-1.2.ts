@@ -5,6 +5,7 @@ import { Size, Rect } from '../Utilities';
 // events:
 //
 // 'connected' -> () -> on successful connection
+// 'disconnect' -> () -> when disconnected 
 // 'resize' -> (w, h) -> done when resize occurs
 // 'rect' -> (x, y, Buffer) -> framebuffer rect (RGBA)
 // 'frame' -> () -> done at end of frame

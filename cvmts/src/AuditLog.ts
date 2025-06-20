@@ -2,7 +2,7 @@ import pino from 'pino';
 import { Rank, User } from './User.js';
 
 // Staff audit log.
-// TODO: 
+// TODO:
 //	- Hook this up to a db or something instead of misusing pino
 export class AuditLog {
 	private auditLogger = pino({
@@ -30,32 +30,32 @@ export class AuditLog {
 		}
 	}
 
-	onReset(callingUser: User) {
-		this.auditLogger.info({ staffUsername: callingUser.username }, `${AuditLog.StaffHonorFromRank(callingUser, true)} reset the virtual machine.`);
+	onReset(node: string, callingUser: User) {
+		this.auditLogger.info({ node, staffUsername: callingUser.username }, `${AuditLog.StaffHonorFromRank(callingUser, true)} reset the virtual machine.`);
 	}
 
-	onReboot(callingUser: User) {
+	onReboot(node: string, callingUser: User) {
 		this.auditLogger.info({ staffUsername: callingUser.username }, `${AuditLog.StaffHonorFromRank(callingUser, true)} rebooted the virtual machine.`);
 	}
 
-	onMute(callingUser: User, target: User, perm: boolean) {
-		this.auditLogger.info({ staffUsername: callingUser.username, targetUsername: target.username, perm: perm }, `${AuditLog.StaffHonorFromRank(callingUser, true)} muted user.`);
+	onMute(node: string, callingUser: User, target: User, perm: boolean) {
+		this.auditLogger.info({ node, staffUsername: callingUser.username, targetUsername: target.username, perm: perm }, `${AuditLog.StaffHonorFromRank(callingUser, true)} muted user.`);
 	}
 
-	onUnmute(callingUser: User, target: User) {
-		this.auditLogger.info({ staffUsername: callingUser.username, targetUsername: target.username }, `${AuditLog.StaffHonorFromRank(callingUser, true)} unmuted user.`);
+	onUnmute(node: string, callingUser: User, target: User) {
+		this.auditLogger.info({ node, staffUsername: callingUser.username, targetUsername: target.username }, `${AuditLog.StaffHonorFromRank(callingUser, true)} unmuted user.`);
 	}
 
-	onKick(callingUser: User, target: User) {
-		this.auditLogger.info({ staffUsername: callingUser.username, targetUsername: target.username }, `${AuditLog.StaffHonorFromRank(callingUser, true)} kicked user.`);
+	onKick(node: string, callingUser: User, target: User) {
+		this.auditLogger.info({ node, staffUsername: callingUser.username, targetUsername: target.username }, `${AuditLog.StaffHonorFromRank(callingUser, true)} kicked user.`);
 	}
 
-	onBan(callingUser: User, target: User) {
-		this.auditLogger.info({ staffUsername: callingUser.username, targetUsername: target.username }, `${AuditLog.StaffHonorFromRank(callingUser, true)} banned user.`);
+	onBan(node: string, callingUser: User, target: User) {
+		this.auditLogger.info({ node, staffUsername: callingUser.username, targetUsername: target.username }, `${AuditLog.StaffHonorFromRank(callingUser, true)} banned user.`);
 	}
 
-	onMonitorCommand(callingUser: User, command: string) {
-		this.auditLogger.info({ staffUsername: callingUser.username, commandLine: command }, `${AuditLog.StaffHonorFromRank(callingUser, true)} executed monitor command.`);
+	onMonitorCommand(node: string, callingUser: User, command: string) {
+		this.auditLogger.info({ node, staffUsername: callingUser.username, commandLine: command }, `${AuditLog.StaffHonorFromRank(callingUser, true)} executed monitor command.`);
 	}
 }
 

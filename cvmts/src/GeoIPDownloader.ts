@@ -33,10 +33,10 @@ export default class GeoIPDownloader {
 				this.logger.warn('File exists at GeoIP directory path, unlinking...');
 				await fs.unlink(this.directory.substring(0, this.directory.length - 1));
 			} else if (error.code !== 'ENOENT') {
-				this.logger.error('Failed to access GeoIP directory: {0}', error.message);
+				this.logger.error({ error }, 'Failed to access GeoIP directory');
 				process.exit(1);
 			}
-			this.logger.info('Creating GeoIP directory: {0}', this.directory);
+			this.logger.info({ directory: this.directory }, 'Creating GeoIP directory');
 			await fs.mkdir(this.directory, { recursive: true });
 			return;
 		}
@@ -47,13 +47,13 @@ export default class GeoIPDownloader {
 		let dbpath = path.join(this.directory, (await this.getLatestVersion()).replace('.tar.gz', ''), 'GeoLite2-Country.mmdb');
 		try {
 			await fs.access(dbpath, fs.constants.F_OK | fs.constants.R_OK);
-			this.logger.info('Loading cached GeoIP database: {0}', dbpath);
+			this.logger.info({ database_path: dbpath }, 'Loading cached GeoIP database');
 		} catch (ex) {
 			var error = ex as NodeJS.ErrnoException;
 			if (error.code === 'ENOENT') {
 				await this.downloadLatestDatabase();
 			} else {
-				this.logger.error('Failed to access GeoIP database: {0}', error.message);
+				this.logger.error({ error }, 'Failed to access GeoIP directory');
 				process.exit(1);
 			}
 		}
@@ -83,7 +83,7 @@ export default class GeoIPDownloader {
 
 	async downloadLatestDatabase(): Promise<void> {
 		let filename = await this.getLatestVersion();
-		this.logger.info('Downloading latest GeoIP database: {0}', filename);
+		this.logger.info({ database_filename: filename }, 'Downloading latest GeoIP database');
 		let dbpath = path.join(this.directory, filename);
 		let file = await fs.open(dbpath, fs.constants.O_CREAT | fs.constants.O_TRUNC | fs.constants.O_WRONLY);
 		let stream = file.createWriteStream();
@@ -95,8 +95,8 @@ export default class GeoIPDownloader {
 		});
 		await finished(Readable.fromWeb(res.body as ReadableStream<any>).pipe(stream));
 		await file.close();
-		this.logger.info('Finished downloading latest GeoIP database: {0}', filename);
-		this.logger.info('Extracting GeoIP database: {0}', filename);
+		this.logger.info({ database_filename: filename }, 'Finished downloading latest GeoIP database');
+		this.logger.info({ database_filename: filename }, 'Extracting GeoIP database');
 		// yeah whatever
 		await execa('tar', ['xzf', filename], { cwd: this.directory });
 		this.logger.info('Unlinking GeoIP tarball');

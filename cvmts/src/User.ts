@@ -9,6 +9,7 @@ import pino from 'pino';
 import { BanManager } from './BanManager.js';
 import { IProtocol, IProtocolMessageHandler, ListEntry, ProtocolAddUser, ProtocolChatHistory, ProtocolFlag, ProtocolRenameStatus, ProtocolUpgradeCapability, ScreenRect } from './protocol/Protocol.js';
 import { TheProtocolManager } from './protocol/Manager.js';
+import { CollabVMNode } from './CollabVMNode.js';
 
 export class User {
 	socket: NetworkClient;
@@ -16,18 +17,28 @@ export class User {
 	msgRecieveInterval: NodeJS.Timeout;
 	nopRecieveTimeout?: NodeJS.Timeout;
 	username?: string;
-	connectedToNode: boolean;
+	public Node: CollabVMNode | null;
 	viewMode: number;
 	rank: Rank;
 	msgsSent: number;
 	Config: IConfig;
 	IP: IPData;
-	Capabilities: CollabVMCapabilities;
+
+	// This contains all capabilities which the user has negotiated 
+	// (and we have support for). 
+	// Techinically more expensive than boolean flags,
+	// however it probably shouldn't matter since we shouldn't be checking these in a hot path
+	negotiatedCapabilities: Set<ProtocolUpgradeCapability> = new Set<ProtocolUpgradeCapability>();
+
+	// The protocol currently in use.
 	protocol: IProtocol;
+
 	turnWhitelist: boolean = false;
+
 	// Hide flag. Only takes effect if the user is logged in.
 	noFlag: boolean = false;
 	countryCode: string | null = null;
+
 	// Rate limiters
 	ChatRateLimit: RateLimiter;
 	LoginRateLimit: RateLimiter;
@@ -35,16 +46,13 @@ export class User {
 	TurnRateLimit: RateLimiter;
 	VoteRateLimit: RateLimiter;
 
-	private logger = pino({ name: 'CVMTS.User' });
-
-	constructor(socket: NetworkClient, protocol: string, ip: IPData, config: IConfig, username?: string, node?: string) {
+	constructor(socket: NetworkClient, protocol: string, ip: IPData, config: IConfig, username?: string) {
 		this.IP = ip;
-		this.connectedToNode = false;
+		this.Node = null;
 		this.viewMode = -1;
 		this.Config = config;
 		this.socket = socket;
 		this.msgsSent = 0;
-		this.Capabilities = new CollabVMCapabilities();
 
 		// All clients default to the Guacamole protocol.
 		this.protocol = TheProtocolManager.getProtocol(protocol);
@@ -56,7 +64,6 @@ export class User {
 			clearInterval(this.nopSendInterval);
 			clearInterval(this.msgRecieveInterval);
 		});
-
 
 		this.nopSendInterval = setInterval(() => this.sendNop(), 5000);
 		this.msgRecieveInterval = setInterval(() => this.onNoMsg(), 10000);
@@ -73,6 +80,22 @@ export class User {
 		this.TurnRateLimit.on('limit', () => this.closeConnection());
 		this.VoteRateLimit = new RateLimiter(3, 3);
 		this.VoteRateLimit.on('limit', () => this.closeConnection());
+	}
+
+	get connectedToNode() {
+		// Compatibility hack
+		return this.Node != null;
+	}
+
+	get shouldRecieveScreenUpdates() {
+		// Screen updates should only be sent in the following cases:
+		// - The user connected via `connect` op
+		// - The user connected via `view` op, but set viewmode 1
+		return this.viewMode == -1 || this.viewMode == 1;
+	}
+
+	hasCapability(cap: ProtocolUpgradeCapability) {
+		return this.negotiatedCapabilities.has(cap);
 	}
 
 	assignGuestName(existingUsers: string[]): string {
@@ -154,13 +177,13 @@ export class User {
 	// manually wrapping state (and probably prevents mixup bugs too.)
 
 	processMessage(handler: IProtocolMessageHandler, buffer: Buffer) {
-		this.protocol.processMessage(this, handler, buffer);
+		return this.protocol.processMessage(this, handler, buffer);
 	}
 
 	sendNop(): void {
 		this.protocol.sendNop(this);
 	}
-	
+
 	sendSync(now: number): void {
 		this.protocol.sendSync(this, now);
 	}

@@ -2,7 +2,8 @@ import { Rank, User } from '../User';
 
 // We should probably put this in the binproto repository or something
 export enum ProtocolUpgradeCapability {
-	BinRects = 'bin'
+	BinRects = 'bin',
+	ExtendedList = 'xlst'
 }
 
 export enum ProtocolRenameStatus {
@@ -22,6 +23,7 @@ export interface ListEntry {
 	id: string;
 	name: string;
 	thumbnail: Buffer;
+	userCount: number;
 }
 
 export interface ProtocolChatHistory {

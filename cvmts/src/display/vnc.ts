@@ -5,6 +5,7 @@ import { BatchRects } from './batch.js';
 import { VMDisplay } from './interface.js';
 
 import { Size, Rect } from '../Utilities.js';
+import pino from 'pino';
 
 // the FPS to run the VNC client at
 // This only affects internal polling,
@@ -19,6 +20,15 @@ export type VncRect = {
 	height: number;
 };
 
+let safeDefer = (fn: () => void, timeout: number) => {
+	let iv = setTimeout(() => {
+		fn();
+		clearTimeout(iv);
+	}, timeout);
+};
+
+// The max amount of tries before the client will give up.
+const kVncMaxTries = 3;
 
 // TODO: replace with a non-asshole VNC client (prefably one implemented
 // as a part of cvm-rs)
@@ -39,9 +49,15 @@ export class VncDisplay extends EventEmitter implements VMDisplay {
 
 	private vncShouldReconnect: boolean = false;
 	private vncConnectOpts: any;
+	private nrReconnectBackoffSteps = 0;
 
-	constructor(vncConnectOpts: any) {
+	private logger = pino({ name: `CVMTS/VncDisplay` });
+
+	private doBackoff;
+
+	constructor(vncConnectOpts: any, wantsBackoff = true) {
 		super();
+		this.doBackoff = wantsBackoff;
 
 		this.vncConnectOpts = vncConnectOpts;
 
@@ -62,6 +78,9 @@ export class VncDisplay extends EventEmitter implements VMDisplay {
 		});
 
 		this.displayVnc.on('firstFrameUpdate', () => {
+			// we connected and got the first frame, so we can reset backoff.
+			this.nrReconnectBackoffSteps = 0;
+
 			// apparently this library is this good.
 			// at least it's better than the two others which exist.
 			this.displayVnc.changeFps(kVncBaseFramerate);
@@ -94,15 +113,41 @@ export class VncDisplay extends EventEmitter implements VMDisplay {
 		});
 	}
 
+	private getReconnectBackoffMs() {
+		const kReconnectTimeBase = 250;
+		if (this.nrReconnectBackoffSteps == 0) return 0;
+
+		return Math.exp(this.nrReconnectBackoffSteps) * kReconnectTimeBase;
+	}
+
 	private Reconnect() {
 		if (this.displayVnc.connected) return;
-
 		if (!this.vncShouldReconnect) return;
 
-		// TODO: this should also give up after a max tries count
-		// if we fail after max tries, emit a event
+		if (this.doBackoff) {
+			this.emit('disconnect');
 
-		this.displayVnc.connect(this.vncConnectOpts);
+			this.logger.info(
+				{
+					reconnect_time_seconds: this.getReconnectBackoffMs() / 1000,
+					backoff_steps: this.nrReconnectBackoffSteps+1
+				},
+				'Reconnecting to VNC client with backoff'
+			);
+
+			safeDefer(() => {
+				this.displayVnc.connect(this.vncConnectOpts);
+			}, this.getReconnectBackoffMs());
+			
+			if (this.nrReconnectBackoffSteps + 1 < kVncMaxTries) {
+				this.nrReconnectBackoffSteps++;				
+			}
+
+		} else {
+			safeDefer(() => {
+				this.displayVnc.connect(this.vncConnectOpts);
+			}, 0);
+		}
 	}
 
 	Connect() {
@@ -113,10 +158,7 @@ export class VncDisplay extends EventEmitter implements VMDisplay {
 	Disconnect() {
 		this.vncShouldReconnect = false;
 		this.displayVnc.disconnect();
-
-		// bye bye!
-		this.displayVnc.removeAllListeners();
-		this.removeAllListeners();
+		this.emit('finalDisconnect');
 	}
 
 	Connected() {

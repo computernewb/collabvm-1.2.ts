@@ -300,6 +300,14 @@ export class GuacamoleProtocol implements IProtocol {
 			arr.push(node.id);
 			arr.push(node.name);
 			arr.push(node.thumbnail.toString('base64'));
+
+			// If the user has extended list (with guacamole protocol)
+			// then we add the user count. A little bleh, but it works.
+			// (when a fully binary protocol is added to cvmts, we can PROBABLY. Key word, PROBABLY
+			// drop support for this cap from the webapp)
+			if (user.hasCapability(ProtocolUpgradeCapability.ExtendedList)) {
+				arr.push(node.userCount.toString());
+			}
 		}
 
 		user.sendMsg(cvm.guacEncode(...arr));

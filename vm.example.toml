@@ -1,0 +1,93 @@
+# CollabVM Node Configuration
+# For example purposes, this file should be placed in `/srv/collabvm/vms/acoolvm/vm.toml`.
+
+[collabvm]
+
+# This node's ID.
+# Make sure this is unique among all the other nodes in a webapp
+node = "acoolvm"
+
+# HTML display name shown on the VM list
+displayname = "A <b>Really</b> Cool CollabVM Instance"
+
+# HTML message shown in the chat when a user joins.
+# This overrides config.toml if it is pressent here.
+motd = "welcome!"
+
+# How long a turn lasts, in seconds.
+# This overrides config.toml if pressent, so you can alter turn times per node.
+turnTime = 20
+
+# How long a reset vote lasts, in seconds.
+# This overrides config.toml if pressent, so you can alter turn times per node.
+voteTime = 100
+
+# How long until another vote can be started, in seconds.
+# This overrides config.toml if pressent, so you can alter turn times per node..
+voteCooldown = 180
+
+# Whether a password is required to take a turn. Overrides config.toml.
+turnwhitelist = false
+
+# SHA256 sum for the password to take a turn. Only takes effect if turnwhitelist == true. 
+# If set to an empty string or not provided in config.toml and this node's configuration, 
+# only admins and mods can take turns on this node.
+turnpass = ""
+
+[vm]
+# Configures what type of VM this node is
+# Supported values:
+#    "qemu" - Runs a QEMU VM
+#    "vncvm" - Connects to an existing VNC server
+type = "qemu"
+
+# The JPEG quality to use for this node. Must be specified here.
+jpegQuality = 35
+
+[vm.qemu]
+qemuArgs = "qemu-system-x86_64"
+# VNC port to be used for this VM. Must be unique among all VMs. Only used on Windows, as unix sockets are used on Linux.
+vncPort = 5900
+snapshots = true
+
+# Resource limits. 
+# Only works on Linux, with `Delegate=yes` set in your .service file. No-op on other platforms.
+#
+# cpuUsageMax is an optional value which specifies the max CPU usage the VM can use
+# as a percentage in the common top notation (i.e: 200% means 2 CPUs, 400% is 4 CPUs).
+#
+# A general reccomendation is to set this to 100*[vCPU count].
+# For example, if your QEMU command line contains -smp cores=2, then cpuUsageMax should be 200.
+# For an overcomitted host, you can use lower values, 
+# but it *can* get noticable if you throttle CPU too low.
+#
+# runOnCpus is an optional array that specifies what CPUs the VM is allowed to run on.
+# This option will *not* work if you do not use a system service. (effectively, it will be a loud no-op that logs an error on startup).
+#
+# periodMs is an optional value in milliseconds that specifies the cgroup's CPU accounting period.
+# The default is 100 ms (which matches the cgroups2 defaults), and should work in pretty much all cases, but
+# it's a knob provided for any addl. tuning purposes.
+#
+# limitProcess is an optional boolean (default false) that determines if only qemu vCPU threads are put into the cgroup,
+# or the entire QEMU process (incl. all its threads). The default behaviour of only limiting vCPU threads
+# is more than likely what you want, so the example configuration omits specifying this key.
+#
+# Commenting or removing this table from the configuration disables resource limiting entirely.
+#
+#resourceLimits = { cpuUsageMax = 100, runOnCpus = [ 2, 4 ] }
+
+# You may also specify this like so:
+#
+#[vm.qemu.resourceLimits]
+#cpuUsageMax = 100
+
+
+# VNC options
+# Only used if vm.type is set to "vncvm"
+[vm.vncvm]
+vncHost = "127.0.0.1"
+vncPort = 5900
+# startCmd = ""
+# stopCmd = ""
+# rebootCmd = ""
+# restoreCmd = ""
