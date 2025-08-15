@@ -284,7 +284,7 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 					c.sendAddUser([
 						{
 							username: user.username!,
-							rank: getUserRank(user)
+							rank: this.getUserRank(user)
 						}
 					])
 				);
@@ -542,7 +542,7 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 			c.sendAddUser([
 				{
 					username: user.username!,
-					rank: getUserRank(user)
+					rank: this.getUserRank(user)
 				}
 			])
 		);
@@ -770,7 +770,7 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 
 		if (hadName) {
 			this.logger.info(`Rename ${client.IP.address} from ${oldname} to ${client.username}`);
-			if (announce) this.clients.forEach((c) => c.sendRename(oldname, client.username!, getUserRank(client)));
+			if (announce) this.clients.forEach((c) => c.sendRename(oldname, client.username!, this.getUserRank(client)));
 		} else {
 			this.logger.info(`Rename ${client.IP.address} to ${client.username}`);
 			if (announce)
@@ -778,7 +778,7 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 					c.sendAddUser([
 						{
 							username: client.username!,
-							rank: getUserRank(client)
+							rank: this.getUserRank(client)
 						}
 					]);
 
@@ -800,7 +800,7 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 			.map((c) => {
 				return {
 					username: c.username!,
-					rank: getUserRank(c)
+					rank: this.getUserRank(c)
 				};
 			});
 	}
