@@ -99,6 +99,14 @@ export class GuacamoleProtocol implements IProtocol {
 				if (decodedElements.length !== 3) return false;
 				handler.onAdminSystemMessage(user, decodedElements[2]);
 				break;
+			case '26':
+				if (decodedElements.length !== 3) return false;
+				let shadow = true;
+				if (decodedElements[2] == '0') shadow = false;
+				else if (decodedElements[2] == '1') shadow = true;
+				else return false;
+				handler.onAdminShadow(user, shadow);
+				break;
 		}
 		return true;
 	}
