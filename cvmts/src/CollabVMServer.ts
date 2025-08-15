@@ -716,7 +716,7 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 		} else {
 			this.screenHidden = true;
 			this.clients
-				.filter((c) => c.rank == Rank.Unregistered)
+				.filter((c) => c.rank == Rank.Unregistered || c.rank == Rank.Registered)
 				.forEach((client) => {
 					client.sendScreenResize(1024, 768);
 					client.sendScreenUpdate({
@@ -901,7 +901,7 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 		this.clients
 			.filter((c) => c.connectedToNode || c.viewMode == 1)
 			.forEach((c) => {
-				if (this.screenHidden && c.rank == Rank.Unregistered) return;
+				if (this.screenHidden && (c.rank == Rank.Unregistered || c.rank == Rank.Registered)) return;
 				c.sendScreenResize(size.width, size.height);
 			});
 	}
@@ -915,7 +915,7 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 			self.clients
 				.filter((c) => c.connectedToNode || c.viewMode == 1)
 				.forEach((c) => {
-					if (self.screenHidden && c.rank == Rank.Unregistered) return;
+					if (self.screenHidden && (c.rank == Rank.Unregistered || c.rank == Rank.Registered)) return;
 
 					c.sendScreenUpdate({
 						x: rect.x,
