@@ -170,8 +170,9 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 		if (this.Config.geoip.enabled) {
 			try {
 				user.countryCode = this.geoipReader!.country(user.IP.address).country!.isoCode;
+				user.logger.info({event: "geoip/resolved", geoip: user.countryCode});
 			} catch (error) {
-				this.logger.warn(`Failed to get country code for ${user.IP.address}: ${(error as Error).message}`);
+				user.logger.warn({event: "geoip/unresolved", msg: `${(error as Error)}`});
 			}
 		}
 
@@ -179,9 +180,8 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 			try {
 				user.processMessage(this, buf);
 			} catch (err) {
-				this.logger.error({
-					ip: user.IP.address,
-					username: user.username,
+				user.logger.error({
+					event: "msg/general error",
 					error_message: (err as Error).message
 				}, 'Error in %s#processMessage.', Object.getPrototypeOf(user.protocol).constructor?.name);
 				user.kick();
@@ -214,7 +214,7 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 
 		this.clients.splice(clientIndex, 1);
 
-		this.logger.info(`Disconnect From ${user.IP.address}${user.username ? ` with username ${user.username}` : ''}`);
+		user.logger.info({event: "user/disconnect"});
 		if (!user.username) return;
 		if (this.TurnQueue.toArray().indexOf(user) !== -1) {
 			var hadturn = this.TurnQueue.peek() === user;
@@ -255,7 +255,7 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 			let res = await this.auth!.Authenticate(token, user);
 
 			if (res.clientSuccess) {
-				this.logger.info(`${user.IP.address} logged in as ${res.username}`);
+				user.logger.info({ event: "user/auth/login", username: res.username });
 				user.sendLoginResponse(true, '');
 
 				let old = this.clients.find((c) => c.username === res.username);
@@ -295,7 +295,7 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 				}
 			}
 		} catch (err) {
-			this.logger.error(`Error authenticating client ${user.IP.address}: ${(err as Error).message}`);
+			this.logger.error({event: "user/auth/internal error", msg: `${(err as Error).message}`});
 
 			user.sendLoginResponse(false, 'There was an internal error while authenticating. Please let a staff member know as soon as possible');
 		}
@@ -330,12 +330,19 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 	}
 
 	onTurnRequest(user: User, forfeit: boolean): void {
+		user.logger.trace({event: "turn/requested"});
 		if ((!this.turnsAllowed || this.Config.collabvm.turnwhitelist) && user.rank !== Rank.Admin && user.rank !== Rank.Moderator && !user.turnWhitelist) return;
 
 		if (!this.authCheck(user, this.Config.auth.guestPermissions.turn)) return;
 
-		if (!user.TurnRateLimit.request()) return;
-		if (!user.connectedToNode) return;
+		if (!user.TurnRateLimit.request()) {
+			user.logger.warn({event: "turn/ratelimited"});
+			return;
+		}
+		if (!user.connectedToNode) {
+			user.logger.warn({event: "turn/requested when not in queue"})
+			return;
+		}
 
 		if (forfeit == false) {
 			var currentQueue = this.TurnQueue.toArray();
@@ -348,8 +355,12 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 				// Get the amount of users in the turn queue with the same IP as the user requesting a turn.
 				let turns = currentQueue.filter((otheruser) => otheruser.IP.address == user.IP.address);
 				// If it exceeds the limit set in the config, ignore the turn request.
-				if (turns.length + 1 > this.Config.collabvm.turnlimit.maximum) return;
+				if (turns.length + 1 > this.Config.collabvm.turnlimit.maximum) {
+					user.logger.warn({event: "turn/ignoring request due to turn limit"});
+					return;
+				}
 			}
+			user.logger.info({event: "turn/entering queue"});
 			this.TurnQueue.enqueue(user);
 			if (this.TurnQueue.size === 1) this.nextTurn();
 		} else {
@@ -360,10 +371,19 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 	}
 
 	onVote(user: User, choice: number): void {
-		if (!this.VM.SnapshotsSupported()) return;
+		if (!this.VM.SnapshotsSupported()) {
+			user.logger.warn({event: "vote/voted without snapshots enabled"});
+			return;
+		}
 		if ((!this.turnsAllowed || this.Config.collabvm.turnwhitelist) && user.rank !== Rank.Admin && user.rank !== Rank.Moderator && !user.turnWhitelist) return;
-		if (!user.connectedToNode) return;
-		if (!user.VoteRateLimit.request()) return;
+		if (!user.connectedToNode) {
+			user.logger.warn({event: "vote/ratelimited"});
+			return;
+		}
+		if (!user.VoteRateLimit.request()) {
+			user.logger.warn({event: "vote/voted but was ratelimited"});
+			return;
+		}
 		switch (choice) {
 			case 1:
 				if (!this.voteInProgress) {
@@ -374,6 +394,7 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 						return;
 					}
 
+					user.logger.info({event: "vote/user initiated a vote"});
 					this.startVote();
 					this.clients.forEach((c) => c.sendChatMessage('', `${user.username} has started a vote to reset the VM.`));
 				}
@@ -383,6 +404,8 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 				if (user.IP.vote !== true) {
 					this.clients.forEach((c) => c.sendChatMessage('', `${user.username} has voted yes.`));
 				}
+
+				user.logger.info({event: "vote/yes"});
 				user.IP.vote = true;
 				break;
 			case 0:
@@ -393,6 +416,8 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 				if (user.IP.vote !== false) {
 					this.clients.forEach((c) => c.sendChatMessage('', `${user.username} has voted no.`));
 				}
+
+				user.logger.info({event: "vote/no"});
 				user.IP.vote = false;
 				break;
 			default:
@@ -455,16 +480,24 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 	}
 
 	async onConnect(user: User, node: string) {
+		user.logger.info({event: "user/joined node", node});
 		return this.connectViewShared(user, node, undefined);
 	}
 
 	async onView(user: User, node: string, viewMode: number) {
+		user.logger.info({event: "user/entering view", node, viewMode});
 		return this.connectViewShared(user, node, viewMode);
 	}
 
 	onRename(user: User, newName: string | undefined): void {
-		if (!user.RenameRateLimit.request()) return;
-		if (user.connectedToNode && user.IP.muted) return;
+		if (!user.RenameRateLimit.request()) {
+			user.logger.warn({event: "rename/ratelimit"});
+			return;
+		}
+		if (user.connectedToNode && user.IP.muted) {
+			user.logger.warn({event: "rename/attempted to rename while muted"});
+			return;
+		}
 		if (this.Config.auth.enabled && user.rank !== Rank.Unregistered) {
 			user.sendChatMessage('', 'Go to your account settings to change your username.');
 			return;
@@ -480,7 +513,10 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 	}
 
 	onChat(user: User, message: string): void {
-		if (!user.username) return;
+		if (!user.username) {
+			user.logger.warn({event: "chat/dropped message without username", message});
+			return;
+		}
 		if (user.IP.muted) return;
 		if (!this.authCheck(user, this.Config.auth.guestPermissions.chat)) return;
 
@@ -489,6 +525,7 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 		if (msg.length > this.Config.collabvm.maxChatLength) msg = msg.substring(0, this.Config.collabvm.maxChatLength);
 		if (msg.trim().length < 1) return;
 
+		user.logger.info({event: "chat/message", msg});
 		this.clients.forEach((c) => c.sendChatMessage(user.username!, msg));
 		this.ChatHistory.push({ user: user.username, msg: msg });
 		user.onChatMsgSent();
@@ -496,6 +533,7 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 
 	onKey(user: User, keysym: number, pressed: boolean): void {
 		if (this.TurnQueue.peek() !== user && user.rank !== Rank.Admin) return;
+		user.logger.info({event: "key", keysym, pressed});
 		this.VM.GetDisplay()?.KeyboardEvent(keysym, pressed);
 	}
 
@@ -512,6 +550,7 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 		sha256.destroy();
 
 		if (this.Config.collabvm.turnwhitelist && pwdHash === this.Config.collabvm.turnpass) {
+			user.logger.info({event: "admin/granted turnpass"})
 			user.turnWhitelist = true;
 			user.sendChatMessage('', 'You may now take turns.');
 			return;
@@ -523,12 +562,15 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 		}
 
 		if (pwdHash === this.Config.collabvm.adminpass) {
+			user.logger.info({event: "admin/granted adminpass"})
 			user.rank = Rank.Admin;
 			user.sendAdminLoginResponse(true, undefined);
 		} else if (this.Config.collabvm.moderatorEnabled && pwdHash === this.Config.collabvm.modpass) {
+			user.logger.info({event: "admin/granted modpass"})
 			user.rank = Rank.Moderator;
 			user.sendAdminLoginResponse(true, this.ModPerms);
 		} else {
+			user.logger.warn({event: "admin/failed login attempt"})
 			user.sendAdminLoginResponse(false, undefined);
 			return;
 		}
@@ -750,10 +792,10 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 		client.sendSelfRename(status, client.username!, client.rank);
 
 		if (hadName) {
-			this.logger.info(`Rename ${client.IP.address} from ${oldname} to ${client.username}`);
+			client.logger.info({event: "rename", from: oldname, to: client.username});
 			if (announce) this.clients.forEach((c) => c.sendRename(oldname, client.username!, client.rank));
 		} else {
-			this.logger.info(`Rename ${client.IP.address} to ${client.username}`);
+			client.logger.info({event: "rename", to: client.username});
 			if (announce)
 				this.clients.forEach((c) => {
 					c.sendAddUser([
@@ -825,8 +867,12 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 					c.sendTurnQueue(turntime, users);
 				}
 			});
-		if (currentTurningUser) currentTurningUser.sendTurnQueue(turntime, users);
+		if (currentTurningUser) {
+			currentTurningUser.logger.info({event: "turn/held"});
+			currentTurningUser.sendTurnQueue(turntime, users);
+		}
 	}
+
 	private nextTurn() {
 		clearInterval(this.TurnInterval);
 		if (this.TurnQueue.size === 0) {
@@ -838,18 +884,21 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 	}
 
 	clearTurns() {
+		this.logger.info({event: "turn/clearing turn queue"});
 		clearInterval(this.TurnInterval);
 		this.TurnQueue.clear();
 		this.sendTurnUpdate();
 	}
 
 	bypassTurn(client: User) {
+		client.logger.info({event: "turn/bypassing"});
 		var a = this.TurnQueue.toArray().filter((c) => c !== client);
 		this.TurnQueue = Queue.from([client, ...a]);
 		this.nextTurn();
 	}
 
 	endTurn(client: User) {
+		client.logger.info({event: "turn/ending"});
 		// I must have somehow accidentally removed this while scalpaling everything out
 		if (this.indefiniteTurn === client) this.indefiniteTurn = null;
 		var hasTurn = this.TurnQueue.peek() === client;
@@ -956,6 +1005,7 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 	startVote() {
 		if (this.voteInProgress) return;
 		this.voteInProgress = true;
+		this.logger.info({event: "vote/start"});
 		this.clients.forEach((c) => c.sendVoteStarted());
 		this.voteTime = this.Config.collabvm.voteTime;
 		this.voteInterval = setInterval(() => {
