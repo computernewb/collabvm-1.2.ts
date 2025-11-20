@@ -183,7 +183,6 @@ export class User {
 	}
 
 	sendAuth(authServer: string): void {
-		this.logger.info({event: "sending auth", auth_server: authServer});
 		this.protocol.sendAuth(this, authServer);
 	}
 

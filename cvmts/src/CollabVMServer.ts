@@ -377,7 +377,7 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 		}
 		if ((!this.turnsAllowed || this.Config.collabvm.turnwhitelist) && user.rank !== Rank.Admin && user.rank !== Rank.Moderator && !user.turnWhitelist) return;
 		if (!user.connectedToNode) {
-			user.logger.warn({event: "vote/ratelimited"});
+			user.logger.warn({event: "vote/not connected to node"});
 			return;
 		}
 		if (!user.VoteRateLimit.request()) {
