@@ -23,6 +23,7 @@
 		"msgpackr": "^1.10.2",
 		"pino": "^9.3.1",
 		"toml": "^3.0.0",
+		"uuid": "^13.0.0",
 		"ws": "^8.17.1"
 	},
 	"devDependencies": {

@@ -5,7 +5,8 @@ import IConfig from './IConfig.js';
 import RateLimiter from './RateLimiter.js';
 import { NetworkClient } from './net/NetworkClient.js';
 import { CollabVMCapabilities } from '@cvmts/collab-vm-1.2-binary-protocol';
-import pino from 'pino';
+import { pino, type Logger } from 'pino';
+import { v4 as uuid4 } from 'uuid';
 import { BanManager } from './BanManager.js';
 import { IProtocol, IProtocolMessageHandler, ListEntry, ProtocolAddUser, ProtocolChatHistory, ProtocolFlag, ProtocolRenameStatus, ProtocolUpgradeCapability, ScreenRect } from './protocol/Protocol.js';
 import { TheProtocolManager } from './protocol/Manager.js';
@@ -15,7 +16,7 @@ export class User {
 	nopSendInterval: NodeJS.Timeout;
 	msgRecieveInterval: NodeJS.Timeout;
 	nopRecieveTimeout?: NodeJS.Timeout;
-	username?: string;
+	private _username?: string;
 	connectedToNode: boolean;
 	viewMode: number;
 	rank: Rank;
@@ -34,8 +35,9 @@ export class User {
 	RenameRateLimit: RateLimiter;
 	TurnRateLimit: RateLimiter;
 	VoteRateLimit: RateLimiter;
+	uuid: string;
 
-	private logger = pino({ name: 'CVMTS.User' });
+	logger: Logger;
 
 	constructor(socket: NetworkClient, protocol: string, ip: IPData, config: IConfig, username?: string, node?: string) {
 		this.IP = ip;
@@ -44,12 +46,19 @@ export class User {
 		this.Config = config;
 		this.socket = socket;
 		this.msgsSent = 0;
+		this.uuid = uuid4();
+		this.logger = pino().child({
+			name: "CVMTS.User",
+			"uuid/user": this.uuid,
+			ip: ip.address,
+		});
 		this.Capabilities = new CollabVMCapabilities();
 
 		// All clients default to the Guacamole protocol.
 		this.protocol = TheProtocolManager.getProtocol(protocol);
 
 		this.socket.on('disconnect', () => {
+			this.logger.info({event: "user disconnected", username});
 			// Unref the ip data for this connection
 			this.IP.Unref();
 
@@ -80,6 +89,7 @@ export class User {
 		do {
 			username = 'guest' + Utilities.Randint(10000, 99999);
 		} while (existingUsers.indexOf(username) !== -1);
+		this.logger.info({event: "assign guest username"});
 		this.username = username;
 		return username;
 	}
@@ -100,11 +110,13 @@ export class User {
 	private onNoMsg() {
 		this.sendNop();
 		this.nopRecieveTimeout = setTimeout(() => {
+			this.logger.info({event: "nop timeout"});
 			this.closeConnection();
 		}, 3000);
 	}
 
 	closeConnection() {
+		this.logger.info({event: "closing connection"});
 		this.socket.send(cvm.guacEncode('disconnect'));
 		this.socket.close();
 	}
@@ -124,6 +136,7 @@ export class User {
 	}
 
 	mute(permanent: boolean) {
+		this.logger.info({event: "mute", time_seconds: this.Config.collabvm.tempMuteTime, permanent});
 		this.IP.muted = true;
 		this.sendMsg(cvm.guacEncode('chat', '', `You have been muted${permanent ? '' : ` for ${this.Config.collabvm.tempMuteTime} seconds`}.`));
 		if (!permanent) {
@@ -131,13 +144,16 @@ export class User {
 			this.IP.tempMuteExpireTimeout = setTimeout(() => this.unmute(), this.Config.collabvm.tempMuteTime * 1000);
 		}
 	}
+
 	unmute() {
+		this.logger.info({event: "unmute"});
 		clearTimeout(this.IP.tempMuteExpireTimeout);
 		this.IP.muted = false;
 		this.sendMsg(cvm.guacEncode('chat', '', 'You are no longer muted.'));
 	}
 
 	async ban(banmgr: BanManager) {
+		this.logger.info({event: "ban"});
 		// Prevent the user from taking turns or chatting, in case the ban command takes a while
 		this.IP.muted = true;
 		await banmgr.BanUser(this.IP.address, this.username || '');
@@ -145,6 +161,7 @@ export class User {
 	}
 
 	async kick() {
+		this.logger.info({event: "kick"});
 		this.sendMsg('10.disconnect;');
 		this.socket.close();
 	}
@@ -259,6 +276,18 @@ export class User {
 
 	sendScreenUpdate(rect: ScreenRect): void {
 		this.protocol.sendScreenUpdate(this, rect);
+	}
+
+	get username(): string {
+		return this._username!;
+	}
+
+	set username(updated: string) {
+		this.logger = this.logger.child({
+			username: updated,
+		});
+
+		this._username = updated;
 	}
 }
 
