@@ -25,14 +25,15 @@ logger.info('CollabVM Server starting up');
 
 // Parse the config file
 
+let confFile = process.argv[2] || 'config.toml';
 let Config: IConfig;
 
-if (!fs.existsSync('config.toml')) {
-	logger.error('Fatal error: Config.toml not found. Please copy config.example.toml and fill out fields');
+if (!fs.existsSync(confFile)) {
+	logger.error('Fatal error: '+confFile+' not found. Please copy config.example.toml and fill out fields');
 	process.exit(1);
 }
 try {
-	var configRaw = fs.readFileSync('config.toml').toString();
+	var configRaw = fs.readFileSync(confFile).toString();
 	Config = toml.parse(configRaw);
 } catch (e) {
 	logger.error({err: e}, 'Fatal error: Failed to read or parse the config file');
