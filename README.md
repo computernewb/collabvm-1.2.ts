@@ -23,7 +23,10 @@ The CollabVM server requires the following to be installed on your server:
 
 ### Installing dependencies on Debian
 
-TODO
+1. Install dependencies: `sudo apt-get install -y git nasm build-essential cmake curl`
+2. Install nodeJS: `curl -fsSL https://deb.nodesource.com/setup_21.x | sudo bash - && sudo apt-get install nodejs -y`
+3. Install Rust toolchain: `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh` then logout and relogin
+4. Enable corepack: `sudo corepack enable`
 
 ## Running
 
