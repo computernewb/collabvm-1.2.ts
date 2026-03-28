@@ -151,6 +151,7 @@ forcevote = true
 mute = true
 kick = true
 bypassturn = true
+infiniteturn = false # doesnt work yet ...
 rename = true
 grabip = true
 xss = true
