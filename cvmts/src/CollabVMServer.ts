@@ -13,6 +13,7 @@ import AuthManager from './AuthManager.js';
 import { JPEGEncoder } from './JPEGEncoder.js';
 import VM from './vm/interface.js';
 import { ReaderModel } from '@maxmind/geoip2-node';
+import DJSOpus from '@discordjs/opus';
 
 import { Size, Rect } from './Utilities.js';
 import pino from 'pino';
@@ -86,6 +87,11 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 	// Ban manager
 	private banmgr: BanManager;
 
+	// Audio encoding
+	private opusEncoder: DJSOpus.OpusEncoder;
+	private opusBuffer: Buffer;
+	private opusBufferPos: number;
+
 	// queue of rects, reset every frame
 	private rectQueue: Rect[] = [];
 
@@ -122,7 +128,7 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 
 				// start the display and add the events once
 				if (self.VM.GetDisplay() == null) {
-					self.VM.StartDisplay();
+					self.VM.StartDisplay(self.Config.audio);
 
 					self.logger.info('started display, adding events now');
 
@@ -130,6 +136,8 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 					self.VM.GetDisplay()?.on('resize', (size: Size) => self.OnDisplayResized(size));
 					self.VM.GetDisplay()?.on('rect', (rect: Rect) => self.OnDisplayRectangle(rect));
 					self.VM.GetDisplay()?.on('frame', () => self.OnDisplayFrame());
+					self.VM.GetDisplay()?.on('audio', (data: Buffer) => self.OnDisplayAudio(data));
+					self.VM.GetDisplay()?.on('audioEnd', () => self.OnDisplayAudioEnded());
 				}
 			}
 
@@ -147,6 +155,16 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 		this.geoipReader = geoipReader;
 
 		this.banmgr = banmgr;
+
+		{
+			const cfg = this.Config.audio;
+
+			this.opusEncoder = new DJSOpus.OpusEncoder(cfg.sampleRate, cfg.channels);
+			this.opusEncoder.setBitrate(cfg.opus.bitrate);
+
+			this.opusBuffer = Buffer.alloc(cfg.sampleRate * (cfg.opus.frameSize / 1000) * cfg.channels * 2);
+			this.opusBufferPos = 0;
+		}
 	}
 
 	public connectionOpened(user: User) {
@@ -915,6 +933,30 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 		await Promise.all(promises);
 	}
 
+	private OnDisplayAudio(data: Buffer) {
+		let dataPos = 0;
+
+		// We need to buffer enough for a frame before Opus can encode it
+		while (dataPos < data.length) {
+			const dataCopying = Math.min(data.length - dataPos, this.opusBuffer.length - this.opusBufferPos);
+
+			data.copy(this.opusBuffer, this.opusBufferPos, dataPos, dataPos + dataCopying);
+			dataPos += dataCopying;
+			this.opusBufferPos += dataCopying;
+
+			if (this.opusBufferPos == this.opusBuffer.length) {
+				this.opusBufferPos = 0;
+				this.SendAudioBuffer();
+			}
+		}
+	}
+
+	private OnDisplayAudioEnded() {
+		this.opusBuffer.fill(0, this.opusBufferPos);
+		this.opusBufferPos = 0;
+		this.SendAudioBuffer();
+	}
+
 	private async SendFullScreenWithSize(client: User) {
 		let display = this.VM.GetDisplay();
 		if (display == null) return;
@@ -947,6 +989,18 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 		let encoded = await JPEGEncoder.Encode(display.Buffer(), displaySize, rect);
 
 		return encoded;
+	}
+
+	private SendAudioBuffer() {
+		// Opus encoding seems to be really cheap, so we shouldn't need to put this on another thread
+		const encoded = this.opusEncoder.encode(this.opusBuffer);
+		
+		this.clients
+			.filter((c) => c.connectedToNode || c.viewMode == 1 || c.audioEnabled)
+			.forEach((c) => {
+				if (this.screenHidden && c.rank == Rank.Unregistered) return;
+				c.sendAudio(encoded);
+			});
 	}
 
 	async getThumbnail(): Promise<Buffer> {

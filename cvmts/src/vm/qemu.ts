@@ -83,7 +83,7 @@ export class QemuVMShim implements VM {
 		}
 	}
 
-	StartDisplay(): void {
+	StartDisplay(audioConfig: any): void {
 		// boot it up
 		let info = this.vm.GetDisplayInfo();
 
@@ -95,12 +95,12 @@ export class QemuVMShim implements VM {
 					host: info.host || '127.0.0.1',
 					port: info.port || 5900,
 					path: null
-				});
+				}, audioConfig);
 				break;
 			case 'vnc-uds':
 				this.display = new VncDisplay({
 					path: info.path
-				});
+				}, audioConfig);
 				break;
 		}
 

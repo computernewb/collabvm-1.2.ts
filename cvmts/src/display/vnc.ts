@@ -23,25 +23,30 @@ export type VncRect = {
 // TODO: replace with a non-asshole VNC client (prefably one implemented
 // as a part of cvm-rs)
 export class VncDisplay extends EventEmitter implements VMDisplay {
-	private displayVnc = new VncClient({
-		debug: false,
-		fps: kVncBaseFramerate,
-
-		encodings: [
-			VncClient.consts.encodings.raw,
-
-			//VncClient.consts.encodings.pseudoQemuAudio,
-			VncClient.consts.encodings.pseudoDesktopSize
-			// For now?
-			//VncClient.consts.encodings.pseudoCursor
-		]
-	});
-
+	private displayVnc: VncClient;
 	private vncShouldReconnect: boolean = false;
 	private vncConnectOpts: any;
 
-	constructor(vncConnectOpts: any) {
+	constructor(vncConnectOpts: any, audioConfig: any) {
 		super();
+
+		this.displayVnc = new VncClient({
+			debug: false,
+
+			audioFormat: VncClient.consts.qemuAudioFormats.s16,
+			audioChannels: audioConfig.channels,
+			audioFrequency: audioConfig.sampleRate,
+
+			fps: kVncBaseFramerate,
+
+			encodings: [
+				VncClient.consts.encodings.raw,
+				VncClient.consts.encodings.pseudoQemuAudio,
+				VncClient.consts.encodings.pseudoDesktopSize
+				// For now?
+				//VncClient.consts.encodings.pseudoCursor
+			]
+		});
 
 		this.vncConnectOpts = vncConnectOpts;
 
@@ -91,6 +96,14 @@ export class VncDisplay extends EventEmitter implements VMDisplay {
 			rects = [];
 
 			this.emit('frame');
+		});
+
+		this.displayVnc.on('audioStream', (data: Buffer) => {
+			this.emit('audio', data);
+		});
+
+		this.displayVnc.on('audioStreamEnd', () => {
+			this.emit('audioEnd');
 		});
 	}
 

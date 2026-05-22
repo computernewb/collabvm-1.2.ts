@@ -20,7 +20,8 @@ export default interface VM {
 	MonitorCommand(command: string): Promise<any>;
 
 	// Start/connect the display
-	StartDisplay(): void;
+	// TODO: shouldn't really be using the any type
+	StartDisplay(audioConfig: any): void;
 
 	// Gets the current active display
 	// TODO: this could probaly be replaced with an event or something

@@ -7,7 +7,7 @@ import { CollabVMCapabilities } from '@cvmts/collab-vm-1.2-binary-protocol';
 import { pino, type Logger } from 'pino';
 import { v4 as uuid4 } from 'uuid';
 import { BanManager } from './BanManager.js';
-import { IProtocol, IProtocolMessageHandler, ListEntry, ProtocolAddUser, ProtocolChatHistory, ProtocolFlag, ProtocolRenameStatus, ProtocolUpgradeCapability, ScreenRect } from './protocol/Protocol.js';
+import { IProtocol, IProtocolMessageHandler, ListEntry, ProtocolAddUser, ProtocolChatHistory, ProtocolFlag, ProtocolRenameStatus, ProtocolUpgradeCapability, ScreenRect, AudioFormat } from './protocol/Protocol.js';
 import { TheProtocolManager } from './protocol/Manager.js';
 
 export class User {
@@ -28,6 +28,7 @@ export class User {
 	// Hide flag. Only takes effect if the user is logged in.
 	noFlag: boolean = false;
 	countryCode: string | null = null;
+	audioEnabled: boolean = true; // TODO: Should be disabled by default & opt-in
 	// Rate limiters
 	ChatRateLimit: RateLimiter;
 	LoginRateLimit: RateLimiter;
@@ -279,6 +280,14 @@ export class User {
 
 	sendScreenUpdate(rect: ScreenRect): void {
 		this.protocol.sendScreenUpdate(this, rect);
+	}
+
+	sendAudioFormat(format: AudioFormat): void {
+		this.protocol.sendAudioFormat(this, format);
+	}
+
+	sendAudio(data: Buffer): void {
+		this.protocol.sendAudio(this, data);
 	}
 
 	get username(): string {

@@ -37,6 +37,15 @@ export default interface IConfig {
 		resourceLimits?: CgroupLimits
 	};
 	vncvm: VNCVMDef;
+	audio: {
+		enabled: boolean;
+		sampleRate: number;
+		channels: number;
+		opus: {
+			bitrate: number;
+			frameSize: number;
+		}
+	};
 	mysql: MySQLConfig;
 	bans: BanConfig;
 	collabvm: {

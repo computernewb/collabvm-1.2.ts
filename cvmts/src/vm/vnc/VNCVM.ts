@@ -49,7 +49,7 @@ export default class VNCVM extends EventEmitter implements VM {
 		this.emit('statechange', newState);
 	}
 
-	StartDisplay(): void {
+	StartDisplay(audioConfig: any): void {
 		this.logger.info('Connecting to VNC server');
 		let self = this;
 
@@ -57,7 +57,7 @@ export default class VNCVM extends EventEmitter implements VM {
 			host: this.def.vncHost,
 			port: this.def.vncPort,
 			path: null
-		});
+		}, audioConfig);
 
 		self.vnc!.on('connected', () => {
 			self.logger.info('Connected to VNC server');

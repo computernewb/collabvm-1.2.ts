@@ -86,6 +86,17 @@ vncPort = 5900
 # rebootCmd = ""
 # restoreCmd = ""
 
+# Opus is limited in which sample rates it can use
+[audio]
+enabled = true
+sampleRate = 48000
+channels = 2
+
+# It is recommended these be kept as default, especially frame size
+[audio.opus]
+bitrate = 64000
+frameSize = 20
+
 [mysql]
 # Configures the MySQL database. This is ONLY required if you use the internal cvmban banning system (configured below)
 enabled = false

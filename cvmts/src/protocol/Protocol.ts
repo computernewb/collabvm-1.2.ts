@@ -39,6 +39,12 @@ export interface ProtocolFlag {
 	countryCode: string;
 }
 
+export interface AudioFormat {
+	format: string;
+	sampleRate: number;
+	channels: number;
+};
+
 // Protocol handlers. This is implemented by a layer that wants to listen to CollabVM protocol messages.
 export interface IProtocolMessageHandler {
 	onNop(user: User): void;
@@ -143,4 +149,7 @@ export interface IProtocol {
 
 	// Sends a rectangle update to the user.
 	sendScreenUpdate(user: User, rect: ScreenRect): void;
+
+	sendAudioFormat(user: User, format: AudioFormat): void;
+	sendAudio(user: User, data: Buffer): void;
 }

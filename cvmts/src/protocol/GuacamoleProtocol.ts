@@ -1,4 +1,4 @@
-import { IProtocol, IProtocolMessageHandler, ListEntry, ProtocolAddUser, ProtocolChatHistory, ProtocolFlag, ProtocolRenameStatus, ProtocolUpgradeCapability, ScreenRect } from './Protocol.js';
+import { IProtocol, IProtocolMessageHandler, ListEntry, ProtocolAddUser, ProtocolChatHistory, ProtocolFlag, ProtocolRenameStatus, ProtocolUpgradeCapability, ScreenRect, AudioFormat } from './Protocol.js';
 import { Rank, User } from '../User.js';
 
 import * as cvm from '@cvmts/cvm-rs';
@@ -346,5 +346,13 @@ export class GuacamoleProtocol implements IProtocol {
 	sendScreenUpdate(user: User, rect: ScreenRect): void {
 		user.sendMsg(cvm.guacEncode('png', '0', '0', rect.x.toString(), rect.y.toString(), rect.data.toString('base64')));
 		this.sendSync(user, Date.now());
+	}
+
+	sendAudioFormat(user: User, format: AudioFormat): void {
+		// Guacamole doesn't need this, as each audio frame has to be encapsulated in a container that has this data (if we don't just end up using our own stuff)
+	}
+
+	sendAudio(user: User, data: Buffer): void {
+		// TODO
 	}
 }

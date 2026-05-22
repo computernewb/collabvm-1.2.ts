@@ -1,6 +1,6 @@
 import pino, { Logger } from 'pino';
 import { MySQLConfig } from './IConfig';
-import mariadb from 'mariadb';
+import * as mariadb from 'mariadb';
 
 export class Database {
 	cfg: MySQLConfig;

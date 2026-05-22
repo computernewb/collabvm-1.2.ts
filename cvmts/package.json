@@ -15,6 +15,7 @@
 		"@computernewb/nodejs-rfb": "^0.4.2",
 		"@computernewb/superqemu": "^0.3.0",
 		"@cvmts/cvm-rs": "*",
+		"@discordjs/opus": "^0.10.0",
 		"@maxmind/geoip2-node": "^5.0.0",
 		"execa": "^8.0.1",
 		"ip-address": "^10.1.1",
