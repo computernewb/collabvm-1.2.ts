@@ -5,7 +5,7 @@ import { GuacamoleProtocol } from './GuacamoleProtocol.js';
 import { ScreenRect, AudioFormat } from './Protocol';
 import { User } from '../User.js';
 
-export class BinRectsProtocol extends GuacamoleProtocol {
+export class BinaryProtocol extends GuacamoleProtocol {
 	sendScreenUpdate(user: User, rect: ScreenRect): void {
 		const bmsg: CollabVMProtocolMessage = {
 			type: CollabVMProtocolMessageType.rect,

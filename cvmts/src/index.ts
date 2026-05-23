@@ -17,7 +17,7 @@ import { BanManager } from './BanManager.js';
 import { QemuVMShim } from './vm/qemu.js';
 import { TheProtocolManager } from './protocol/Manager.js';
 import { GuacamoleProtocol } from './protocol/GuacamoleProtocol.js';
-import { BinRectsProtocol } from './protocol/BinRectsProtocol.js';
+import { BinaryProtocol } from './protocol/BinaryProtocol.js';
 
 let logger = pino();
 
@@ -101,7 +101,7 @@ async function start() {
 
 	// Register protocol(s) that the server supports
 	TheProtocolManager.registerProtocol("guacamole", () => new GuacamoleProtocol);
-	TheProtocolManager.registerProtocol("binary1", () => new BinRectsProtocol);
+	TheProtocolManager.registerProtocol("binary1", () => new BinaryProtocol);
 
 	// Start up the server
 	var CVM = new CollabVMServer(Config, VM, banmgr, auth, geoipReader);

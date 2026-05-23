@@ -2,7 +2,7 @@ import { Rank, User } from '../User';
 
 // We should probably put this in the binproto repository or something
 export enum ProtocolUpgradeCapability {
-	BinRects = 'bin'
+	Binary = 'bin'
 }
 
 export enum ProtocolRenameStatus {
