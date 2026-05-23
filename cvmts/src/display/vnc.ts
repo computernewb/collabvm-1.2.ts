@@ -30,7 +30,7 @@ export class VncDisplay extends EventEmitter implements VMDisplay {
 	constructor(vncConnectOpts: any, audioConfig: any) {
 		super();
 
-		this.displayVnc = new VncClient({
+		let vncConfig = {
 			debug: false,
 
 			audioFormat: VncClient.consts.qemuAudioFormats.s16,
@@ -41,12 +41,18 @@ export class VncDisplay extends EventEmitter implements VMDisplay {
 
 			encodings: [
 				VncClient.consts.encodings.raw,
-				VncClient.consts.encodings.pseudoQemuAudio,
 				VncClient.consts.encodings.pseudoDesktopSize
 				// For now?
 				//VncClient.consts.encodings.pseudoCursor
 			]
-		});
+		};
+
+		// However, a misbehaving server could still send audio even if we don't announce support
+		if (audioConfig.enabled) {
+			vncConfig.encodings.push(VncClient.consts.encodings.pseudoQemuAudio);
+		}
+
+		this.displayVnc = new VncClient(vncConfig);
 
 		this.vncConnectOpts = vncConnectOpts;
 
