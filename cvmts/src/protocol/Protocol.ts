@@ -90,6 +90,8 @@ export interface IProtocolMessageHandler {
 
 	onKey(user: User, keysym: number, pressed: boolean): void;
 	onMouse(user: User, x: number, y: number, buttonMask: number): void;
+
+	onAudio(user: User, enable: boolean): void;
 }
 
 // Abstracts away all of the protocol details from the CollabVM server,

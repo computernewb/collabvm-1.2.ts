@@ -136,8 +136,11 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 					self.VM.GetDisplay()?.on('resize', (size: Size) => self.OnDisplayResized(size));
 					self.VM.GetDisplay()?.on('rect', (rect: Rect) => self.OnDisplayRectangle(rect));
 					self.VM.GetDisplay()?.on('frame', () => self.OnDisplayFrame());
-					self.VM.GetDisplay()?.on('audio', (data: Buffer) => self.OnDisplayAudio(data));
-					self.VM.GetDisplay()?.on('audioEnd', () => self.OnDisplayAudioEnded());
+
+					if (self.Config.audio.enabled) {
+						self.VM.GetDisplay()?.on('audio', (data: Buffer) => self.OnDisplayAudio(data));
+						self.VM.GetDisplay()?.on('audioEnd', () => self.OnDisplayAudioEnded());	
+					}
 				}
 			}
 
@@ -476,6 +479,14 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 
 		if (this.voteInProgress) this.sendVoteUpdate(user);
 		this.sendTurnUpdate(this.turnController.getTurnInfo(), user);
+
+		if (this.Config.audio.enabled) {
+			user?.sendAudioFormat({
+				format: "opus",
+				sampleRate: this.Config.audio.sampleRate,
+				channels: this.Config.audio.channels
+			});
+		}
 	}
 
 	async onConnect(user: User, node: string) {
@@ -539,6 +550,10 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 	onMouse(user: User, x: number, y: number, buttonMask: number): void {
 		if (!this.turnController.userIsActive(user) && user.rank !== Rank.Admin) return;
 		this.VM.GetDisplay()?.MouseEvent(x, y, buttonMask);
+	}
+
+	onAudio(user: User, enable: boolean): void {
+		user.audioEnabled = enable;
 	}
 
 	async onAdminLogin(user: User, password: string) {
@@ -996,7 +1011,7 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 		const encoded = this.opusEncoder.encode(this.opusBuffer);
 		
 		this.clients
-			.filter((c) => c.connectedToNode || c.viewMode == 1 || c.audioEnabled)
+			.filter((c) => (c.connectedToNode || c.viewMode == 1) && c.audioEnabled)
 			.forEach((c) => {
 				if (this.screenHidden && c.rank == Rank.Unregistered) return;
 				c.sendAudio(encoded);

@@ -28,7 +28,7 @@ export class User {
 	// Hide flag. Only takes effect if the user is logged in.
 	noFlag: boolean = false;
 	countryCode: string | null = null;
-	audioEnabled: boolean = true; // TODO: Should be disabled by default & opt-in
+	audioEnabled: boolean = true;
 	// Rate limiters
 	ChatRateLimit: RateLimiter;
 	LoginRateLimit: RateLimiter;

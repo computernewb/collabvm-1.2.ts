@@ -181,6 +181,11 @@ export class GuacamoleProtocol implements IProtocol {
 				if (choice == undefined) return false;
 				handler.onVote(user, choice);
 				break;
+			case 'audio':
+				if (decodedElements.length < 2) return false;
+				const enable = !!parseInt(decodedElements[1]);
+				handler.onAudio(user, enable);
+				break;
 
 			case 'admin':
 				if (decodedElements.length < 2) return false;

@@ -15,8 +15,14 @@ export class BinaryProtocol extends GuacamoleProtocol {
 		user.socket.sendBinary(msgpack.encode(bmsg));
 	}
 
+	// Relying on AudioFormat and CollabVMAudioFormatMessage being the same... eh
 	sendAudioFormat(user: User, format: AudioFormat) {
-		// TODO
+		const bmsg: CollabVMProtocolMessage = {
+			type: CollabVMProtocolMessageType.audioFormat,
+			audioFormat: format
+		};
+
+		user.socket.sendBinary(msgpack.encode(bmsg));
 	}
 
 	sendAudio(user: User, data: Buffer): void {
