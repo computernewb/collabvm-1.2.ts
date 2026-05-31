@@ -446,18 +446,27 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 			return;
 		}
 
-		user.connectedToNode = true;
-
-		if (viewMode !== undefined) {
-			if (viewMode !== 0 && viewMode !== 1) {
-				user.sendConnectFailResponse();
-				return;
-			}
-
-			user.viewMode = viewMode;
+		if (viewMode !== undefined && viewMode !== 0 && viewMode !== 1) {
+			user.sendConnectFailResponse();
+			return;
 		}
 
 		user.sendConnectOKResponse(this.VM.SnapshotsSupported());
+
+		if (this.Config.audio.enabled) {
+			user.sendAudioFormat({
+				format: "opus",
+				sampleRate: this.Config.audio.sampleRate,
+				channels: this.Config.audio.channels
+			});
+		}
+
+		user.connectedToNode = true;
+
+		// We could avoid this if it was just a boolean
+		if (viewMode !== undefined) {
+			user.viewMode = viewMode;
+		}
 
 		if (this.ChatHistory.size !== 0) {
 			let history = this.ChatHistory.toArray() as ChatHistory[];
@@ -479,14 +488,6 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 
 		if (this.voteInProgress) this.sendVoteUpdate(user);
 		this.sendTurnUpdate(this.turnController.getTurnInfo(), user);
-
-		if (this.Config.audio.enabled) {
-			user?.sendAudioFormat({
-				format: "opus",
-				sampleRate: this.Config.audio.sampleRate,
-				channels: this.Config.audio.channels
-			});
-		}
 	}
 
 	async onConnect(user: User, node: string) {
