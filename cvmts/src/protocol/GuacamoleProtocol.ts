@@ -358,6 +358,25 @@ export class GuacamoleProtocol implements IProtocol {
 	}
 
 	sendAudio(user: User, data: Buffer): void {
-		// TODO
+		/**
+		 * Guacamole support is rather annoying with Opus.
+		 * 
+		 * You cannot just naively throw a single Opus frame in a container, as
+		 * due to the Opus decoder being reinitialised constantly, it will be
+		 * missing sufficient history to be able to play back that frame
+		 * accurately.
+		 * 
+		 * Using Ogg Opus' pre-skip field, it is possible we could prepend the
+		 * past few frames of audio to aid the decoder - which is audibly
+		 * skipped - before the current frame. Xiph suggests at least 80 ms for
+		 * this. This would be rather inefficient though.
+		 * 
+		 * Integrating this into the server seems like it would be difficult
+		 * and inefficient though due to this being a protocol-specific detail
+		 * and there not really being any good place to put something like that
+		 * with state.
+		 * 
+		 * TODO?
+		 */
 	}
 }
