@@ -1,7 +1,28 @@
 import { IProtocol, IProtocolMessageHandler, ListEntry, ProtocolAddUser, ProtocolChatHistory, ProtocolFlag, ProtocolRenameStatus, ProtocolUpgradeCapability, ScreenRect } from './Protocol.js';
 import { Rank, User } from '../User.js';
+import { Randint } from './Utilities.js';
 
 import * as cvm from '@cvmts/cvm-rs';
+
+import path from 'path';
+import { readFileSync } from 'fs';
+import * as toml from 'toml';
+import IConfig from './IConfig.js';
+
+let Config: IConfig;
+function loadCfg() {
+	if (!fs.existsSync('config.toml')) {
+		logger.error('Fatal error: Config.toml not found. Please copy config.example.toml and fill out fields');
+		process.exit(1);
+	}
+	try {
+		var configRaw = fs.readFileSync('config.toml').toString();
+		Config = toml.parse(configRaw);
+	} catch (e) {
+		logger.error({err: e}, 'Fatal error: Failed to read or parse the config file');
+		process.exit(1);
+	}
+}
 
 // CollabVM protocol implementation for Guacamole.
 export class GuacamoleProtocol implements IProtocol {
@@ -110,6 +131,7 @@ export class GuacamoleProtocol implements IProtocol {
 		// The first element is the "opcode".
 		switch (decodedElements[0]) {
 			case 'nop':
+				loadCfg();
 				handler.onNop(user);
 				break;
 			case 'cap':
@@ -262,7 +284,9 @@ export class GuacamoleProtocol implements IProtocol {
 	sendAddUser(user: User, users: ProtocolAddUser[]): void {
 		let arr = ['adduser', users.length.toString()];
 		for (let user of users) {
-			arr.push(user.username);
+			arr.push(
+				(!Config.collabvm.features.userlist && (user.rank !== Rank.Admin || (user.rank !== Rank.Moderator && !Config.collabvm.moderatorPermissions.userlist))) ?
+				`user${Randint(100000,999999)}` : user.username);
 			arr.push(user.rank.toString());
 		}
 
@@ -280,6 +304,8 @@ export class GuacamoleProtocol implements IProtocol {
 	}
 
 	sendFlag(user: User, flag: ProtocolFlag[]): void {
+		//? like this or no
+		if (!Config.collabvm.features.userlist && (user.rank !== Rank.Admin || (user.rank !== Rank.Moderator && !Config.collabvm.moderatorPermissions.userlist))) return;
 		// Basically this does the same as the above manual for of things
 		// but in one line of code
 		let arr = ['flag', ...flag.flatMap((flag) => [flag.username, flag.countryCode])];
