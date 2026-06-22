@@ -109,6 +109,7 @@ node = "acoolvm"
 # HTML display name shown on the VM list
 displayname = "A <b>Really</b> Cool CollabVM Instance"
 # HTML message shown in the chat when a user joins
+enableMotd = true
 motd = "welcome!"
 # Maximum amount of active connections allowed from the same IP.
 maxConnections = 3
@@ -142,6 +143,23 @@ turnwhitelist = false
 # SHA256 sum for the password to take a turn. Only takes effect if turnwhitelist == true. If set to an empty string or not provided, only admins and mods can take turns
 turnpass = ""
 
+[collabvm.features]
+# Enable or disable turns (bypasses the whitelist)
+turns = true
+# Enable or disable resets (bypasses mod perm, excluding admin)
+resets = true
+# Enable or disable the chat (excludes admin)
+# (that will of course wont affect any sys msg)
+chat = true
+# Enable or disable resets (bypasses mod perm, excluding admin)
+userlist = true
+
+[collabvm.features.vm]
+# Enable or disable mouse control (excluding admin)
+mouse = true
+# Enable or disable keyboard control (excluding admin)
+keyboard = true
+
 # What a moderator can and can't do
 [collabvm.moderatorPermissions]
 restore = true
@@ -150,7 +168,12 @@ ban = true
 forcevote = true
 mute = true
 kick = true
-bypassturn = true
 rename = true
 grabip = true
+# (it also applies when chat is disabled, the mod will be able to message even without XSSing)
 xss = true
+# (will be able to take turns when disabled)
+bypassturn = true
+# Mods will be able to see the connected users even when disabled
+# (This only affects if it got disabled in [cvm.features] as said)
+userlist = true
