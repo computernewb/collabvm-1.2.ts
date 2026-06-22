@@ -109,7 +109,6 @@ node = "acoolvm"
 # HTML display name shown on the VM list
 displayname = "A <b>Really</b> Cool CollabVM Instance"
 # HTML message shown in the chat when a user joins
-enableMotd = true
 motd = "welcome!"
 # Maximum amount of active connections allowed from the same IP.
 maxConnections = 3
