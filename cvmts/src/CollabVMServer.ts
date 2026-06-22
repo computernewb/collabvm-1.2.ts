@@ -331,7 +331,7 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 
 	onTurnRequest(user: User, forfeit: boolean): void {
 		user.logger.trace({event: "turn/requested"});
-		if ((!this.turnsAllowed || this.Config.collabvm.turnwhitelist) && user.rank !== Rank.Admin && user.rank !== Rank.Moderator && !user.turnWhitelist) return;
+		if ((!this.Config.collabvm.features.turns && user.rank !== Rank.Admin) || ((!this.turnsAllowed || this.Config.collabvm.turnwhitelist) && user.rank !== Rank.Admin && user.rank !== Rank.Moderator && !user.turnWhitelist)) return;
 
 		if (!this.authCheck(user, this.Config.auth.guestPermissions.turn)) return;
 
@@ -517,6 +517,9 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 			user.logger.warn({event: "chat/dropped message without username", message});
 			return;
 		}
+		if (!this.Config.collabvm.features.chat || (user.rank !== Rank.Admin && (user.rank !== Rank.Moderator || !this.Config.collabvm.moderatorPermissions.xss))) {
+			user.sendChatMessage('', "Chat is disabled");
+		}
 		if (user.IP.muted) return;
 		if (!this.authCheck(user, this.Config.auth.guestPermissions.chat)) return;
 
@@ -533,12 +536,14 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 
 	onKey(user: User, keysym: number, pressed: boolean): void {
 		if (this.TurnQueue.peek() !== user && user.rank !== Rank.Admin) return;
+		if (!this.Config.collabvm.features.vm.keyboard && user.rank !== Rank.Admin) return;
 		user.logger.info({event: "key", keysym, pressed});
 		this.VM.GetDisplay()?.KeyboardEvent(keysym, pressed);
 	}
 
 	onMouse(user: User, x: number, y: number, buttonMask: number): void {
 		if (this.TurnQueue.peek() !== user && user.rank !== Rank.Admin) return;
+		if (!this.Config.collabvm.features.vm.mouse && user.rank !== Rank.Admin) return;
 		this.VM.GetDisplay()?.MouseEvent(x, y, buttonMask);
 	}
 
@@ -549,7 +554,7 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 		var pwdHash = sha256.digest('hex');
 		sha256.destroy();
 
-		if (this.Config.collabvm.turnwhitelist && pwdHash === this.Config.collabvm.turnpass) {
+		if ((this.Config.collabvm.turnwhitelist && pwdHash === this.Config.collabvm.turnpass) && this.Config.collabvm.features.turns) {
 			user.logger.info({event: "admin/granted turnpass"})
 			user.turnWhitelist = true;
 			user.sendChatMessage('', 'You may now take turns.');
@@ -1004,6 +1009,8 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 
 	startVote() {
 		if (this.voteInProgress) return;
+		// todo: send sys message to the user that says that resets are disabled
+		if (!this.Config.collabvm.features.resets) return;
 		this.voteInProgress = true;
 		this.logger.info({event: "vote/start"});
 		this.clients.forEach((c) => c.sendVoteStarted());
