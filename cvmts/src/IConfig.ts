@@ -52,7 +52,6 @@ export default interface IConfig {
 		};
 		node: string;
 		displayname: string;
-		enableMotd: boolean;
 		motd: string;
 		maxConnections: number;
 		moderatorEnabled: boolean;
