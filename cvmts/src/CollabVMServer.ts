@@ -331,7 +331,7 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 
 	onTurnRequest(user: User, forfeit: boolean): void {
 		user.logger.trace({event: "turn/requested"});
-		if ((!this.Config.collabvm.features.turns && user.rank !== Rank.Admin) || ((!this.turnsAllowed || this.Config.collabvm.turnwhitelist) && user.rank !== Rank.Admin && user.rank !== Rank.Moderator && !user.turnWhitelist)) return;
+		if ((!this.turnsAllowed || this.Config.collabvm.turnwhitelist) && user.rank !== Rank.Admin && user.rank !== Rank.Moderator && !user.turnWhitelist) return;
 
 		if (!this.authCheck(user, this.Config.auth.guestPermissions.turn)) return;
 
@@ -1009,8 +1009,6 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 
 	startVote() {
 		if (this.voteInProgress) return;
-		// todo: send sys message to the user that says that resets are disabled
-		if (!this.Config.collabvm.features.resets) return;
 		this.voteInProgress = true;
 		this.logger.info({event: "vote/start"});
 		this.clients.forEach((c) => c.sendVoteStarted());
