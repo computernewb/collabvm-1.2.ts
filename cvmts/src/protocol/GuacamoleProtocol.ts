@@ -1,5 +1,5 @@
 import { IProtocol, IProtocolMessageHandler, ListEntry, ProtocolAddUser, ProtocolChatHistory, ProtocolFlag, ProtocolRenameStatus, ProtocolUpgradeCapability, ScreenRect } from './Protocol.js';
-import { Rank, User } from '../User.js';
+import { Rank, User, ObfuscatedUsers } from '../User.js';
 
 import * as cvm from '@cvmts/cvm-rs';
 

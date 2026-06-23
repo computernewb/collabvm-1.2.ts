@@ -1,6 +1,6 @@
 import IConfig from './IConfig.js';
 import * as Utilities from './Utilities.js';
-import { User, Rank } from './User.js';
+import { User, Rank, ObfuscatedUsers } from './User.js';
 // I hate that you have to do it like this
 import CircularBuffer from 'mnemonist/circular-buffer.js';
 import Queue from 'mnemonist/queue.js';

@@ -11,6 +11,11 @@ import { BanManager } from './BanManager.js';
 import { IProtocol, IProtocolMessageHandler, ListEntry, ProtocolAddUser, ProtocolChatHistory, ProtocolFlag, ProtocolRenameStatus, ProtocolUpgradeCapability, ScreenRect } from './protocol/Protocol.js';
 import { TheProtocolManager } from './protocol/Manager.js';
 
+export class ObfuscatedUsers extends Utilities.BetterMap {
+	constructor() { super() }
+	genUsername() { return `user${Utilities.Randint(100000, 999999)}` }
+}
+
 export class User {
 	socket: NetworkClient;
 	nopSendInterval: NodeJS.Timeout;
