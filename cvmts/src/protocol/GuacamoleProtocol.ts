@@ -29,6 +29,8 @@ function loadCfg() {
 
 // CollabVM protocol implementation for Guacamole.
 export class GuacamoleProtocol implements IProtocol {
+	constructor() { loadCfg() }
+	
 	private __processMessage_admin(user: User, handler: IProtocolMessageHandler, decodedElements: string[]): boolean {
 		switch (decodedElements[1]) {
 			case '2':
@@ -134,7 +136,6 @@ export class GuacamoleProtocol implements IProtocol {
 		// The first element is the "opcode".
 		switch (decodedElements[0]) {
 			case 'nop':
-				loadCfg();
 				handler.onNop(user);
 				break;
 			case 'cap':
