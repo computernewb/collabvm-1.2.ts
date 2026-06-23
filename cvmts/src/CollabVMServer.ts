@@ -5,7 +5,7 @@ import { User, Rank } from './User.js';
 import CircularBuffer from 'mnemonist/circular-buffer.js';
 import Queue from 'mnemonist/queue.js';
 import { createHash } from 'crypto';
-import { VMState, QemuVM, QemuVmDefinition } from '@computernewb/superqemu';
+import { VMState } from '@computernewb/superqemu';
 import { IPDataManager } from './IPData.js';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';

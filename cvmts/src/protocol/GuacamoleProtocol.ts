@@ -4,7 +4,6 @@ import { Randint } from '../Utilities.js';
 
 import * as cvm from '@cvmts/cvm-rs';
 
-import path from 'node:path';
 import fs from 'node:fs';
 import * as toml from 'toml';
 import IConfig from '../IConfig.js';
