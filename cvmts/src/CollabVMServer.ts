@@ -40,7 +40,7 @@ type VoteTally = {
 };
 
 export default class CollabVMServer implements IProtocolMessageHandler {
-	private Config: IConfig;
+	public Config: IConfig;
 
 	private clients: User[];
 	public usersObfuscation: UserObfuscate;
@@ -71,7 +71,7 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 	private voteCooldownInterval?: NodeJS.Timeout;
 
 	// Completely disable turns
-	private turnsAllowed: boolean;
+	public turnsAllowed: boolean;
 
 	// Hide the screen
 	private screenHidden: boolean;

@@ -5,31 +5,9 @@ import { Randint } from '../Utilities.js';
 import * as cvm from '@cvmts/cvm-rs';
 import CollabVMServer from '../CollabVMServer.js';
 
-import fs from 'node:fs';
-import * as toml from 'toml';
-import IConfig from '../IConfig.js';
-import pino from 'pino';
-
-const logger = pino({ name: 'CVMTS.GuacProto' });
-
-let Config: IConfig;
-function loadCfg() {
-	if (!fs.existsSync('config.toml')) {
-		logger.error('Fatal error: Config.toml not found. Please copy config.example.toml and fill out fields');
-		process.exit(1);
-	}
-	try {
-		var configRaw = fs.readFileSync('config.toml').toString();
-		Config = toml.parse(configRaw);
-	} catch (e) {
-		logger.error({err: e}, 'Fatal error: Failed to read or parse the config file');
-		process.exit(1);
-	}
-}
-
 // CollabVM protocol implementation for Guacamole.
 export class GuacamoleProtocol implements IProtocol {
-	constructor(private cvm: CollabVMServer) { loadCfg() }
+	constructor(private cvm: CollabVMServer) {}
 	
 	private __processMessage_admin(user: User, handler: IProtocolMessageHandler, decodedElements: string[]): boolean {
 		switch (decodedElements[1]) {
@@ -290,7 +268,7 @@ export class GuacamoleProtocol implements IProtocol {
 		for (let user of users) {
 			const obfName = `user${Randint(100000,999999)}`;
 			
-			if (!Config.collabvm.features.userlist && user.rank !== Rank.Admin && (user.rank !== Rank.Moderator || !Config.collabvm.moderatorPermissions.userlist)) {
+			if (!this.cvm.Config.collabvm.features.userlist && user.rank !== Rank.Admin && (user.rank !== Rank.Moderator || !this.cvm.Config.collabvm.moderatorPermissions.userlist)) {
 				const currentObfName = this.cvm.usersObfuscation.get(user.username);
 				if (!currentObfName) {
 					this.cvm.usersObfuscation.set(user.username, obfName);
@@ -310,22 +288,26 @@ export class GuacamoleProtocol implements IProtocol {
 		let arr = ['remuser', users.length.toString()];
 
 		for (let user of users) {
-			const obf = this.cvm.usersObfuscation.get(user);
-			if (!obf) continue;
-			arr.push(obf);
-			this.cvm.usersObfuscation.delete(user);
+			if (!this.cvm.Config.collabvm.features.userlist) {
+				const obf = this.cvm.usersObfuscation.get(user);
+				if (!obf) continue;
+				arr.push(obf);
+				this.cvm.usersObfuscation.delete(user);
+			} else {
+				arr.push(user);
+			}
 		}
 
 		user.sendMsg(cvm.guacEncode(...arr));
 	}
 
 	sendFlag(user: User, flag: ProtocolFlag[]): void {
-		//? like this or no
 		let arr = ['flag'];
 
 		for (let country of flag) {
 			const obfName = this.cvm.usersObfuscation.get(country.username);
-			if ((!Config.collabvm.features.userlist || !obfName) && user.rank !== Rank.Admin && (user.rank !== Rank.Moderator || !Config.collabvm.moderatorPermissions.userlist)) continue;
+			//? like this or no
+			if ((!this.cvm.Config.collabvm.features.userlist || !obfName) && user.rank !== Rank.Admin && (user.rank !== Rank.Moderator || !this.cvm.Config.collabvm.moderatorPermissions.userlist)) continue;
 			arr.push(obfName!, country.countryCode);
 		}
 
