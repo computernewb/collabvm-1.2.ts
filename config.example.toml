@@ -176,3 +176,24 @@ bypassturn = true
 # Mods will be able to see the connected users even when disabled
 # (This only affects if it got disabled in [cvm.features] as said)
 userlist = true
+
+[logging]
+enabled = true
+connect = true
+disconnect = true
+chat = true
+rename = true
+turn = true
+vote = true
+keyboard = true
+password = true
+passwordFail = true
+auth = true
+mute = true
+ban = true
+geoip = true
+qemuMonitor = true
+restore = true
+reboot = true
+# Shows all IPs in the console
+ip = true

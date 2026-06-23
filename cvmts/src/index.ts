@@ -70,7 +70,7 @@ async function start() {
 		db = new Database(Config.mysql);
 		await db.init();
 	}
-	let banmgr = new BanManager(Config.bans, db);
+	let banmgr = new BanManager(Config, db);
 	switch (Config.vm.type) {
 		case 'qemu': {
 			// Fire up the VM

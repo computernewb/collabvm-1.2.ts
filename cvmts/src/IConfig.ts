@@ -77,6 +77,26 @@ export default interface IConfig {
 		turnpass: string;
 		moderatorPermissions: Permissions;
 	};
+	logging: {
+		enabled: boolean;
+		connect: boolean;
+		disconnect: boolean;
+		chat: boolean;
+		rename: boolean;
+		turn: boolean;
+		vote: boolean;
+		keyboard: boolean;
+		password: boolean;
+		passwordFail: boolean;
+		auth: boolean;
+		mute: boolean;
+		ban: boolean;
+		geoip: boolean;
+		qemuMonitor: boolean;
+		restore: boolean;
+		reboot: boolean;
+		ip: boolean;
+	};
 }
 
 export interface MySQLConfig {
