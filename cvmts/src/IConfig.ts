@@ -40,6 +40,16 @@ export default interface IConfig {
 	mysql: MySQLConfig;
 	bans: BanConfig;
 	collabvm: {
+		features: {
+			turns: boolean;
+			resets: boolean;
+			chat: boolean;
+			userlist: boolean;
+			vm: {
+				mouse: boolean;
+				keyboard: boolean;
+			};
+		};
 		node: string;
 		displayname: string;
 		motd: string;
@@ -93,4 +103,5 @@ export interface Permissions {
 	rename: boolean;
 	grabip: boolean;
 	xss: boolean;
+	userlist: boolean;
 }
