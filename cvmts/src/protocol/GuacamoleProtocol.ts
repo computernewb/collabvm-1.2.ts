@@ -292,11 +292,9 @@ export class GuacamoleProtocol implements IProtocol {
 			
 			if (!Config.collabvm.features.userlist && user.rank !== Rank.Admin && (user.rank !== Rank.Moderator || !Config.collabvm.moderatorPermissions.userlist)) {
 				const currentObfName = this.cvm.usersObfuscation.get(user.username);
-				console.log(currentObfName)
 				if (!currentObfName) {
 					this.cvm.usersObfuscation.set(user.username, obfName);
 					arr.push(obfName);
-					console.log(this.cvm.usersObfuscation.values())
 				} else {
 					arr.push(currentObfName);
 				}
@@ -305,7 +303,6 @@ export class GuacamoleProtocol implements IProtocol {
 			arr.push(user.rank.toString());
 		}
 
-		console.log(JSON.stringify(arr))
 		user.sendMsg(cvm.guacEncode(...arr));
 	}
 
@@ -316,6 +313,7 @@ export class GuacamoleProtocol implements IProtocol {
 			const obf = this.cvm.usersObfuscation.get(user);
 			if (!obf) continue;
 			arr.push(obf);
+			this.cvm.usersObfuscation.delete(user);
 		}
 
 		user.sendMsg(cvm.guacEncode(...arr));
