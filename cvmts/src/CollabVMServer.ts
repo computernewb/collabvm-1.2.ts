@@ -517,8 +517,9 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 			user.logger.warn({event: "chat/dropped message without username", message});
 			return;
 		}
-		if (!this.Config.collabvm.features.chat || (user.rank !== Rank.Admin && (user.rank !== Rank.Moderator || !this.Config.collabvm.moderatorPermissions.xss))) {
+		if (!this.Config.collabvm.features.chat && (user.rank !== Rank.Admin && (user.rank !== Rank.Moderator || !this.Config.collabvm.moderatorPermissions.xss))) {
 			user.sendChatMessage('', "Chat is disabled");
+			return;
 		}
 		if (user.IP.muted) return;
 		if (!this.authCheck(user, this.Config.auth.guestPermissions.chat)) return;
