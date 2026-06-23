@@ -333,7 +333,7 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 
 	onTurnRequest(user: User, forfeit: boolean): void {
 		user.logger.trace({event: "turn/requested"});
-		if (!this.Config.collabvm.features.turns && (!this.turnsAllowed || this.Config.collabvm.turnwhitelist) && user.rank !== Rank.Admin && ((!this.Config.collabvm.features.turns && !this.Config.collabvm.moderatorPermissions.bypassturn) || user.rank !== Rank.Moderator) && !user.turnWhitelist) return;
+		if (!this.Config.collabvm.features.turns && user.rank !== Rank.Admin && ((!this.Config.collabvm.features.turns && !this.Config.collabvm.moderatorPermissions.bypassturn) || user.rank !== Rank.Moderator) || (!this.turnsAllowed || this.Config.collabvm.turnwhitelist) && user.rank !== Rank.Admin && user.rank !== Rank.Moderator && !user.turnWhitelist) return;
 
 		if (!this.authCheck(user, this.Config.auth.guestPermissions.turn)) return;
 
