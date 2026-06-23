@@ -333,7 +333,7 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 
 	onTurnRequest(user: User, forfeit: boolean): void {
 		user.logger.trace({event: "turn/requested"});
-		if ((!this.turnsAllowed || this.Config.collabvm.turnwhitelist) && user.rank !== Rank.Admin && user.rank !== Rank.Moderator && !user.turnWhitelist) return;
+		if ((!this.Config.collabvm.features.turns && user.rank !== Rank.Admin && (user.rank !== Rank.Moderator || !this.Config.collabvm.moderatorPermissions.bypassturn)) || ((!this.turnsAllowed || this.Config.collabvm.turnwhitelist) && user.rank !== Rank.Admin && user.rank !== Rank.Moderator && !user.turnWhitelist)) return;
 
 		if (!this.authCheck(user, this.Config.auth.guestPermissions.turn)) return;
 
@@ -534,13 +534,13 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 	}
 
 	onKey(user: User, keysym: number, pressed: boolean): void {
-		if (this.TurnQueue.peek() !== user && user.rank !== Rank.Admin) return;
+		if (!this.Config.collabvm.features.vm.keyboard && this.TurnQueue.peek() !== user && user.rank !== Rank.Admin) return;
 		user.logger.info({event: "key", keysym, pressed});
 		this.VM.GetDisplay()?.KeyboardEvent(keysym, pressed);
 	}
 
 	onMouse(user: User, x: number, y: number, buttonMask: number): void {
-		if (this.TurnQueue.peek() !== user && user.rank !== Rank.Admin) return;
+		if (!this.Config.collabvm.features.vm.mouse && this.TurnQueue.peek() !== user && user.rank !== Rank.Admin) return;
 		this.VM.GetDisplay()?.MouseEvent(x, y, buttonMask);
 	}
 
