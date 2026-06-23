@@ -377,7 +377,7 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 			user.logger.warn({event: "vote/voted without snapshots enabled"});
 			return;
 		}
-		if ((!this.turnsAllowed || this.Config.collabvm.turnwhitelist) && user.rank !== Rank.Admin && user.rank !== Rank.Moderator && !user.turnWhitelist) return;
+		if ((!this.Config.collabvm.features.resets && user.rank !== Rank.Admin && (user.rank !== Rank.Moderator || !this.Config.collabvm.moderatorPermissions.restore)) || ((!this.turnsAllowed || this.Config.collabvm.turnwhitelist) && user.rank !== Rank.Admin && user.rank !== Rank.Moderator && !user.turnWhitelist)) return;
 		if (!user.connectedToNode) {
 			user.logger.warn({event: "vote/not connected to node"});
 			return;
@@ -519,8 +519,11 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 			user.logger.warn({event: "chat/dropped message without username", message});
 			return;
 		}
-		if (user.IP.muted) return;
-		if (!this.authCheck(user, this.Config.auth.guestPermissions.chat)) return;
+		if (!this.Config.collabvm.features.chat && user.rank !== Rank.Admin && (user.rank !== Rank.Moderator || !this.Config.collabvm.moderatorPermissions.xss)) {
+			user.sendChatMessage('', "Chat is disabled");
+			return;
+		}
+		if (user.IP.muted || !this.authCheck(user, this.Config.auth.guestPermissions.chat)) return;
 
 		var msg = Utilities.HTMLSanitize(message);
 		// One of the things I hated most about the old server is it completely discarded your message if it was too long
