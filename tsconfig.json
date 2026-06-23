@@ -1,7 +1,7 @@
 // This is the base tsconfig the entire cvmts project uses
 {
 	"compilerOptions": {
-		"ignoreDeprecations": "6.0",
+		"ignoreDeprecations": "5.0",
 		"target": "ES2022",
 		"module": "ES2022",
 		"moduleResolution": "Node",
