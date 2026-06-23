@@ -1,13 +1,16 @@
 import { IProtocol, IProtocolMessageHandler, ListEntry, ProtocolAddUser, ProtocolChatHistory, ProtocolFlag, ProtocolRenameStatus, ProtocolUpgradeCapability, ScreenRect } from './Protocol.js';
 import { Rank, User } from '../User.js';
-import { Randint } from './Utilities.js';
+import { Randint } from '../Utilities.js';
 
 import * as cvm from '@cvmts/cvm-rs';
 
-import path from 'path';
-import { readFileSync } from 'fs';
+import path from 'node:path';
+import fs from 'node:fs';
 import * as toml from 'toml';
-import IConfig from './IConfig.js';
+import IConfig from '../IConfig.js';
+import pino from 'pino';
+
+const logger = pino({ name: 'CVMTS.GuacProto' });
 
 let Config: IConfig;
 function loadCfg() {
@@ -285,7 +288,7 @@ export class GuacamoleProtocol implements IProtocol {
 		let arr = ['adduser', users.length.toString()];
 		for (let user of users) {
 			arr.push(
-				(!Config.collabvm.features.userlist && (user.rank !== Rank.Admin || (user.rank !== Rank.Moderator && !Config.collabvm.moderatorPermissions.userlist))) ?
+				(!Config.collabvm.features.userlist && (user.rank !== Rank.Admin && (user.rank === Rank.Moderator && !Config.collabvm.moderatorPermissions.userlist))) ?
 				`user${Randint(100000,999999)}` : user.username);
 			arr.push(user.rank.toString());
 		}
@@ -305,7 +308,7 @@ export class GuacamoleProtocol implements IProtocol {
 
 	sendFlag(user: User, flag: ProtocolFlag[]): void {
 		//? like this or no
-		if (!Config.collabvm.features.userlist && (user.rank !== Rank.Admin || (user.rank !== Rank.Moderator && !Config.collabvm.moderatorPermissions.userlist))) return;
+		if (!Config.collabvm.features.userlist && (user.rank !== Rank.Admin && (user.rank !== Rank.Moderator && !Config.collabvm.moderatorPermissions.userlist))) return;
 		// Basically this does the same as the above manual for of things
 		// but in one line of code
 		let arr = ['flag', ...flag.flatMap((flag) => [flag.username, flag.countryCode])];
