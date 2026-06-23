@@ -287,8 +287,12 @@ export class GuacamoleProtocol implements IProtocol {
 	sendAddUser(user: User, users: ProtocolAddUser[]): void {
 		let arr = ['adduser', users.length.toString()];
 		for (let user of users) {
+			console.log(String(!Config.collabvm.features.userlist))
+			console.log(String(user.rank !== Rank.Admin))
+			console.log(String(user.rank !== Rank.Moderator))
+			console.log(String(!Config.collabvm.moderatorPermissions.userlist))
 			arr.push(
-				(!Config.collabvm.features.userlist && (user.rank !== Rank.Admin && (user.rank === Rank.Moderator && !Config.collabvm.moderatorPermissions.userlist))) ?
+				(!Config.collabvm.features.userlist && (user.rank !== Rank.Admin && (user.rank !== Rank.Moderator || !Config.collabvm.moderatorPermissions.userlist))) ?
 				`user${Randint(100000,999999)}` : user.username);
 			arr.push(user.rank.toString());
 		}
@@ -308,7 +312,7 @@ export class GuacamoleProtocol implements IProtocol {
 
 	sendFlag(user: User, flag: ProtocolFlag[]): void {
 		//? like this or no
-		if (!Config.collabvm.features.userlist && (user.rank !== Rank.Admin && (user.rank !== Rank.Moderator && !Config.collabvm.moderatorPermissions.userlist))) return;
+		if (!Config.collabvm.features.userlist && (user.rank !== Rank.Admin && (user.rank !== Rank.Moderator || !Config.collabvm.moderatorPermissions.userlist))) return;
 		// Basically this does the same as the above manual for of things
 		// but in one line of code
 		let arr = ['flag', ...flag.flatMap((flag) => [flag.username, flag.countryCode])];
