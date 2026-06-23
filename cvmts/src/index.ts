@@ -99,16 +99,18 @@ async function start() {
 	process.on('SIGINT', async () => await stop());
 	process.on('SIGTERM', async () => await stop());
 
+	// Initialize the server
+	var CVM = new CollabVMServer(Config, VM, banmgr, auth, geoipReader);
+
 	// Register protocol(s) that the server supports
-	TheProtocolManager.registerProtocol("guacamole", () => new GuacamoleProtocol);
-	TheProtocolManager.registerProtocol("binary1", () => new BinRectsProtocol);
+	TheProtocolManager.registerProtocol("guacamole", () => new GuacamoleProtocol(CVM));
+	TheProtocolManager.registerProtocol("binary1", () => new BinRectsProtocol(CVM));
 
 	// Start up the server
-	var CVM = new CollabVMServer(Config, VM, banmgr, auth, geoipReader);
-	await VM.Start();
 
 	var WS = new WSServer(Config, banmgr);
 	WS.on('connect', (client: User) => CVM.connectionOpened(client));
+	await VM.Start();
 	WS.start();
 }
 start();

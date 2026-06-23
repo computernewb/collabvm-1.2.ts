@@ -40,8 +40,9 @@ type VoteTally = {
 };
 
 export default class CollabVMServer implements IProtocolMessageHandler {
-	private Config: IConfig;
+	public Config: IConfig;
 
+	public obfusNames: ObfuscatedUsers;
 	private clients: User[];
 
 	private ChatHistory: CircularBuffer<ChatHistory>;
@@ -111,6 +112,7 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 		this.screenHidden = false;
 		this.screenHiddenImg = readFileSync(path.join(kCVMTSAssetsRoot, 'screenhidden.jpeg'));
 		this.screenHiddenThumb = readFileSync(path.join(kCVMTSAssetsRoot, 'screenhiddenthumb.jpeg'));
+		this.obfusNames = new ObfuscatedUsers();
 
 		this.indefiniteTurn = null;
 		this.ModPerms = Utilities.MakeModPerms(this.Config.collabvm.moderatorPermissions);

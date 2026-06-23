@@ -2,9 +2,12 @@ import { IProtocol, IProtocolMessageHandler, ListEntry, ProtocolAddUser, Protoco
 import { Rank, User, ObfuscatedUsers } from '../User.js';
 
 import * as cvm from '@cvmts/cvm-rs';
+import CollabVMServer from '../CollabVMServer.js';
 
 // CollabVM protocol implementation for Guacamole.
 export class GuacamoleProtocol implements IProtocol {
+	constructor(private cvm: CollabVMServer) {}
+
 	private __processMessage_admin(user: User, handler: IProtocolMessageHandler, decodedElements: string[]): boolean {
 		switch (decodedElements[1]) {
 			case '2':
@@ -102,7 +105,6 @@ export class GuacamoleProtocol implements IProtocol {
 		}
 		return true;
 	}
-
 	processMessage(user: User, handler: IProtocolMessageHandler, buffer: Buffer): boolean {
 		let decodedElements = cvm.guacDecode(buffer.toString('utf-8'));
 		if (decodedElements.length < 1) return false;
@@ -186,7 +188,6 @@ export class GuacamoleProtocol implements IProtocol {
 				if (decodedElements.length < 2) return false;
 				return this.__processMessage_admin(user, handler, decodedElements);
 		}
-
 		return true;
 	}
 
@@ -225,7 +226,6 @@ export class GuacamoleProtocol implements IProtocol {
 			user.sendMsg(cvm.guacEncode('login', '0', message!));
 		}
 	}
-
 	sendAdminLoginResponse(user: User, ok: boolean, modPerms: number | undefined): void {
 		if (ok) {
 			if (modPerms == undefined) {
@@ -249,7 +249,6 @@ export class GuacamoleProtocol implements IProtocol {
 	sendChatMessage(user: User, username: string, message: string): void {
 		user.sendMsg(cvm.guacEncode('chat', username, message));
 	}
-
 	sendChatHistoryMessage(user: User, history: ProtocolChatHistory[]): void {
 		let arr = ['chat'];
 		for (let a of history) {
@@ -262,34 +261,41 @@ export class GuacamoleProtocol implements IProtocol {
 	sendAddUser(user: User, users: ProtocolAddUser[]): void {
 		let arr = ['adduser', users.length.toString()];
 		for (let user of users) {
-			arr.push(user.username);
+			const newObfName = this.cvm.obfusNames.genUsername();
+			if (!this.cvm.Config.collabvm.features.userlist && user.rank !== Rank.Admin && (user.rank !== Rank.Moderator || !this.cvm.Config.collabvm.moderatorPermissions.userlist)) {
+				const obfName = this.cvm.obfusNames.getOrSet(user.username, newObfName);
+				arr.push(obfName);
+			} else arr.push(user.username);
 			arr.push(user.rank.toString());
 		}
-
 		user.sendMsg(cvm.guacEncode(...arr));
 	}
-
-	sendRemUser(user: User, users: string[]): void {
+	sendRemUser(target: User, users: string[]): void {
 		let arr = ['remuser', users.length.toString()];
-
 		for (let user of users) {
-			arr.push(user);
+			if (!this.cvm.Config.collabvm.features.userlist && target.rank !== Rank.Admin && (target.rank !== Rank.Moderator || !this.cvm.Config.collabvm.moderatorPermissions.userlist)) {
+				const obf = this.cvm.obfusNames.get(user);
+				if (!obf) continue;
+				arr.push(obf);
+				this.cvm.obfusNames.delete(obf);
+			} else arr.push(user);
 		}
-
-		user.sendMsg(cvm.guacEncode(...arr));
+		target.sendMsg(cvm.guacEncode(...arr));
 	}
-
 	sendFlag(user: User, flag: ProtocolFlag[]): void {
 		// Basically this does the same as the above manual for of things
-		// but in one line of code
-		let arr = ['flag', ...flag.flatMap((flag) => [flag.username, flag.countryCode])];
+		// but with flatMap
+		let arr = ['flag', ...flag.flatMap((flag) => {
+			let username = flag.username;
+			if (this.cvm.obfusNames.get(username) && !this.cvm.Config.collabvm.features.userlist) username = this.cvm.obfusNames.set(flag.username, flag.countryCode).get(flag.username);
+			return [username, flag.countryCode]
+		})];
 		user.sendMsg(cvm.guacEncode(...arr));
 	}
 
 	sendSelfRename(user: User, status: ProtocolRenameStatus, newUsername: string, rank: Rank): void {
 		user.sendMsg(cvm.guacEncode('rename', '0', status.toString(), newUsername));
 	}
-
 	sendRename(user: User, oldUsername: string, newUsername: string, rank: Rank): void {
 		user.sendMsg(cvm.guacEncode('rename', '1', oldUsername, newUsername));
 	}
@@ -308,15 +314,12 @@ export class GuacamoleProtocol implements IProtocol {
 	sendVoteStarted(user: User): void {
 		user.sendMsg(cvm.guacEncode('vote', '0'));
 	}
-
 	sendVoteStats(user: User, msLeft: number, nrYes: number, nrNo: number): void {
 		user.sendMsg(cvm.guacEncode('vote', '1', msLeft.toString(), nrYes.toString(), nrNo.toString()));
 	}
-
 	sendVoteEnded(user: User): void {
 		user.sendMsg(cvm.guacEncode('vote', '2'));
 	}
-
 	sendVoteCooldown(user: User, ms: number): void {
 		user.sendMsg(cvm.guacEncode('vote', '3', ms.toString()));
 	}
@@ -324,11 +327,9 @@ export class GuacamoleProtocol implements IProtocol {
 	private getTurnQueueBase(turnTime: number, users: string[]): string[] {
 		return ['turn', turnTime.toString(), users.length.toString(), ...users];
 	}
-
 	sendTurnQueue(user: User, turnTime: number, users: string[]): void {
 		user.sendMsg(cvm.guacEncode(...this.getTurnQueueBase(turnTime, users)));
 	}
-
 	sendTurnQueueWaiting(user: User, turnTime: number, users: string[], waitTime: number): void {
 		let queue = this.getTurnQueueBase(turnTime, users);
 		queue.push(waitTime.toString());
@@ -338,7 +339,6 @@ export class GuacamoleProtocol implements IProtocol {
 	sendScreenResize(user: User, width: number, height: number): void {
 		user.sendMsg(cvm.guacEncode('size', '0', width.toString(), height.toString()));
 	}
-
 	sendScreenUpdate(user: User, rect: ScreenRect): void {
 		user.sendMsg(cvm.guacEncode('png', '0', '0', rect.x.toString(), rect.y.toString(), rect.data.toString('base64')));
 		this.sendSync(user, Date.now());
