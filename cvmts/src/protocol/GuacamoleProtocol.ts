@@ -3,6 +3,7 @@ import { Rank, User } from '../User.js';
 import { Randint } from '../Utilities.js';
 
 import * as cvm from '@cvmts/cvm-rs';
+import CollabVMServer from '../CollabVMServer.js';
 
 import fs from 'node:fs';
 import * as toml from 'toml';
@@ -28,7 +29,7 @@ function loadCfg() {
 
 // CollabVM protocol implementation for Guacamole.
 export class GuacamoleProtocol implements IProtocol {
-	constructor() { loadCfg() }
+	constructor(private cvm: CollabVMServer) { loadCfg() }
 	
 	private __processMessage_admin(user: User, handler: IProtocolMessageHandler, decodedElements: string[]): boolean {
 		switch (decodedElements[1]) {
@@ -287,16 +288,24 @@ export class GuacamoleProtocol implements IProtocol {
 	sendAddUser(user: User, users: ProtocolAddUser[]): void {
 		let arr = ['adduser', users.length.toString()];
 		for (let user of users) {
-			console.log(String(!Config.collabvm.features.userlist))
-			console.log(String(user.rank !== Rank.Admin))
-			console.log(String(user.rank !== Rank.Moderator))
-			console.log(String(!Config.collabvm.moderatorPermissions.userlist))
-			arr.push(
-				(!Config.collabvm.features.userlist && (user.rank !== Rank.Admin && (user.rank !== Rank.Moderator || !Config.collabvm.moderatorPermissions.userlist))) ?
-				`user${Randint(100000,999999)}` : user.username);
+			const obfName = `user${Randint(100000,999999)}`;
+			
+			if (!Config.collabvm.features.userlist && user.rank !== Rank.Admin && (user.rank !== Rank.Moderator || !Config.collabvm.moderatorPermissions.userlist)) {
+				const currentObfName = this.cvm.usersObfuscation.get(user.username);
+				console.log(currentObfName)
+				if (!currentObfName) {
+					this.cvm.usersObfuscation.set(user.username, obfName);
+					arr.push(obfName);
+					console.log(this.cvm.usersObfuscation.values())
+				} else {
+					arr.push(currentObfName);
+				}
+			} else arr.push(user.username);
+
 			arr.push(user.rank.toString());
 		}
 
+		console.log(JSON.stringify(arr))
 		user.sendMsg(cvm.guacEncode(...arr));
 	}
 
@@ -304,7 +313,9 @@ export class GuacamoleProtocol implements IProtocol {
 		let arr = ['remuser', users.length.toString()];
 
 		for (let user of users) {
-			arr.push(user);
+			const obf = this.cvm.usersObfuscation.get(user);
+			if (!obf) continue;
+			arr.push(obf);
 		}
 
 		user.sendMsg(cvm.guacEncode(...arr));
@@ -312,10 +323,14 @@ export class GuacamoleProtocol implements IProtocol {
 
 	sendFlag(user: User, flag: ProtocolFlag[]): void {
 		//? like this or no
-		if (!Config.collabvm.features.userlist && (user.rank !== Rank.Admin && (user.rank !== Rank.Moderator || !Config.collabvm.moderatorPermissions.userlist))) return;
-		// Basically this does the same as the above manual for of things
-		// but in one line of code
-		let arr = ['flag', ...flag.flatMap((flag) => [flag.username, flag.countryCode])];
+		let arr = ['flag'];
+
+		for (let country of flag) {
+			const obfName = this.cvm.usersObfuscation.get(country.username);
+			if ((!Config.collabvm.features.userlist || !obfName) && user.rank !== Rank.Admin && (user.rank !== Rank.Moderator || !Config.collabvm.moderatorPermissions.userlist)) continue;
+			arr.push(obfName!, country.countryCode);
+		}
+
 		user.sendMsg(cvm.guacEncode(...arr));
 	}
 

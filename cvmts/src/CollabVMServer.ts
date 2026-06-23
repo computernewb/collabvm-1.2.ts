@@ -1,6 +1,6 @@
 import IConfig from './IConfig.js';
 import * as Utilities from './Utilities.js';
-import { User, Rank } from './User.js';
+import { User, Rank, UserObfuscate } from './User.js';
 // I hate that you have to do it like this
 import CircularBuffer from 'mnemonist/circular-buffer.js';
 import Queue from 'mnemonist/queue.js';
@@ -43,6 +43,7 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 	private Config: IConfig;
 
 	private clients: User[];
+	public usersObfuscation: UserObfuscate;
 
 	private ChatHistory: CircularBuffer<ChatHistory>;
 
@@ -111,6 +112,7 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 		this.screenHidden = false;
 		this.screenHiddenImg = readFileSync(path.join(kCVMTSAssetsRoot, 'screenhidden.jpeg'));
 		this.screenHiddenThumb = readFileSync(path.join(kCVMTSAssetsRoot, 'screenhiddenthumb.jpeg'));
+		this.usersObfuscation = new UserObfuscate();
 
 		this.indefiniteTurn = null;
 		this.ModPerms = Utilities.MakeModPerms(this.Config.collabvm.moderatorPermissions);

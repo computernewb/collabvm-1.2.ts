@@ -11,6 +11,31 @@ import { BanManager } from './BanManager.js';
 import { IProtocol, IProtocolMessageHandler, ListEntry, ProtocolAddUser, ProtocolChatHistory, ProtocolFlag, ProtocolRenameStatus, ProtocolUpgradeCapability, ScreenRect } from './protocol/Protocol.js';
 import { TheProtocolManager } from './protocol/Manager.js';
 
+export class UserObfuscate extends Map {
+    constructor() {
+		super();
+	}
+
+    private generateAlias() {
+        return `user${Utilities.Randint(100000, 900000)}`;
+    }
+
+    getOrCreate(username: string): string {
+        let alias = this.get(username);
+
+        if (!alias) {
+            alias = this.generateAlias();
+            this.set(username, alias);
+        }
+
+        return alias;
+    }
+
+    getAll(): IterableIterator<[string, string]> {
+        return this.entries();
+    }
+}
+
 export class User {
 	socket: NetworkClient;
 	nopSendInterval: NodeJS.Timeout;
