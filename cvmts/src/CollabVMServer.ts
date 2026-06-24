@@ -852,7 +852,11 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 		else turntime = 9999999999;
 		var users: string[] = [];
 
-		this.TurnQueue.forEach((c) => users.push(c.username!));
+		this.TurnQueue.forEach((c) => {
+			if (!this.Config.collabvm.features.userlist && c.rank !== Rank.Admin && (c.rank !== Rank.Moderator || !this.Config.collabvm.moderatorPermissions.userlist)) {
+				users.push(this.obfusNames.get(c.username!));
+			} else users.push(c.username!);
+		});
 
 		var currentTurningUser = this.TurnQueue.peek();
 
