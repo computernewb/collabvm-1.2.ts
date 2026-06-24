@@ -370,6 +370,7 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 			this.endTurn(user);
 		}
 		this.sendTurnUpdate();
+		this.sendTurnUpdate(user);
 	}
 
 	onVote(user: User, choice: number): void {
@@ -846,16 +847,18 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 	}
 
 	private sendTurnUpdate(client?: User) {
+		this.logger.info({
+			event: "turn/update",
+			target: client?.username ?? "broadcast"
+		});
 		var turnQueueArr = this.TurnQueue.toArray();
 		var turntime: number;
 		if (this.indefiniteTurn === null) turntime = this.TurnTime * 1000;
 		else turntime = 9999999999;
 		var users: string[] = [];
 
-		this.TurnQueue.forEach((c) => {
-			if (!this.Config.collabvm.features.userlist && c.rank !== Rank.Admin && (c.rank !== Rank.Moderator || !this.Config.collabvm.moderatorPermissions.userlist)) {
-				users.push(this.obfusNames.get(c.username!));
-			} else users.push(c.username!);
+		this.TurnQueue.forEach((c, i) => {
+			if (!this.Config.collabvm.features.userlist && c.rank !== Rank.Admin && (c.rank !== Rank.Moderator || !this.Config.collabvm.moderatorPermissions.userlist) && (!client || client.username !== c.username)) users.push(this.obfusNames.get(c.username!) || c.username!); else users.push(c.username!);
 		});
 
 		var currentTurningUser = this.TurnQueue.peek();

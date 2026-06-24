@@ -260,20 +260,20 @@ export class GuacamoleProtocol implements IProtocol {
 
 	sendAddUser(user: User, users: ProtocolAddUser[]): void {
 		let arr = ['adduser', users.length.toString()];
-		for (let user of users) {
+		for (let u of users) {
 			const newObfName = this.cvm.obfusNames.genUsername();
-			if (!this.cvm.Config.collabvm.features.userlist && user.rank !== Rank.Admin && (user.rank !== Rank.Moderator || !this.cvm.Config.collabvm.moderatorPermissions.userlist)) {
-				const obfName = this.cvm.obfusNames.getOrSet(user.username, newObfName);
+			if (!this.cvm.Config.collabvm.features.userlist && u.rank !== Rank.Admin && (u.rank !== Rank.Moderator || !this.cvm.Config.collabvm.moderatorPermissions.userlist) && user.username !== u.username) {
+				const obfName = this.cvm.obfusNames.getOrSet(u.username, newObfName);
 				arr.push(obfName);
-			} else arr.push(user.username);
-			arr.push(user.rank.toString());
+			} else arr.push(u.username);
+			arr.push(u.rank.toString());
 		}
 		user.sendMsg(cvm.guacEncode(...arr));
 	}
 	sendRemUser(target: User, users: string[]): void {
 		let arr = ['remuser', users.length.toString()];
 		for (let user of users) {
-			if (!this.cvm.Config.collabvm.features.userlist && target.rank !== Rank.Admin && (target.rank !== Rank.Moderator || !this.cvm.Config.collabvm.moderatorPermissions.userlist)) {
+			if (!this.cvm.Config.collabvm.features.userlist && target.rank !== Rank.Admin && (target.rank !== Rank.Moderator || !this.cvm.Config.collabvm.moderatorPermissions.userlist) && target.username !== user) {
 				const obf = this.cvm.obfusNames.get(user);
 				if (!obf) continue;
 				arr.push(obf);
@@ -287,7 +287,7 @@ export class GuacamoleProtocol implements IProtocol {
 		// but with flatMap
 		let arr = ['flag', ...flag.flatMap((flag) => {
 			let username = flag.username;
-			if (this.cvm.obfusNames.get(username) && !this.cvm.Config.collabvm.features.userlist) username = this.cvm.obfusNames.set(flag.username, flag.countryCode).get(flag.username);
+			if (this.cvm.obfusNames.get(username) && !this.cvm.Config.collabvm.features.userlist && flag.username !== user.username) username = this.cvm.obfusNames.get(flag.username);
 			return [username, flag.countryCode]
 		})];
 		user.sendMsg(cvm.guacEncode(...arr));
