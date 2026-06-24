@@ -20,6 +20,7 @@ import { BanManager } from './BanManager.js';
 import { TheAuditLog } from './AuditLog.js';
 import { IProtocolMessageHandler, ListEntry, ProtocolAddUser, ProtocolFlag, ProtocolRenameStatus, ProtocolUpgradeCapability } from './protocol/Protocol.js';
 import { TheProtocolManager } from './protocol/Manager.js';
+import { TurnController, TurnQueue } from './TurnController.js';
 
 // Instead of strange hacks we can just use nodejs provided
 // import.meta properties, which have existed since LTS if not before
@@ -46,13 +47,7 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 
 	private ChatHistory: CircularBuffer<ChatHistory>;
 
-	private TurnQueue: Queue<User>;
-
-	// Time remaining on the current turn
-	private TurnTime: number;
-
-	// Interval to keep track of the current turn time
-	private TurnInterval?: NodeJS.Timeout;
+	private turnController: TurnController;
 
 	// If a reset vote is in progress
 	private voteInProgress: boolean;
@@ -79,8 +74,6 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 	private screenHiddenImg: Buffer;
 	private screenHiddenThumb: Buffer;
 
-	// Indefinite turn
-	private indefiniteTurn: User | null;
 	private ModPerms: number;
 	private VM: VM;
 
@@ -101,8 +94,7 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 	constructor(config: IConfig, vm: VM, banmgr: BanManager, auth: AuthManager | null, geoipReader: ReaderModel | null) {
 		this.Config = config;
 		this.ChatHistory = new CircularBuffer<ChatHistory>(Array, this.Config.collabvm.maxChatHistoryLength);
-		this.TurnQueue = new Queue<User>();
-		this.TurnTime = 0;
+		this.turnController = new TurnController(config, this.onTurnUpdate.bind(this));
 		this.clients = [];
 		this.voteInProgress = false;
 		this.voteTime = 0;
@@ -112,7 +104,6 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 		this.screenHiddenImg = readFileSync(path.join(kCVMTSAssetsRoot, 'screenhidden.jpeg'));
 		this.screenHiddenThumb = readFileSync(path.join(kCVMTSAssetsRoot, 'screenhiddenthumb.jpeg'));
 
-		this.indefiniteTurn = null;
 		this.ModPerms = Utilities.MakeModPerms(this.Config.collabvm.moderatorPermissions);
 
 		// No size initially, since there usually won't be a display connected at all during initalization
@@ -210,18 +201,12 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 			this.sendVoteUpdate();
 		}
 
-		if (this.indefiniteTurn === user) this.indefiniteTurn = null;
-
 		this.clients.splice(clientIndex, 1);
 
 		user.logger.info({event: "user/disconnect"});
 		if (!user.username) return;
-		if (this.TurnQueue.toArray().indexOf(user) !== -1) {
-			var hadturn = this.TurnQueue.peek() === user;
-			this.TurnQueue = Queue.from(this.TurnQueue.toArray().filter((u) => u !== user));
-			if (hadturn) this.nextTurn();
-		}
 
+		this.turnController.removeUser(user);
 		this.clients.forEach((c) => c.sendRemUser([user.username!]));
 	}
 
@@ -345,29 +330,25 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 		}
 
 		if (forfeit == false) {
-			var currentQueue = this.TurnQueue.toArray();
-			// If the user is already in the turn queue, ignore the turn request.
-			if (currentQueue.indexOf(user) !== -1) return;
+			if(this.turnController.userInQueue(user)) return;
+
 			// If they're muted, also ignore the turn request.
 			// Send them the turn queue to prevent client glitches
 			if (user.IP.muted) return;
 			if (this.Config.collabvm.turnlimit.enabled) {
 				// Get the amount of users in the turn queue with the same IP as the user requesting a turn.
-				let turns = currentQueue.filter((otheruser) => otheruser.IP.address == user.IP.address);
 				// If it exceeds the limit set in the config, ignore the turn request.
-				if (turns.length + 1 > this.Config.collabvm.turnlimit.maximum) {
+				let sameIp = this.turnController.usersWithSameIpInQueue(user);
+				if (sameIp > this.Config.collabvm.turnlimit.maximum) {
 					user.logger.warn({event: "turn/ignoring request due to turn limit"});
 					return;
 				}
 			}
 			user.logger.info({event: "turn/entering queue"});
-			this.TurnQueue.enqueue(user);
-			if (this.TurnQueue.size === 1) this.nextTurn();
+			this.turnController.addUser(user);
 		} else {
-			// Not sure why this wasn't using this before
-			this.endTurn(user);
+			this.turnController.removeUser(user);
 		}
-		this.sendTurnUpdate();
 	}
 
 	onVote(user: User, choice: number): void {
@@ -476,7 +457,7 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 		user.sendSync(Date.now());
 
 		if (this.voteInProgress) this.sendVoteUpdate(user);
-		this.sendTurnUpdate(user);
+		this.sendTurnUpdate(this.turnController.getTurnInfo(), user);
 	}
 
 	async onConnect(user: User, node: string) {
@@ -532,13 +513,13 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 	}
 
 	onKey(user: User, keysym: number, pressed: boolean): void {
-		if (this.TurnQueue.peek() !== user && user.rank !== Rank.Admin) return;
+		if (!this.turnController.userIsActive(user) && user.rank !== Rank.Admin) return;
 		user.logger.info({event: "key", keysym, pressed});
 		this.VM.GetDisplay()?.KeyboardEvent(keysym, pressed);
 	}
 
 	onMouse(user: User, x: number, y: number, buttonMask: number): void {
-		if (this.TurnQueue.peek() !== user && user.rank !== Rank.Admin) return;
+		if (!this.turnController.userIsActive(user) && user.rank !== Rank.Admin) return;
 		this.VM.GetDisplay()?.MouseEvent(x, y, buttonMask);
 	}
 
@@ -706,9 +687,8 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 
 	onAdminIndefiniteTurn(user: User): void {
 		if (user.rank !== Rank.Admin) return;
-		this.indefiniteTurn = user;
-		this.TurnQueue = Queue.from([user, ...this.TurnQueue.toArray().filter((c) => c !== user)]);
-		this.sendTurnUpdate();
+		this.turnController.bypassTurn(user);
+		this.turnController.pauseQueue();
 	}
 
 	async onAdminHideScreen(user: User, show: boolean) {
@@ -839,81 +819,47 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 		return arr;
 	}
 
-	private sendTurnUpdate(client?: User) {
-		var turnQueueArr = this.TurnQueue.toArray();
-		var turntime: number;
-		if (this.indefiniteTurn === null) turntime = this.TurnTime * 1000;
-		else turntime = 9999999999;
-		var users: string[] = [];
-
-		this.TurnQueue.forEach((c) => users.push(c.username!));
-
-		var currentTurningUser = this.TurnQueue.peek();
-
-		if (client) {
-			client.sendTurnQueue(turntime, users);
+	private sendTurnUpdate(state: TurnQueue, client: User) {
+		if(state.length == 0) {
+			client.sendTurnQueue(0, []);
 			return;
 		}
 
-		this.clients
-			.filter((c) => c !== currentTurningUser && c.connectedToNode)
-			.forEach((c) => {
-				if (turnQueueArr.indexOf(c) !== -1) {
-					var time;
-					if (this.indefiniteTurn === null) time = this.TurnTime * 1000 + (turnQueueArr.indexOf(c) - 1) * this.Config.collabvm.turnTime * 1000;
-					else time = 9999999999;
-					c.sendTurnQueueWaiting(turntime, users, time);
-				} else {
-					c.sendTurnQueue(turntime, users);
-				}
-			});
-		if (currentTurningUser) {
-			currentTurningUser.logger.info({event: "turn/held"});
-			currentTurningUser.sendTurnQueue(turntime, users);
+		let users = state.map((v) => v.user.username);
+		if(this.turnController.userInQueue(client)) {
+			let entry = state[state.findIndex((v) => v.user === client)];
+			if(entry.waiting) {
+				client.sendTurnQueueWaiting(state[0].time, users, state[0].time + entry.waitingTime!);
+			} else {
+				client.sendTurnQueue(state[0].time, users);
+			}
+		} else {
+			client.sendTurnQueue(state[0].time, users);
 		}
 	}
 
-	private nextTurn() {
-		clearInterval(this.TurnInterval);
-		if (this.TurnQueue.size === 0) {
-		} else {
-			this.TurnTime = this.Config.collabvm.turnTime;
-			this.TurnInterval = setInterval(() => this.turnInterval(), 1000);
-		}
-		this.sendTurnUpdate();
+	private onTurnUpdate(state: TurnQueue) {
+		// broadcast new turn state
+		this.clients
+			.filter((c) => c.connectedToNode)
+			.forEach((c) => {
+				this.sendTurnUpdate(state, c);
+			});
 	}
 
 	clearTurns() {
 		this.logger.info({event: "turn/clearing turn queue"});
-		clearInterval(this.TurnInterval);
-		this.TurnQueue.clear();
-		this.sendTurnUpdate();
+		this.turnController.clearTurns();
 	}
 
 	bypassTurn(client: User) {
 		client.logger.info({event: "turn/bypassing"});
-		var a = this.TurnQueue.toArray().filter((c) => c !== client);
-		this.TurnQueue = Queue.from([client, ...a]);
-		this.nextTurn();
+		this.turnController.bypassTurn(client);
 	}
 
 	endTurn(client: User) {
 		client.logger.info({event: "turn/ending"});
-		// I must have somehow accidentally removed this while scalpaling everything out
-		if (this.indefiniteTurn === client) this.indefiniteTurn = null;
-		var hasTurn = this.TurnQueue.peek() === client;
-		this.TurnQueue = Queue.from(this.TurnQueue.toArray().filter((c) => c !== client));
-		if (hasTurn) this.nextTurn();
-		else this.sendTurnUpdate();
-	}
-
-	private turnInterval() {
-		if (this.indefiniteTurn !== null) return;
-		this.TurnTime--;
-		if (this.TurnTime < 1) {
-			this.TurnQueue.dequeue();
-			this.nextTurn();
-		}
+		this.turnController.removeUser(client);
 	}
 
 	private OnDisplayRectangle(rect: Rect) {

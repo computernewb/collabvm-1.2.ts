@@ -68,3 +68,14 @@ export function MakeModPerms(modperms: Permissions): number {
 	if (modperms.xss) perms |= 512;
 	return perms;
 }
+
+/// Returns true if iterating through the provided iterable produces the provided value.
+export function iteratorHasItem<T>(iter: Iterator<T>, expected: T) {
+	while(true) {
+		const { value, done } = iter.next();
+		if(done)
+			return false;
+		if(value == expected)
+			return true;
+	}
+}
