@@ -83,7 +83,8 @@ export class TurnController {
 			} break;
 
 			case TurnState.Active_Paused: {
-				// this state can be entered by a user 
+				// We don't need to pause the turn timer if it was never armed or we entered
+				// from an inactive queue.
 				if(fromState !== TurnState.Inactive) {
 					if(this.turnTimer.wasArmed())
 						this.turnTimer.pause();
@@ -105,10 +106,10 @@ export class TurnController {
 			} else if(this.queue.size == 0) {
 				this.transitionToState(TurnState.Inactive);
 			}
-
-			// tell upstream layer about turn queue update
-			this.updateCb(this.getTurnInfo());
 		}
+
+		// tell upstream layer about turn queue update
+		this.updateCb(this.getTurnInfo());
 	}
 
 

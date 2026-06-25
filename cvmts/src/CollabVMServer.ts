@@ -687,8 +687,8 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 
 	onAdminIndefiniteTurn(user: User): void {
 		if (user.rank !== Rank.Admin) return;
-		this.turnController.bypassTurn(user);
 		this.turnController.pauseQueue();
+		this.turnController.bypassTurn(user);
 	}
 
 	async onAdminHideScreen(user: User, show: boolean) {
@@ -849,6 +849,13 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 
 	clearTurns() {
 		this.logger.info({event: "turn/clearing turn queue"});
+
+		// similar hack to the one in TurnController
+		// see there for why it is a hack
+		if(this.turnController.paused()) {
+			this.turnController.unpauseQueue();
+		}
+
 		this.turnController.clearTurns();
 	}
 
