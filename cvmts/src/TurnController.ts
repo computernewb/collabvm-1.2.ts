@@ -1,6 +1,6 @@
 import Queue from 'mnemonist/queue.js';
 import * as Utilities from './Utilities.js';
-import { User, Rank } from './User.js';
+import { User } from './User.js';
 import IConfig from './IConfig.js';
 import { Timer } from './util/timer.js';
 
@@ -12,11 +12,9 @@ export enum TurnState {
 	Active_Paused, // active, but explicitly paused by an admin or moderator
 }
 
-// TODO only OneUser is used atm
 export enum SpecialTurnTimes {
 	OneUser = 2147483647,
-	Paused = 2147483646,
-	IndefiniteTurn = 2147483645
+	Paused = 2147483646
 }
 
 export interface TurnQueueEntry {
@@ -35,10 +33,15 @@ export class TurnController {
 	private turnTimer: Timer;
 	private updateCb: (state: TurnQueue) => void;
 
-	constructor(config: IConfig, updateCb: (state: TurnQueue)=>void) {
+	constructor(config: IConfig, updateCb: (state: TurnQueue) => void) {
 		this.queue = new Queue();
 		this.turnTimer = new Timer(config.collabvm.turnTime, this.onTurnTimerElapsed.bind(this));
 		this.updateCb = updateCb;
+	}
+
+	private onTurnTimerElapsed() {
+		this.queue.dequeue();
+		this.updateStateMachine();
 	}
 
 	private transitionToState(newState: TurnState) {
@@ -89,10 +92,7 @@ export class TurnController {
 		}
 	}
 
-	private onTurnTimerElapsed() {
-		this.queue.dequeue();
-		this.updateStateMachine();
-	}
+
 
 	private updateStateMachine() {
 		if(!this.paused()) {
@@ -105,10 +105,10 @@ export class TurnController {
 			} else if(this.queue.size == 0) {
 				this.transitionToState(TurnState.Inactive);
 			}
-		}
 
-		// tell upstream layer about turn queue update
-		this.updateCb(this.getTurnInfo());
+			// tell upstream layer about turn queue update
+			this.updateCb(this.getTurnInfo());
+		}
 	}
 
 
@@ -134,9 +134,10 @@ export class TurnController {
 			return;
 
 		if(this.queue.peek() == user) {
+			// bit of a "temporary" hack to unpause the queue from an infinite turn
+			// should probably add new admin ops to pause and unpause queue & do that instead...
 			// kinda nasty but whatever
 			if(this.paused()) {
-				console.log('unpausing queue since indef turn is being removed')
 				this.unpauseQueue();
 			}
 
@@ -170,7 +171,8 @@ export class TurnController {
 	}
 
 	pauseQueue() {
-		this.transitionToState(TurnState.Active_Paused);
+		if(!this.paused())
+			this.transitionToState(TurnState.Active_Paused);
 	}
 
 	paused() { 
@@ -178,7 +180,8 @@ export class TurnController {
 	}
 
 	unpauseQueue() {
-		this.transitionToState(TurnState.Active);
+		if(this.paused())
+			this.transitionToState(TurnState.Active);
 	}
 
 	usersWithSameIpInQueue(user: User) {
@@ -212,9 +215,6 @@ export class TurnController {
 				];
 			};
 
-			// TODO it should be possible to merge these cases. hopefully not in too ugly of a way
-			// the least ugly way would probably involve ternary and some if soup though which i kind of don't like....
-
 			case TurnState.Active: {
 				let remainingTurnTimeMs = this.turnTimer.getRemaining() * 1000;
 				let users: TurnQueueEntry[] = [];
@@ -247,7 +247,7 @@ export class TurnController {
 
 				users.push({
 					user: currentTurningUser,
-					time: SpecialTurnTimes.OneUser,
+					time: SpecialTurnTimes.Paused,
 					waiting: false
 				});
 
@@ -256,9 +256,9 @@ export class TurnController {
 						return;
 					users.push({
 						user,
-						time: SpecialTurnTimes.OneUser,
+						time: SpecialTurnTimes.Paused,
 						waiting: true,
-						waitingTime: SpecialTurnTimes.OneUser,
+						waitingTime: SpecialTurnTimes.Paused,
 					});
 				});
 

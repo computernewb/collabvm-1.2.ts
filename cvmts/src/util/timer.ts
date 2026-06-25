@@ -65,8 +65,6 @@ export class Timer {
 	}
 
 	getRemaining() {
-		//if(!this.wasArmed())
-		// throw new Error('Only makes sense to call Timer#getRemaning() when timer is armed');
 		return this.leftSeconds;
 	}
 
