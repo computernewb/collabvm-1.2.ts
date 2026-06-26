@@ -1,5 +1,4 @@
 import * as Utilities from './Utilities.js';
-import * as cvm from '@cvmts/cvm-rs';
 import { IPData } from './IPData.js';
 import IConfig from './IConfig.js';
 import RateLimiter from './RateLimiter.js';
@@ -122,7 +121,7 @@ export class User {
 
 	closeConnection() {
 		if (this.Config.logging.disconnect) this.logger.info({event: "closing connection"});
-		this.socket.send(cvm.guacEncode('disconnect'));
+		this.sendDisconnect();
 		this.socket.close();
 	}
 
@@ -143,7 +142,7 @@ export class User {
 	mute(permanent: boolean) {
 		if (this.Config.logging.mute) this.logger.info({event: "mute", time_seconds: this.Config.collabvm.tempMuteTime, permanent});
 		this.IP.muted = true;
-		this.sendMsg(cvm.guacEncode('chat', '', `You have been muted${permanent ? '' : ` for ${this.Config.collabvm.tempMuteTime} seconds`}.`));
+		this.sendChatMessage('', `You have been muted${permanent ? '' : ` for ${this.Config.collabvm.tempMuteTime} seconds`}.`)
 		if (!permanent) {
 			clearTimeout(this.IP.tempMuteExpireTimeout);
 			this.IP.tempMuteExpireTimeout = setTimeout(() => this.unmute(), this.Config.collabvm.tempMuteTime * 1000);
@@ -154,7 +153,7 @@ export class User {
 		if (this.Config.logging.mute) this.logger.info({event: "unmute"});
 		clearTimeout(this.IP.tempMuteExpireTimeout);
 		this.IP.muted = false;
-		this.sendMsg(cvm.guacEncode('chat', '', 'You are no longer muted.'));
+		this.sendChatMessage('', 'You are no longer muted.');
 	}
 
 	async ban(banmgr: BanManager) {
@@ -167,7 +166,7 @@ export class User {
 
 	async kick() {
 		if (this.Config.logging.disconnect) this.logger.info({event: "kick"});
-		this.sendMsg('10.disconnect;');
+		this.sendDisconnect();
 		this.socket.close();
 	}
 
@@ -193,6 +192,10 @@ export class User {
 
 	sendCapabilities(caps: ProtocolUpgradeCapability[]): void {
 		this.protocol.sendCapabilities(this, caps);
+	}
+
+	sendDisconnect() : void {
+		this.protocol.sendDisconnect(this);
 	}
 
 	sendConnectFailResponse(): void {

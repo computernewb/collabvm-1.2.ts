@@ -210,6 +210,10 @@ export class GuacamoleProtocol implements IProtocol {
 		user.sendMsg(cvm.guacEncode(...arr));
 	}
 
+	sendDisconnect(user: User): void {
+		user.sendMsg(cvm.guacEncode('disconnect'));
+	}
+
 	sendConnectFailResponse(user: User): void {
 		user.sendMsg(cvm.guacEncode('connect', '0'));
 	}
