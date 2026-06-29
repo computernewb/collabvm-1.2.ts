@@ -18,7 +18,7 @@ export enum SpecialTurnTimes {
 }
 
 export interface TurnQueueEntry {
-	user?: User;
+	user: User;
 	time: number; // time left
 
 	waiting: boolean;
@@ -240,10 +240,7 @@ export class TurnController {
 			case TurnState.Active_Paused: {
 				let users: TurnQueueEntry[] = [];
 				if(this.queue.size == 0) {
-					users.push({
-						time: SpecialTurnTimes.Paused,
-						waiting: false
-					});
+					return users;
 				} else {
 					let currentTurningUser = this.queue.peek()!;
 

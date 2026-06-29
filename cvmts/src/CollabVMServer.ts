@@ -20,7 +20,7 @@ import { BanManager } from './BanManager.js';
 import { TheAuditLog } from './AuditLog.js';
 import { IProtocolMessageHandler, ListEntry, ProtocolAddUser, ProtocolFlag, ProtocolRenameStatus, ProtocolUpgradeCapability } from './protocol/Protocol.js';
 import { TheProtocolManager } from './protocol/Manager.js';
-import { TurnController, TurnQueue } from './TurnController.js';
+import { SpecialTurnTimes, TurnController, TurnQueue } from './TurnController.js';
 
 // Instead of strange hacks we can just use nodejs provided
 // import.meta properties, which have existed since LTS if not before
@@ -821,17 +821,16 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 
 	private sendTurnUpdate(state: TurnQueue, client: User) {
 		if(state.length == 0) {
-			client.sendTurnQueue(0, []);
+			// kinda not happy about this because it's a bit leaky, but it's better than before I suppose
+			if(this.turnController.paused())
+				client.sendTurnQueue(SpecialTurnTimes.Paused, []);
+			else
+				client.sendTurnQueue(0, []);
 			return;
 		}
 
 		let users = state
-			.map((v) => {
-				// this kinda fuckin sucks but what will you do.
-				if(v.user)
-					return v.user.username;
-				return '';
-			});
+			.map((v) => v.user.username);
 		if(this.turnController.userInQueue(client)) {
 			let entry = state[state.findIndex((v) => {
 				if(v.user == null)
