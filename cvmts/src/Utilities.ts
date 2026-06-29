@@ -12,6 +12,19 @@ export type Rect = {
 	height: number;
 };
 
+export class BetterMap extends Map {
+	constructor() { super() }
+
+	public getOrSet(key: string, value: string): string {
+		let iterator = this.get(key) as string;
+		if (!iterator) {
+			this.set(key, value);
+			iterator = value;
+		}
+		return iterator;
+	}
+}
+
 export function Clamp(input: number, min: number, max: number) {
 	return Math.min(Math.max(input, min), max);
 }

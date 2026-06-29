@@ -2,6 +2,7 @@ import { WebSocket } from 'ws';
 import { NetworkClient } from '../NetworkClient.js';
 import EventEmitter from 'events';
 import { pino, type Logger } from 'pino';
+import IConfig from '../../IConfig.js';
 
 export default class WSClient extends EventEmitter implements NetworkClient {
 	socket: WebSocket;
@@ -10,7 +11,7 @@ export default class WSClient extends EventEmitter implements NetworkClient {
 	enforceTextOnly = true
 	private logger: Logger;
 
-	constructor(ws: WebSocket, ip: string, uuid: string) {
+	constructor(ws: WebSocket, ip: string, uuid: string, private conf: IConfig) {
 		super();
 		this.socket = ws;
 		this.ip = ip;
@@ -37,7 +38,7 @@ export default class WSClient extends EventEmitter implements NetworkClient {
 		})
 
 		this.socket.on('close', () => {
-			this.logger.info({event: "disconnecting client"});
+			if (this.conf.logging.disconnect) this.logger.info({event: "disconnecting client"});
 			this.emit('disconnect');
 		});
 	}

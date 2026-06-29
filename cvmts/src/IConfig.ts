@@ -40,6 +40,16 @@ export default interface IConfig {
 	mysql: MySQLConfig;
 	bans: BanConfig;
 	collabvm: {
+		features: {
+			turns: boolean;
+			resets: boolean;
+			chat: boolean;
+			userlist: boolean;
+			vm: {
+				mouse: boolean;
+				keyboard: boolean;
+			};
+		};
 		node: string;
 		displayname: string;
 		motd: string;
@@ -67,6 +77,26 @@ export default interface IConfig {
 		turnpass: string;
 		moderatorPermissions: Permissions;
 	};
+	logging: {
+		enabled: boolean;
+		connect: boolean;
+		disconnect: boolean;
+		chat: boolean;
+		rename: boolean;
+		turn: boolean;
+		vote: boolean;
+		keyboard: boolean;
+		password: boolean;
+		passwordFail: boolean;
+		auth: boolean;
+		mute: boolean;
+		ban: boolean;
+		geoip: boolean;
+		qemuMonitor: boolean;
+		restore: boolean;
+		reboot: boolean;
+		ip: boolean;
+	};
 }
 
 export interface MySQLConfig {
@@ -93,4 +123,5 @@ export interface Permissions {
 	rename: boolean;
 	grabip: boolean;
 	xss: boolean;
+	userlist: boolean;
 }

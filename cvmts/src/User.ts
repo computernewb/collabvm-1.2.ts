@@ -10,6 +10,11 @@ import { BanManager } from './BanManager.js';
 import { IProtocol, IProtocolMessageHandler, ListEntry, ProtocolAddUser, ProtocolChatHistory, ProtocolFlag, ProtocolRenameStatus, ProtocolUpgradeCapability, ScreenRect } from './protocol/Protocol.js';
 import { TheProtocolManager } from './protocol/Manager.js';
 
+export class ObfuscatedUsers extends Utilities.BetterMap {
+	constructor() { super() }
+	genUsername() { return `user${Utilities.Randint(100000, 999999)}` }
+}
+
 export class User {
 	socket: NetworkClient;
 	nopSendInterval: NodeJS.Timeout;
@@ -49,7 +54,7 @@ export class User {
 		this.logger = pino().child({
 			name: "CVMTS.User",
 			"uuid/user": this.uuid,
-			ip: ip.address,
+			ip: config.logging.ip ? ip.address : '[hidden]',
 		});
 		this.Capabilities = new CollabVMCapabilities();
 
@@ -57,7 +62,7 @@ export class User {
 		this.protocol = TheProtocolManager.getProtocol(protocol);
 
 		this.socket.on('disconnect', () => {
-			this.logger.info({event: "user disconnected", username});
+			if (config.logging.disconnect) this.logger.info({event: "user disconnected", username});
 			// Unref the ip data for this connection
 			this.IP.Unref();
 
@@ -88,7 +93,7 @@ export class User {
 		do {
 			username = 'guest' + Utilities.Randint(10000, 99999);
 		} while (existingUsers.indexOf(username) !== -1);
-		this.logger.info({event: "assign guest username"});
+		if (this.Config.logging.rename) this.logger.info({event: "assign guest username"});
 		this.username = username;
 		return username;
 	}
@@ -109,13 +114,13 @@ export class User {
 	private onNoMsg() {
 		this.sendNop();
 		this.nopRecieveTimeout = setTimeout(() => {
-			this.logger.info({event: "nop timeout"});
+			if (this.Config.logging.disconnect) this.logger.info({event: "nop timeout"});
 			this.closeConnection();
 		}, 3000);
 	}
 
 	closeConnection() {
-		this.logger.info({event: "closing connection"});
+		if (this.Config.logging.disconnect) this.logger.info({event: "closing connection"});
 		this.sendDisconnect();
 		this.socket.close();
 	}
@@ -135,7 +140,7 @@ export class User {
 	}
 
 	mute(permanent: boolean) {
-		this.logger.info({event: "mute", time_seconds: this.Config.collabvm.tempMuteTime, permanent});
+		if (this.Config.logging.mute) this.logger.info({event: "mute", time_seconds: this.Config.collabvm.tempMuteTime, permanent});
 		this.IP.muted = true;
 		this.sendChatMessage('', `You have been muted${permanent ? '' : ` for ${this.Config.collabvm.tempMuteTime} seconds`}.`)
 		if (!permanent) {
@@ -145,14 +150,14 @@ export class User {
 	}
 
 	unmute() {
-		this.logger.info({event: "unmute"});
+		if (this.Config.logging.mute) this.logger.info({event: "unmute"});
 		clearTimeout(this.IP.tempMuteExpireTimeout);
 		this.IP.muted = false;
 		this.sendChatMessage('', 'You are no longer muted.');
 	}
 
 	async ban(banmgr: BanManager) {
-		this.logger.info({event: "ban"});
+		if (this.Config.logging.ban) this.logger.info({event: "ban"});
 		// Prevent the user from taking turns or chatting, in case the ban command takes a while
 		this.IP.muted = true;
 		await banmgr.BanUser(this.IP.address, this.username || '');
@@ -160,7 +165,7 @@ export class User {
 	}
 
 	async kick() {
-		this.logger.info({event: "kick"});
+		if (this.Config.logging.disconnect) this.logger.info({event: "kick"});
 		this.sendDisconnect();
 		this.socket.close();
 	}
@@ -286,7 +291,7 @@ export class User {
 	}
 
 	set username(updated: string) {
-		this.logger = this.logger.child({
+		if (this.Config.logging.rename) this.logger = this.logger.child({
 			username: updated,
 		});
 

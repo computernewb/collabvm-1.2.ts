@@ -1,16 +1,16 @@
 import { ExecaSyncError, execa, execaCommand } from 'execa';
-import { BanConfig } from './IConfig';
+import IConfig from './IConfig';
 import pino from 'pino';
 import { Database } from './Database';
 import { Address6 } from 'ip-address';
 import { isIP } from 'net';
 
 export class BanManager {
-	private cfg: BanConfig;
+	private cfg: IConfig;
 	private logger: pino.Logger;
 	private db: Database | undefined;
 
-	constructor(config: BanConfig, db: Database | undefined) {
+	constructor(config: IConfig, db: Database | undefined) {
 		this.cfg = config;
 		this.logger = pino({
 			name: 'CVMTS.BanManager'
@@ -39,20 +39,20 @@ export class BanManager {
 	async BanUser(ip: string, username: string) {
 		ip = this.formatIP(ip);
 		// If cvmban enabled, write to DB
-		if (this.cfg.cvmban) {
+		if (this.cfg.bans.cvmban) {
 			if (!this.db) throw new Error('CVMBAN enabled but Database is undefined');
 			await this.db.banIP(ip, username);
 		}
 		// If ban command enabled, run it
 		try {
-			if (Array.isArray(this.cfg.bancmd)) {
-				let args: string[] = this.cfg.bancmd.map((a: string) => this.banCmdArgs(a, ip, username));
+			if (Array.isArray(this.cfg.bans.bancmd)) {
+				let args: string[] = this.cfg.bans.bancmd.map((a: string) => this.banCmdArgs(a, ip, username));
 				if (args.length || args[0].length) {
 					this.logger.info(`Running "${JSON.stringify(args)}"`);
 					await execa(args.shift()!, args, { stdout: process.stdout, stderr: process.stderr });
 				}
-			} else if (typeof this.cfg.bancmd == 'string') {
-				let cmd: string = this.banCmdArgs(this.cfg.bancmd, ip, username);
+			} else if (typeof this.cfg.bans.bancmd == 'string') {
+				let cmd: string = this.banCmdArgs(this.cfg.bans.bancmd, ip, username);
 				if (cmd.length) {
 					// Run through JSON.stringify for char escaping
 					this.logger.info(`Running ${JSON.stringify(cmd)}`);
@@ -60,7 +60,7 @@ export class BanManager {
 				}
 			}
 		} catch (e) {
-			this.logger.error(`Failed to ban ${ip} (${username}): ${(e as ExecaSyncError).shortMessage}`);
+			this.logger.error(`Failed to ban ${this.cfg.logging.ip ? ip : '[hidden]'} (${username}): ${(e as ExecaSyncError).shortMessage}`);
 		}
 	}
 
@@ -68,7 +68,7 @@ export class BanManager {
 		ip = this.formatIP(ip);
 		if (!this.db) return false;
 		if (await this.db.isIPBanned(ip)) {
-			this.logger.info(`Banned IP ${ip} tried connecting.`);
+			this.logger.info(`Banned IP ${this.cfg.logging.ip ? ip : '[hidden]'} tried connecting.`);
 			return true;
 		}
 		return false;

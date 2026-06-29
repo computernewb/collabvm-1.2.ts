@@ -178,7 +178,7 @@ export default class WSServer extends EventEmitter implements NetworkServer {
 		};
 		this.logger.info({ ...connectionId, event: "websocket client connecting" });
 
-		let client = new WSClient(ws, ip, uuid);
+		let client = new WSClient(ws, ip, uuid, this.Config);
 		this.clients.push(client);
 
 		let user = new User(client, protocol, IPDataManager.GetIPData(ip), this.Config);
