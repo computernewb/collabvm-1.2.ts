@@ -65,7 +65,7 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 	private voteCooldownInterval?: NodeJS.Timeout;
 
 	// Completely disable turns
-	private turnsAllowed: boolean;
+	private votesAllowed: boolean;
 
 	// Hide the screen
 	private screenHidden: boolean;
@@ -99,7 +99,7 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 		this.voteInProgress = false;
 		this.voteTime = 0;
 		this.voteCooldown = 0;
-		this.turnsAllowed = true;
+		this.votesAllowed = true;
 		this.screenHidden = false;
 		this.screenHiddenImg = readFileSync(path.join(kCVMTSAssetsRoot, 'screenhidden.jpeg'));
 		this.screenHiddenThumb = readFileSync(path.join(kCVMTSAssetsRoot, 'screenhiddenthumb.jpeg'));
@@ -316,7 +316,7 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 
 	onTurnRequest(user: User, forfeit: boolean): void {
 		user.logger.trace({event: "turn/requested"});
-		if ((!this.turnsAllowed || this.Config.collabvm.turnwhitelist) && user.rank !== Rank.Admin && user.rank !== Rank.Moderator && !user.turnWhitelist) return;
+		if ((this.Config.collabvm.turnwhitelist) && user.rank !== Rank.Admin && user.rank !== Rank.Moderator && !user.turnWhitelist) return;
 
 		if (!this.authCheck(user, this.Config.auth.guestPermissions.turn)) return;
 
@@ -356,7 +356,7 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 			user.logger.warn({event: "vote/voted without snapshots enabled"});
 			return;
 		}
-		if ((!this.turnsAllowed || this.Config.collabvm.turnwhitelist) && user.rank !== Rank.Admin && user.rank !== Rank.Moderator && !user.turnWhitelist) return;
+		if ((!this.votesAllowed || this.Config.collabvm.turnwhitelist) && user.rank !== Rank.Admin && user.rank !== Rank.Moderator && !user.turnWhitelist) return;
 		if (!user.connectedToNode) {
 			user.logger.warn({event: "vote/not connected to node"});
 			return;
@@ -677,11 +677,11 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 
 	onAdminToggleTurns(user: User, enabled: boolean): void {
 		if (user.rank !== Rank.Admin) return;
+		this.votesAllowed = enabled;
 		if (enabled) {
-			this.turnsAllowed = true;
+			this.turnController.unpauseQueue();
 		} else {
-			this.turnsAllowed = false;
-			this.clearTurns();
+			this.turnController.pauseQueue();
 		}
 	}
 
@@ -825,9 +825,20 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 			return;
 		}
 
-		let users = state.map((v) => v.user.username);
+		let users = state
+			.map((v) => {
+				// this kinda fuckin sucks but what will you do.
+				if(v.user)
+					return v.user.username;
+				return '';
+			});
 		if(this.turnController.userInQueue(client)) {
-			let entry = state[state.findIndex((v) => v.user === client)];
+			let entry = state[state.findIndex((v) => {
+				if(v.user == null)
+					return false;
+				return v.user.username === client.username;
+			})];
+
 			if(entry.waiting) {
 				client.sendTurnQueueWaiting(state[0].time, users, state[0].time + entry.waitingTime!);
 			} else {
@@ -849,13 +860,6 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 
 	clearTurns() {
 		this.logger.info({event: "turn/clearing turn queue"});
-
-		// similar hack to the one in TurnController
-		// see there for why it is a hack
-		if(this.turnController.paused()) {
-			this.turnController.unpauseQueue();
-		}
-
 		this.turnController.clearTurns();
 	}
 

@@ -18,7 +18,7 @@ export enum SpecialTurnTimes {
 }
 
 export interface TurnQueueEntry {
-	user: User;
+	user?: User;
 	time: number; // time left
 
 	waiting: boolean;
@@ -93,8 +93,6 @@ export class TurnController {
 		}
 	}
 
-
-
 	private updateStateMachine() {
 		if(!this.paused()) {
 			// this is kind of ugly but basically this transitions into the correct
@@ -135,13 +133,6 @@ export class TurnController {
 			return;
 
 		if(this.queue.peek() == user) {
-			// bit of a "temporary" hack to unpause the queue from an infinite turn
-			// should probably add new admin ops to pause and unpause queue & do that instead...
-			// kinda nasty but whatever
-			if(this.paused()) {
-				this.unpauseQueue();
-			}
-
 			this.endCurrentTurn();
 			return;
 		} else {
@@ -172,8 +163,10 @@ export class TurnController {
 	}
 
 	pauseQueue() {
-		if(!this.paused())
+		if(!this.paused()) {
 			this.transitionToState(TurnState.Active_Paused);
+			this.updateStateMachine();
+		}
 	}
 
 	paused() { 
@@ -181,8 +174,10 @@ export class TurnController {
 	}
 
 	unpauseQueue() {
-		if(this.paused())
+		if(this.paused()) {
 			this.transitionToState(TurnState.Active);
+			this.updateStateMachine();
+		}
 	}
 
 	usersWithSameIpInQueue(user: User) {
@@ -209,7 +204,7 @@ export class TurnController {
 				let user = this.queue.peek()!;
 				return [ 
 					{
-						user,
+						user: user,
 						time: SpecialTurnTimes.OneUser,
 						waiting: false
 					}
@@ -231,7 +226,7 @@ export class TurnController {
 					if(user == currentTurningUser)
 						return;
 					users.push({
-						user,
+						user: user,
 						// position specific time
 						time: remainingTurnTimeMs,
 						waiting: true,
@@ -244,24 +239,31 @@ export class TurnController {
 
 			case TurnState.Active_Paused: {
 				let users: TurnQueueEntry[] = [];
-				let currentTurningUser = this.queue.peek()!;
-
-				users.push({
-					user: currentTurningUser,
-					time: SpecialTurnTimes.Paused,
-					waiting: false
-				});
-
-				this.queue.forEach((user: User, queueIndex: number) => {
-					if(user == currentTurningUser)
-						return;
+				if(this.queue.size == 0) {
 					users.push({
-						user,
 						time: SpecialTurnTimes.Paused,
-						waiting: true,
-						waitingTime: SpecialTurnTimes.Paused,
+						waiting: false
 					});
-				});
+				} else {
+					let currentTurningUser = this.queue.peek()!;
+
+					users.push({
+						user: currentTurningUser,
+						time: SpecialTurnTimes.Paused,
+						waiting: false
+					});
+
+					this.queue.forEach((user: User, queueIndex: number) => {
+						if(user == currentTurningUser)
+							return;
+						users.push({
+							user: user,
+							time: SpecialTurnTimes.Paused,
+							waiting: true,
+							waitingTime: SpecialTurnTimes.Paused,
+						});
+					});
+				}
 
 				return users;
 			};
