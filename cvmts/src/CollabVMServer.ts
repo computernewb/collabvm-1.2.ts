@@ -269,7 +269,7 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 					c.sendAddUser([
 						{
 							username: user.username!,
-							rank: user.rank
+							rank: this.getUserRank(user)
 						}
 					])
 				);
@@ -565,7 +565,7 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 			c.sendAddUser([
 				{
 					username: user.username!,
-					rank: user.rank
+					rank: this.getUserRank(user)
 				}
 			])
 		);
@@ -713,7 +713,7 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 		} else {
 			this.screenHidden = true;
 			this.clients
-				.filter((c) => c.rank == Rank.Unregistered)
+				.filter((c) => c.rank == Rank.Unregistered || c.rank == Rank.Registered)
 				.forEach((client) => {
 					client.sendScreenResize(1024, 768);
 					client.sendScreenUpdate({
@@ -730,7 +730,26 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 		this.clients.forEach((c) => c.sendChatMessage('', message));
 	}
 
+	onAdminShadow(user: User, shadow: boolean): void {
+		if (user.rank !== Rank.Admin && (user.rank !== Rank.Moderator || !this.Config.collabvm.moderatorPermissions.shadow)) return;
+		user.isShadowed = shadow;
+	}
+
 	// end protocol message handlers
+
+	getUserRank(user: User): Rank {
+		// tl;dr: return (c.isShadowed ? (this.Config.auth.enabled ? Rank.Registered : Rank.Unregistered) : c.rank);
+		// inlining the above into some places would of apparently completely destroyed the line length so oops
+		if(user.isShadowed) {
+			if(this.Config.auth.enabled) {
+				return Rank.Registered;
+			} else {
+				return Rank.Unregistered;
+			}
+		} else {
+			return user.rank;
+		}
+	}
 
 	getUsernameList(): string[] {
 		var arr: string[] = [];
@@ -773,7 +792,7 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 
 		if (hadName) {
 			client.logger.info({event: "rename", from: oldname, to: client.username});
-			if (announce) this.clients.forEach((c) => c.sendRename(oldname, client.username!, client.rank));
+			if (announce) this.clients.forEach((c) => c.sendRename(oldname, client.username!, this.getUserRank(client)));
 		} else {
 			client.logger.info({event: "rename", to: client.username});
 			if (announce)
@@ -781,7 +800,7 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 					c.sendAddUser([
 						{
 							username: client.username!,
-							rank: client.rank
+							rank: this.getUserRank(client)
 						}
 					]);
 
@@ -803,7 +822,7 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 			.map((c) => {
 				return {
 					username: c.username!,
-					rank: c.rank
+					rank: this.getUserRank(c)
 				};
 			});
 	}
@@ -880,7 +899,7 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 		this.clients
 			.filter((c) => c.connectedToNode || c.viewMode == 1)
 			.forEach((c) => {
-				if (this.screenHidden && c.rank == Rank.Unregistered) return;
+				if (this.screenHidden && (c.rank == Rank.Unregistered || c.rank == Rank.Registered)) return;
 				c.sendScreenResize(size.width, size.height);
 			});
 	}
@@ -894,7 +913,7 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 			self.clients
 				.filter((c) => c.connectedToNode || c.viewMode == 1)
 				.forEach((c) => {
-					if (self.screenHidden && c.rank == Rank.Unregistered) return;
+					if (self.screenHidden && (c.rank == Rank.Unregistered || c.rank == Rank.Registered)) return;
 
 					c.sendScreenUpdate({
 						x: rect.x,

@@ -78,6 +78,7 @@ export interface IProtocolMessageHandler {
 	onAdminIndefiniteTurn(user: User): void;
 	onAdminHideScreen(user: User, show: boolean): void;
 	onAdminSystemMessage(user: User, message: string): void;
+	onAdminShadow(user: User, shadow: boolean): void;
 
 	onRename(user: User, newName: string | undefined): void;
 	onChat(user: User, message: string): void;
