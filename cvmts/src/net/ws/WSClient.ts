@@ -7,7 +7,6 @@ export default class WSClient extends EventEmitter implements NetworkClient {
 	socket: WebSocket;
 	ip: string;
 	uuid: string;
-	enforceTextOnly = true;
 	private logger: Logger;
 
 	constructor(ws: WebSocket, ip: string, uuid: string) {
@@ -21,14 +20,6 @@ export default class WSClient extends EventEmitter implements NetworkClient {
 			'src_ip': ip
 		});
 		this.socket.on('message', (buf: Buffer, isBinary: boolean) => {
-			// Close the user's connection if they send a binary message
-			// when we are not expecting them yet.
-			if (isBinary && this.enforceTextOnly) {
-				this.logger.info({ event: 'received unexpected binary message' });
-				this.close();
-				return;
-			}
-
 			this.emit('msg', buf, isBinary);
 		});
 
@@ -67,7 +58,7 @@ export default class WSClient extends EventEmitter implements NetworkClient {
 		});
 	}
 
-	sendBinary(msg: Uint8Array): Promise<void> {
+	sendBinary(msg: Buffer): Promise<void> {
 		this.logger.trace({ event: 'outgoing message', msg });
 		return new Promise((res, rej) => {
 			if (!this.isOpen()) return res();

@@ -3,7 +3,7 @@ import { IPData } from './IPData.js';
 import IConfig from './IConfig.js';
 import RateLimiter from './RateLimiter.js';
 import { NetworkClient } from './net/NetworkClient.js';
-import { CollabVMCapabilities } from '@cvmts/collab-vm-1.2-binary-protocol';
+import { CollabVMCapabilities, VoteType } from '@cvmts/collab-vm-1.2-binary-protocol';
 import { pino, type Logger } from 'pino';
 import { v4 as uuid4 } from 'uuid';
 import { BanManager } from './BanManager.js';
@@ -168,8 +168,8 @@ export class User {
 	// This is probably grody, but /shrug. It works, and feels less awful than
 	// manually wrapping state (and probably prevents mixup bugs too.)
 
-	processMessage(handler: IProtocolMessageHandler, buffer: Buffer) {
-		this.protocol.processMessage(this, handler, buffer);
+	processMessage(handler: IProtocolMessageHandler, buffer: Buffer, binary: boolean) {
+		this.protocol.processMessage(this, handler, buffer, binary);
 	}
 
 	sendNop(): void {
@@ -256,20 +256,20 @@ export class User {
 		this.protocol.sendTurnQueueWaiting(this, turnTime, users, waitTime);
 	}
 
-	sendVoteStarted(): void {
-		this.protocol.sendVoteStarted(this);
+	sendVoteStats(started: boolean, startedBy: User, voteType: string, intentStr: string, voteTime: number, yesVotes: Array<User>, noVotes: Array<User>, data?: any): void {
+		this.protocol.sendVoteStats(this, started, startedBy, voteType, intentStr, voteTime, yesVotes, noVotes, data);
 	}
 
-	sendVoteStats(msLeft: number, nrYes: number, nrNo: number): void {
-		this.protocol.sendVoteStats(this, msLeft, nrYes, nrNo);
+	sendVoteEnded(voteType: string, intentStr: string, voteSucceeded: boolean): void {
+		this.protocol.sendVoteEnded(this, voteType, intentStr, voteSucceeded);
 	}
 
-	sendVoteEnded(): void {
-		this.protocol.sendVoteEnded(this);
+	sendVoteStartFailed(voteType: string, error: string, cooldown?: number): void {
+		this.protocol.sendVoteStartFailed(this, voteType, error, cooldown);
 	}
 
-	sendVoteCooldown(ms: number): void {
-		this.protocol.sendVoteCooldown(this, ms);
+	sendVotesEnabled(votesEnabled: Array<VoteType>) {
+		this.protocol.sendVotesEnabled(this, votesEnabled);
 	}
 
 	sendScreenResize(width: number, height: number): void {
@@ -278,6 +278,14 @@ export class User {
 
 	sendScreenUpdate(rect: ScreenRect): void {
 		this.protocol.sendScreenUpdate(this, rect);
+	}
+
+	sendIaosAdvertisement(apiUrl: string, mediaKindSupported: Array<string>): void {
+		this.protocol.sendIaosAdvertisement(this, apiUrl, mediaKindSupported);
+	}
+
+	sendIaosMediaChanged(changedBy: User, mediaKind: string, ejected: boolean, mediaName?: string): void {
+		this.protocol.sendIaosMediaChanged(this, changedBy, mediaKind, ejected, mediaName);
 	}
 
 	get username(): string {

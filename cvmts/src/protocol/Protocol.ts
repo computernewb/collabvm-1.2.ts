@@ -1,8 +1,11 @@
+import { VoteType } from '@cvmts/collab-vm-1.2-binary-protocol';
 import { Rank, User } from '../User';
 
 // We should probably put this in the binproto repository or something
 export enum ProtocolUpgradeCapability {
-	BinRects = 'bin'
+	BinRects = 'bin',
+	IaOS = 'iaos',
+	VoteX = 'votex'
 }
 
 export enum ProtocolRenameStatus {
@@ -53,7 +56,9 @@ export interface IProtocolMessageHandler {
 	// Called on turn request
 	onTurnRequest(user: User, forfeit: boolean): void;
 
-	onVote(user: User, choice: number): void;
+	// Votes
+	onStartVote(user: User, voteType: string): void;
+	onCastVote(user: User, vote: boolean): void;
 
 	onList(user: User): void;
 	onConnect(user: User, node: string): void;
@@ -84,6 +89,10 @@ export interface IProtocolMessageHandler {
 
 	onKey(user: User, keysym: number, pressed: boolean): void;
 	onMouse(user: User, x: number, y: number, buttonMask: number): void;
+
+	// iaos stuff
+	onIaosChangeMedia(user: User, id: string): void;
+	onIaosEjectMedia(user: User, kind: string): void;
 }
 
 // Abstracts away all of the protocol details from the CollabVM server,
@@ -97,7 +106,7 @@ export interface IProtocol {
 	// to handle errors. It should, however, catch invalid parameters without failing.
 	//
 	// This function will perform conversion to text if it is required.
-	processMessage(user: User, handler: IProtocolMessageHandler, buffer: Buffer): boolean;
+	processMessage(user: User, handler: IProtocolMessageHandler, buffer: Buffer, binary: boolean): boolean;
 
 	// Senders
 
@@ -134,13 +143,17 @@ export interface IProtocol {
 	sendTurnQueue(user: User, turnTime: number, users: string[]): void;
 	sendTurnQueueWaiting(user: User, turnTime: number, users: string[], waitTime: number): void;
 
-	sendVoteStarted(user: User): void;
-	sendVoteStats(user: User, msLeft: number, nrYes: number, nrNo: number): void;
-	sendVoteEnded(user: User): void;
-	sendVoteCooldown(user: User, ms: number): void;
+	sendVoteStats(user: User, started: boolean, startedBy: User, voteType: string, intentStr: string, voteTime: number, yesVotes: Array<User>, noVotes: Array<User>, data?: any): void;
+	sendVoteEnded(user: User, voteType: string, intentStr: string, voteSucceeded: boolean): void;
+	sendVoteStartFailed(user: User, voteType: string, error: string, cooldown?: number): void;
+	sendVotesEnabled(user: User, votesEnabled: Array<VoteType>): void;
 
 	sendScreenResize(user: User, width: number, height: number): void;
 
 	// Sends a rectangle update to the user.
 	sendScreenUpdate(user: User, rect: ScreenRect): void;
+
+	// IAOS Stuff
+	sendIaosAdvertisement(user: User, apiUrl: string, mediaKindSupported: Array<string>): void;
+	sendIaosMediaChanged(user: User, changedBy: User, mediaKind: string, ejected: boolean, mediaName?: string): void;
 }

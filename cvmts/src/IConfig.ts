@@ -25,6 +25,7 @@ export default interface IConfig {
 			turn: boolean;
 			callForReset: boolean;
 			vote: boolean;
+			iaos: boolean;
 		};
 	};
 	vm: {
@@ -35,6 +36,7 @@ export default interface IConfig {
 		vncPort: number;
 		snapshots: boolean;
 		resourceLimits?: CgroupLimits;
+		mediaDevices: { [key: string]: string };
 	};
 	vncvm: VNCVMDef;
 	mysql: MySQLConfig;
@@ -59,14 +61,22 @@ export default interface IConfig {
 		};
 		tempMuteTime: number;
 		turnTime: number;
-		voteTime: number;
-		voteCooldown: number;
+		voteTime: number; // legacy
+		voteCooldown: number; // legacy
 		adminpass: string;
 		modpass: string;
 		turnwhitelist: boolean;
 		turnpass: string;
 		moderatorPermissions: Permissions;
 	};
+	meta: MetaServerConfig;
+	vote: {
+		reset: VoteConfig;
+		reboot: VoteConfig;
+		iaosInsert: VoteConfig;
+		iaosEject: VoteConfig;
+	};
+	iaos: IAOSConfig;
 }
 
 export interface MySQLConfig {
@@ -93,4 +103,21 @@ export interface Permissions {
 	rename: boolean;
 	grabip: boolean;
 	xss: boolean;
+}
+
+export interface VoteConfig {
+	enabled: boolean;
+	voteTime: number;
+	voteCooldown: number;
+}
+
+export interface MetaServerConfig {
+	enabled: boolean;
+	publicApi: string;
+	privateApi: string;
+}
+
+export interface IAOSConfig {
+	enabled: boolean;
+	mediaKindSupported: Array<string>;
 }

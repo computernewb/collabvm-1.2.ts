@@ -3,14 +3,14 @@ import pino from 'pino';
 export class IPData {
 	tempMuteExpireTimeout?: NodeJS.Timeout;
 	muted: Boolean;
-	vote: boolean | null;
+	hasVoted: boolean;
 	address: string;
 	refCount: number = 0;
 
 	constructor(address: string) {
 		this.address = address;
 		this.muted = false;
-		this.vote = null;
+		this.hasVoted = false;
 	}
 
 	// Call when a connection is closed to "release" the ip data

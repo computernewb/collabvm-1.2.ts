@@ -5,4 +5,6 @@ export default interface VNCVMDef {
 	stopCmd: string | null;
 	rebootCmd: string | null;
 	restoreCmd: string | null;
+	insertMediaCmd: string | null;
+	ejectMediaCmd: string | null;
 }

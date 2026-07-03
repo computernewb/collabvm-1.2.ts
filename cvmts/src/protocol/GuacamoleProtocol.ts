@@ -1,7 +1,9 @@
 import { IProtocol, IProtocolMessageHandler, ListEntry, ProtocolAddUser, ProtocolChatHistory, ProtocolFlag, ProtocolRenameStatus, ProtocolUpgradeCapability, ScreenRect } from './Protocol.js';
 import { Rank, User } from '../User.js';
+import { HTMLSanitize } from '../Utilities.js';
 
 import * as cvm from '@cvmts/cvm-rs';
+import { VoteType } from '@cvmts/collab-vm-1.2-binary-protocol';
 
 // CollabVM protocol implementation for Guacamole.
 export class GuacamoleProtocol implements IProtocol {
@@ -103,7 +105,11 @@ export class GuacamoleProtocol implements IProtocol {
 		return true;
 	}
 
-	processMessage(user: User, handler: IProtocolMessageHandler, buffer: Buffer): boolean {
+	processMessage(user: User, handler: IProtocolMessageHandler, buffer: Buffer, binary: boolean): boolean {
+		if (binary) {
+			user.logger.info({ event: 'received unexpected binary message' });
+			return false;
+		}
 		let decodedElements = cvm.guacDecode(buffer.toString('utf-8'));
 		if (decodedElements.length < 1) return false;
 
@@ -178,8 +184,9 @@ export class GuacamoleProtocol implements IProtocol {
 			case 'vote':
 				if (decodedElements.length !== 2) return false;
 				let choice = parseInt(decodedElements[1]);
-				if (choice == undefined) return false;
-				handler.onVote(user, choice);
+				if (choice !== 0 && choice !== 1) return false;
+
+				handler.onCastVote(user, choice === 1);
 				break;
 
 			case 'admin':
@@ -309,21 +316,40 @@ export class GuacamoleProtocol implements IProtocol {
 		user.sendMsg(cvm.guacEncode(...arr));
 	}
 
-	sendVoteStarted(user: User): void {
-		user.sendMsg(cvm.guacEncode('vote', '0'));
+	sendVoteStats(user: User, started: boolean, startedBy: User, voteType: string, intentStr: string, voteTime: number, yesVotes: Array<User>, noVotes: Array<User>, data?: any): void {
+		if (started) {
+			let systemMsg = `${startedBy.username} has started a vote to ${intentStr}.`;
+			if (voteType === VoteType.VoteReset) {
+				user.sendMsg(cvm.guacEncode('vote', '0'));
+			} else {
+				systemMsg += '<br>To participate in this vote, please use the latest version of the CollabVM Webapp.';
+			}
+			user.sendChatMessage('', systemMsg);
+		}
+		if (voteType === VoteType.VoteReset) {
+			user.sendMsg(cvm.guacEncode('vote', '1', (voteTime * 1000).toString(), yesVotes.length.toString(), noVotes.length.toString()));
+		}
 	}
 
-	sendVoteStats(user: User, msLeft: number, nrYes: number, nrNo: number): void {
-		user.sendMsg(cvm.guacEncode('vote', '1', msLeft.toString(), nrYes.toString(), nrNo.toString()));
+	sendVoteEnded(user: User, voteType: string, intentStr: string, voteSucceeded: boolean): void {
+		if (voteType === VoteType.VoteReset) {
+			user.sendMsg(cvm.guacEncode('vote', '2'));
+		}
+		user.sendChatMessage('', `The vote to ${intentStr} has ${voteSucceeded ? 'won' : 'lost'}.`);
 	}
 
-	sendVoteEnded(user: User): void {
-		user.sendMsg(cvm.guacEncode('vote', '2'));
+	sendVoteStartFailed(user: User, voteType: string, error: string, cooldown?: number): void {
+		switch (error) {
+			case 'cooldown': {
+				user.sendMsg(cvm.guacEncode('vote', '3', cooldown!.toString()));
+				break;
+			}
+			case 'existingVote': {
+				user.sendChatMessage('', 'A vote is already in progress.');
+			}
+		}
 	}
-
-	sendVoteCooldown(user: User, ms: number): void {
-		user.sendMsg(cvm.guacEncode('vote', '3', ms.toString()));
-	}
+	sendVotesEnabled(user: User, votesEnabled: Array<VoteType>): void {}
 
 	private getTurnQueueBase(turnTime: number, users: string[]): string[] {
 		return ['turn', turnTime.toString(), users.length.toString(), ...users];
@@ -346,5 +372,28 @@ export class GuacamoleProtocol implements IProtocol {
 	sendScreenUpdate(user: User, rect: ScreenRect): void {
 		user.sendMsg(cvm.guacEncode('png', '0', '0', rect.x.toString(), rect.y.toString(), rect.data.toString('base64')));
 		this.sendSync(user, Date.now());
+	}
+
+	// iaos stubs
+	sendIaosAdvertisement(user: User, apiUrl: string, mediaKindSupported: Array<string>): void {
+		this.sendChatMessage(user, '', 'To insert ISO/Floppy media into this VM, use the latest version of the CollabVM webapp.');
+	}
+
+	sendIaosMediaChanged(user: User, changedBy: User, mediaKind: string, ejected: boolean, mediaName?: string): void {
+		let mediaKindLong = mediaKind;
+		switch (mediaKind) {
+			case 'iso':
+				mediaKindLong = 'CD Drive';
+				break;
+			case 'flp':
+				mediaKindLong = 'Floppy Drive';
+				break;
+		}
+
+		if (ejected) {
+			user.sendChatMessage('', `${changedBy.username} ejected the ${mediaKindLong}.`);
+		} else {
+			user.sendChatMessage('', `${changedBy.username} inserted <b>${HTMLSanitize(mediaName!)}</b> into the ${mediaKindLong}.`);
+		}
 	}
 }
