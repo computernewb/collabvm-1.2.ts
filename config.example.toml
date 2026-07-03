@@ -153,3 +153,4 @@ bypassturn = true
 rename = true
 grabip = true
 xss = true
+shadow = true

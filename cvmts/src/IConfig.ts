@@ -93,4 +93,5 @@ export interface Permissions {
 	rename: boolean;
 	grabip: boolean;
 	xss: boolean;
+	shadow: boolean;
 }
