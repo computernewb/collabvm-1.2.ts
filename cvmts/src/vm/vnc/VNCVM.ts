@@ -104,4 +104,18 @@ export default class VNCVM extends EventEmitter implements VM {
 	Events(): EventEmitter {
 		return this;
 	}
+
+	async InsertMedia(kind: string, path: string): Promise<void> {
+		if (this.def.insertMediaCmd) {
+			let cmd = this.def.insertMediaCmd.replaceAll('$KIND', kind).replaceAll('$PATH', path);
+			await execaCommand(cmd, { shell: true });
+		}
+	}
+
+	async EjectMedia(kind: string): Promise<void> {
+		if (this.def.ejectMediaCmd) {
+			let cmd = this.def.ejectMediaCmd.replaceAll('$KIND', kind);
+			await execaCommand(cmd, { shell: true });
+		}
+	}
 }

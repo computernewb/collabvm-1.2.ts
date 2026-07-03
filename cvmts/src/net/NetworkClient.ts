@@ -1,4 +1,4 @@
-import { EventEmitter } from 'stream';
+import { EventEmitter } from 'events';
 
 interface NetworkClientEvents extends EventEmitter {
 	on(event: 'msg', listener: (buf: Buffer, binary: boolean) => void): this;
@@ -8,7 +8,7 @@ interface NetworkClientEvents extends EventEmitter {
 export interface NetworkClient extends NetworkClientEvents {
 	getIP(): string;
 	send(msg: string): Promise<void>;
-	sendBinary(msg: Uint8Array): Promise<void>;
+	sendBinary(msg: Buffer): Promise<void>;
 	close(): void;
 	isOpen(): boolean;
 }

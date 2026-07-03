@@ -2,6 +2,7 @@
 **/.yarn/
 **/node_modules/
 config.toml
+media.toml
 
 # for now
 cvmts/attic

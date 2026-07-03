@@ -1,0 +1,24 @@
+{
+	"name": "@cvmts/meta-server",
+	"type": "module",
+	"main": "dist/index.js",
+	"scripts": {
+		"build": "tsc -outDir dist -rootDir src/",
+		"serve": "node dist/index.js",
+		"format": "prettier --write ."
+	},
+	"author": "Elijah R",
+	"license": "GPL-3.0",
+	"dependencies": {
+		"@fastify/cors": "^11.2.0",
+		"fastify": "^5.8.5",
+		"pino": "^9.3.1",
+		"toml": "^3.0.0"
+	},
+	"devDependencies": {
+		"@types/node": "^20.12.5",
+		"prettier": "^3.3.3",
+		"typescript": "^5.4.4"
+	},
+	"packageManager": "yarn@4.1.1"
+}

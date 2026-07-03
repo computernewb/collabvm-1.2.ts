@@ -21,6 +21,9 @@ import { TheAuditLog } from './AuditLog.js';
 import { IProtocolMessageHandler, ListEntry, ProtocolAddUser, ProtocolFlag, ProtocolRenameStatus, ProtocolUpgradeCapability } from './protocol/Protocol.js';
 import { TheProtocolManager } from './protocol/Manager.js';
 import { SpecialTurnTimes, TurnController, TurnQueue } from './TurnController.js';
+import { MetaApi } from './meta/metaApi.js';
+import { Vote, VoteCooldownManager } from './Vote.js';
+import { VoteType } from '@cvmts/collab-vm-1.2-binary-protocol';
 
 // Instead of strange hacks we can just use nodejs provided
 // import.meta properties, which have existed since LTS if not before
@@ -35,11 +38,6 @@ type ChatHistory = {
 	msg: string;
 };
 
-type VoteTally = {
-	yes: number;
-	no: number;
-};
-
 export default class CollabVMServer implements IProtocolMessageHandler {
 	private Config: IConfig;
 
@@ -50,19 +48,8 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 	private turnController: TurnController;
 
 	// If a reset vote is in progress
-	private voteInProgress: boolean;
-
-	// Interval to keep track of vote resets
-	private voteInterval?: NodeJS.Timeout;
-
-	// How much time is left on the vote
-	private voteTime: number;
-
-	// How much time until another reset vote can be cast
-	private voteCooldown: number;
-
-	// Interval to keep track
-	private voteCooldownInterval?: NodeJS.Timeout;
+	private currentVote: Vote | null;
+	private voteCooldownManager: VoteCooldownManager;
 
 	// Completely disable turns
 	private votesAllowed: boolean;
@@ -89,16 +76,18 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 	// queue of rects, reset every frame
 	private rectQueue: Rect[] = [];
 
+	// iaos
+	private metaApi: MetaApi | null = null;
+
 	private logger = pino({ name: 'CVMTS.Server' });
 
-	constructor(config: IConfig, vm: VM, banmgr: BanManager, auth: AuthManager | null, geoipReader: ReaderModel | null) {
+	constructor(config: IConfig, vm: VM, banmgr: BanManager, auth: AuthManager | null, geoipReader: ReaderModel | null, metaApi: MetaApi | null) {
 		this.Config = config;
 		this.ChatHistory = new CircularBuffer<ChatHistory>(Array, this.Config.collabvm.maxChatHistoryLength);
 		this.turnController = new TurnController(config, this.onTurnUpdate.bind(this));
 		this.clients = [];
-		this.voteInProgress = false;
-		this.voteTime = 0;
-		this.voteCooldown = 0;
+		this.currentVote = null;
+		this.voteCooldownManager = new VoteCooldownManager();
 		this.votesAllowed = true;
 		this.screenHidden = false;
 		this.screenHiddenImg = readFileSync(path.join(kCVMTSAssetsRoot, 'screenhidden.jpeg'));
@@ -147,6 +136,8 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 		this.geoipReader = geoipReader;
 
 		this.banmgr = banmgr;
+
+		this.metaApi = metaApi;
 	}
 
 	public connectionOpened(user: User) {
@@ -169,7 +160,7 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 
 		user.socket.on('msg', (buf: Buffer, binary: boolean) => {
 			try {
-				user.processMessage(this, buf);
+				user.processMessage(this, buf, binary);
 			} catch (err) {
 				user.logger.error(
 					{
@@ -200,9 +191,8 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 		let clientIndex = this.clients.indexOf(user);
 		if (clientIndex === -1) return;
 
-		if (user.IP.vote != null) {
-			user.IP.vote = null;
-			this.sendVoteUpdate();
+		if (this.currentVote?.RemoveVote(user)) {
+			this.broadcastVoteUpdate();
 		}
 
 		this.clients.splice(clientIndex, 1);
@@ -309,6 +299,18 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 					user.Capabilities.bin = true;
 					user.protocol = TheProtocolManager.getProtocol('binary1');
 					break;
+				// Install any OS
+				case ProtocolUpgradeCapability.IaOS:
+					if (this.Config.iaos?.enabled) {
+						enabledCaps.push(cap as ProtocolUpgradeCapability);
+						user.Capabilities.iaos = true;
+						break;
+					}
+				// Extended votes
+				case ProtocolUpgradeCapability.VoteX:
+					enabledCaps.push(cap as ProtocolUpgradeCapability);
+					user.Capabilities.votex = true;
+					break;
 				default:
 					break;
 			}
@@ -355,60 +357,69 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 		}
 	}
 
-	onVote(user: User, choice: number): void {
-		if (!this.VM.SnapshotsSupported()) {
-			user.logger.warn({ event: 'vote/voted without snapshots enabled' });
-			return;
-		}
+	onStartVote(user: User, voteType: string): void {
 		if ((!this.votesAllowed || this.Config.collabvm.turnwhitelist) && user.rank !== Rank.Admin && user.rank !== Rank.Moderator && !user.turnWhitelist) return;
+		if (!this.authCheck(user, this.Config.auth.guestPermissions.vote)) return;
+
 		if (!user.connectedToNode) {
-			user.logger.warn({ event: 'vote/not connected to node' });
+			user.logger.warn({ event: 'vote/start/not connected to node' });
 			return;
 		}
 		if (!user.VoteRateLimit.request()) {
-			user.logger.warn({ event: 'vote/voted but was ratelimited' });
+			user.logger.warn({ event: 'vote/start/ratelimited' });
 			return;
 		}
-		switch (choice) {
-			case 1:
-				if (!this.voteInProgress) {
-					if (!this.authCheck(user, this.Config.auth.guestPermissions.callForReset)) return;
 
-					if (this.voteCooldown !== 0) {
-						user.sendVoteCooldown(this.voteCooldown);
-						return;
-					}
-
-					user.logger.info({ event: 'vote/user initiated a vote' });
-					this.startVote();
-					this.clients.forEach((c) => c.sendChatMessage('', `${user.username} has started a vote to reset the VM.`));
+		switch (voteType) {
+			case VoteType.VoteReset: {
+				if (!this.Config.vote.reset?.enabled) {
+					return;
 				}
-
-				if (!this.authCheck(user, this.Config.auth.guestPermissions.vote)) return;
-
-				if (user.IP.vote !== true) {
-					this.clients.forEach((c) => c.sendChatMessage('', `${user.username} has voted yes.`));
+				this.startVote(user, VoteType.VoteReset, this.Config.vote.reset.voteTime, 'reset the VM');
+				break;
+			}
+			case VoteType.VoteReboot: {
+				if (!this.Config.vote.reboot?.enabled) {
+					return;
 				}
-
-				user.logger.info({ event: 'vote/yes' });
-				user.IP.vote = true;
+				this.startVote(user, VoteType.VoteReboot, this.Config.vote.reboot.voteTime, 'reboot the VM');
 				break;
-			case 0:
-				if (!this.voteInProgress) return;
-
-				if (!this.authCheck(user, this.Config.auth.guestPermissions.vote)) return;
-
-				if (user.IP.vote !== false) {
-					this.clients.forEach((c) => c.sendChatMessage('', `${user.username} has voted no.`));
-				}
-
-				user.logger.info({ event: 'vote/no' });
-				user.IP.vote = false;
-				break;
-			default:
-				break;
+			}
+			default: {
+				return;
+			}
 		}
-		this.sendVoteUpdate();
+	}
+
+	onCastVote(user: User, vote: boolean): void {
+		if (!this.currentVote) {
+			if (!user.Capabilities.votex) {
+				this.onStartVote(user, VoteType.VoteReset);
+			}
+			return;
+		}
+
+		if (!this.authCheck(user, this.Config.auth.guestPermissions.vote)) return;
+		if (!user.connectedToNode) {
+			user.logger.warn({ event: 'vote/cast/not connected to node' });
+			return;
+		}
+
+		if (!user.VoteRateLimit.request()) {
+			user.logger.warn({ event: 'vote/cast/ratelimited' });
+			return;
+		}
+
+		if (user.IP.hasVoted && this.currentVote.GetVote(user) === null) {
+			user.logger.warn({ event: 'vote/cast/ip limit' });
+			return;
+		}
+
+		if (this.currentVote.AddVote(user, vote)) {
+			user.logger.info({ event: 'vote/cast', vote: vote ? 'yes' : 'no' });
+			this.broadcastVoteUpdate();
+			this.clients.filter((c) => !c.Capabilities.votex).forEach((c) => c.sendChatMessage('', `${user.username} has voted ${vote ? 'yes' : 'no'}.`));
+		}
 	}
 
 	async onList(user: User) {
@@ -440,7 +451,16 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 			user.viewMode = viewMode;
 		}
 
-		user.sendConnectOKResponse(this.VM.SnapshotsSupported());
+		user.sendConnectOKResponse(this.Config.vote.reset.enabled);
+
+		if (user.Capabilities.votex) {
+			let votesEnabled = [];
+
+			if (this.Config.vote.reset?.enabled) votesEnabled.push(VoteType.VoteReset);
+			if (this.Config.vote.reboot?.enabled) votesEnabled.push(VoteType.VoteReboot);
+
+			user.sendVotesEnabled(votesEnabled);
+		}
 
 		if (this.ChatHistory.size !== 0) {
 			let history = this.ChatHistory.toArray() as ChatHistory[];
@@ -460,8 +480,12 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 
 		user.sendSync(Date.now());
 
-		if (this.voteInProgress) this.sendVoteUpdate(user);
+		if (this.currentVote) this.sendVoteUpdate(user);
 		this.sendTurnUpdate(this.turnController.getTurnInfo(), user);
+
+		if (this.Config?.iaos.enabled) {
+			user.sendIaosAdvertisement(this.Config.meta.publicApi, this.Config.iaos.mediaKindSupported);
+		}
 	}
 
 	async onConnect(user: User, node: string) {
@@ -489,7 +513,7 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 		}
 		if (this.Config.auth.enabled && newName !== undefined) {
 			// Don't send system message to a user without a username since it was likely an automated attempt by the webapp
-			if (user.username) user.sendChatMessage('', 'You need to log in to do that.');
+			if (user.username) user.sendChatMessage('', 'You need to login to do that.');
 			if (user.rank !== Rank.Unregistered) return;
 			this.renameUser(user, undefined);
 			return;
@@ -607,8 +631,8 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 
 	onAdminForceVote(user: User, choice: number): void {
 		if (user.rank !== Rank.Admin && (user.rank !== Rank.Moderator || !this.Config.collabvm.moderatorPermissions.forcevote)) return;
-		if (!this.voteInProgress) return;
-		this.endVote(choice == 1);
+		if (!this.currentVote) return;
+		this.currentVote.EndVote(choice == 1);
 	}
 
 	onAdminMuteUser(user: User, username: string, temporary: boolean): void {
@@ -731,6 +755,76 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 	onAdminSystemMessage(user: User, message: string): void {
 		if (user.rank !== Rank.Admin) return;
 		this.clients.forEach((c) => c.sendChatMessage('', message));
+	}
+
+	// iaos handlers
+
+	async onIaosChangeMedia(user: User, id: string): Promise<void> {
+		if (!this.Config.iaos?.enabled || !this.metaApi) {
+			return;
+		}
+
+		if (this.Config.collabvm.turnwhitelist && user.rank !== Rank.Admin && user.rank !== Rank.Moderator && !user.turnWhitelist) return;
+		if (!this.authCheck(user, this.Config.auth.guestPermissions.iaos)) return;
+		if (!user.connectedToNode) {
+			user.logger.warn({ event: 'iaos/insert/not connected to node' });
+			return;
+		}
+
+		let entry = await this.metaApi.iaosGetMediaById(id);
+
+		if (!entry) {
+			user.logger.info({ event: 'iaos/insert/bad_id', mediaId: id });
+			return;
+		}
+
+		if (this.Config.iaos.mediaKindSupported.indexOf(entry.kind) === -1) {
+			user.logger.info({ event: 'iaos/insert/kind_unsupported', mediaId: id, mediaKind: entry.kind });
+			return;
+		}
+
+		if (this.Config.vote.iaosInsert?.enabled && user.rank !== Rank.Admin && user.rank !== Rank.Moderator) {
+			if (!this.authCheck(user, this.Config.auth.guestPermissions.vote)) return;
+
+			this.startVote(user, VoteType.VoteIaosInsertMedia, this.Config.vote.iaosInsert.voteTime, `insert ${entry.name}`, {
+				mediaId: entry.id,
+				mediaKind: entry.kind,
+				mediaName: entry.name
+			});
+		} else {
+			await this.VM.InsertMedia(entry.kind, entry.path);
+			this.clients.forEach((c) => c.sendIaosMediaChanged(user, entry.kind, false, entry.name));
+			user.logger.info({ event: 'iaos/insert', mediaKind: entry.kind, mediaId: id, mediaPath: entry.path });
+		}
+	}
+
+	async onIaosEjectMedia(user: User, kind: string): Promise<void> {
+		if (!this.Config.iaos.enabled) {
+			return;
+		}
+
+		if (this.Config.collabvm.turnwhitelist && user.rank !== Rank.Admin && user.rank !== Rank.Moderator && !user.turnWhitelist) return;
+		if (!this.authCheck(user, this.Config.auth.guestPermissions.iaos)) return;
+		if (!user.connectedToNode) {
+			user.logger.warn({ event: 'iaos/eject/not connected to node' });
+			return;
+		}
+
+		if (this.Config.iaos.mediaKindSupported.indexOf(kind) === -1) {
+			user.logger.info({ event: 'iaos/eject/kind_unsupported', mediaKind: kind });
+		}
+
+		if (this.Config.vote.iaosEject?.enabled && user.rank !== Rank.Admin && user.rank !== Rank.Moderator) {
+			if (!this.authCheck(user, this.Config.auth.guestPermissions.vote)) return;
+
+			this.startVote(user, VoteType.VoteIaosEjectMedia, this.Config.vote.iaosEject.voteTime, 'eject media from the VM', {
+				mediaKind: kind
+			});
+		} else {
+			await this.VM.EjectMedia(kind);
+			this.clients.forEach((c) => c.sendIaosMediaChanged(user, kind, true));
+			user.logger.info({ event: 'iaos/eject', mediaKind: kind });
+		}
 	}
 
 	// end protocol message handlers
@@ -960,57 +1054,105 @@ export default class CollabVMServer implements IProtocolMessageHandler {
 		return JPEGEncoder.EncodeThumbnail(display.Buffer(), display.Size());
 	}
 
-	startVote() {
-		if (this.voteInProgress) return;
-		this.voteInProgress = true;
-		this.logger.info({ event: 'vote/start' });
-		this.clients.forEach((c) => c.sendVoteStarted());
-		this.voteTime = this.Config.collabvm.voteTime;
-		this.voteInterval = setInterval(() => {
-			this.voteTime--;
-			if (this.voteTime < 1) {
-				this.endVote();
-			}
-		}, 1000);
-	}
-
-	endVote(result?: boolean) {
-		if (!this.voteInProgress) return;
-		this.voteInProgress = false;
-		clearInterval(this.voteInterval);
-		var count = this.getVoteCounts();
-		this.clients.forEach((c) => c.sendVoteEnded());
-		if (result === true || (result === undefined && count.yes >= count.no)) {
-			this.clients.forEach((c) => c.sendChatMessage('', 'The vote to reset the VM has won.'));
-			this.VM.Reset();
-		} else {
-			this.clients.forEach((c) => c.sendChatMessage('', 'The vote to reset the VM has lost.'));
+	startVote(user: User, voteType: VoteType, voteTime: number, intentStr: string, data?: any) {
+		if (this.currentVote) {
+			user.sendVoteStartFailed(voteType, 'existingVote');
+			return;
 		}
-		this.clients.forEach((c) => {
-			c.IP.vote = null;
-		});
-		this.voteCooldown = this.Config.collabvm.voteCooldown;
-		this.voteCooldownInterval = setInterval(() => {
-			this.voteCooldown--;
-			if (this.voteCooldown < 1) clearInterval(this.voteCooldownInterval);
-		}, 1000);
+
+		let cooldownTime = this.voteCooldownManager.CheckCooldown(voteType as VoteType);
+		if (cooldownTime !== null) {
+			user.sendVoteStartFailed(voteType, 'cooldown', cooldownTime);
+			return;
+		}
+
+		this.currentVote = new Vote(voteType, voteTime, intentStr, user, data);
+		this.currentVote.on('voteEnd', (result) => this.onVoteEnd(result));
+		user.logger.info({ event: 'vote/start', voteType });
+		this.clients.forEach((c) =>
+			c.sendVoteStats(
+				true,
+				this.currentVote!.GetStartedBy(),
+				this.currentVote!.GetVoteType(),
+				this.currentVote!.GetVoteIntentStr(),
+				this.currentVote!.GetVoteTime(),
+				[this.currentVote!.GetStartedBy()],
+				[],
+				this.currentVote!.data
+			)
+		);
 	}
 
-	sendVoteUpdate(client?: User) {
-		if (!this.voteInProgress) return;
-		var count = this.getVoteCounts();
+	async onVoteEnd(result: boolean) {
+		if (!this.currentVote) return;
 
-		if (client) client.sendVoteStats(this.voteTime * 1000, count.yes, count.no);
-		else this.clients.forEach((c) => c.sendVoteStats(this.voteTime * 1000, count.yes, count.no));
+		switch (this.currentVote.GetVoteType()) {
+			case VoteType.VoteReset: {
+				if (result === true) {
+					this.VM.Reset();
+				}
+				this.voteCooldownManager.SetCooldown(VoteType.VoteReset, this.Config.vote.reset.voteCooldown);
+				break;
+			}
+			case VoteType.VoteReboot: {
+				if (result === true) {
+					this.VM.Reboot();
+				}
+				this.voteCooldownManager.SetCooldown(VoteType.VoteReboot, this.Config.vote.reboot.voteCooldown);
+				break;
+			}
+			case VoteType.VoteIaosInsertMedia: {
+				if (result === true) {
+					let mediaId = this.currentVote.data.mediaId as string;
+
+					let entry = await this.metaApi!.iaosGetMediaById(mediaId);
+
+					if (!entry) {
+						this.logger.info({ event: 'iaos/insert/bad_id', mediaId });
+						return;
+					}
+
+					await this.VM.InsertMedia(entry.kind, entry.path);
+					this.logger.info({ event: 'iaos/insert', mediaKind: entry.kind, mediaId, mediaPath: entry.path });
+				}
+
+				this.voteCooldownManager.SetCooldown(VoteType.VoteIaosInsertMedia, this.Config.vote.iaosInsert.voteCooldown);
+				break;
+			}
+			case VoteType.VoteIaosEjectMedia: {
+				if (result === true) {
+					let mediaKind = this.currentVote.data.mediaKind as string;
+					await this.VM.EjectMedia(mediaKind);
+					this.logger.info({ event: 'iaos/eject', mediaKind });
+				}
+
+				this.voteCooldownManager.SetCooldown(VoteType.VoteIaosEjectMedia, this.Config.vote.iaosEject.voteCooldown);
+				break;
+			}
+		}
+
+		this.clients.forEach((c) => c.sendVoteEnded(this.currentVote!.GetVoteType(), this.currentVote!.GetVoteIntentStr(), result));
+		this.currentVote = null;
 	}
 
-	getVoteCounts(): VoteTally {
-		let yes = 0;
-		let no = 0;
-		IPDataManager.ForEachIPData((c) => {
-			if (c.vote === true) yes++;
-			if (c.vote === false) no++;
-		});
-		return { yes: yes, no: no };
+	broadcastVoteUpdate() {
+		if (!this.currentVote) return;
+
+		this.clients.forEach((c) => this.sendVoteUpdate(c));
+	}
+
+	sendVoteUpdate(client: User) {
+		if (!this.currentVote) return;
+
+		client.sendVoteStats(
+			false,
+			this.currentVote.GetStartedBy(),
+			this.currentVote.GetVoteType(),
+			this.currentVote.GetVoteIntentStr(),
+			this.currentVote.GetVoteTime(),
+			this.currentVote.GetYesVotes(),
+			this.currentVote.GetNoVotes(),
+			this.currentVote.data
+		);
 	}
 }

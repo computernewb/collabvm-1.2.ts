@@ -13,9 +13,11 @@ export class QemuVMShim implements VM {
 	private logger;
 	private cg_launcher: QemuResourceLimitedLauncher | null = null;
 	private resource_limits: CgroupLimits | null = null;
+	private mediaDevices: { [key: string]: string };
 
-	constructor(def: QemuVmDefinition, resourceLimits?: CgroupLimits) {
+	constructor(def: QemuVmDefinition, mediaDevices: { [key: string]: string }, resourceLimits?: CgroupLimits) {
 		this.logger = pino({ name: `CVMTS.QemuVMShim/${def.id}` });
+		this.mediaDevices = mediaDevices;
 
 		if (resourceLimits) {
 			if (process.platform == 'linux') {
@@ -129,5 +131,33 @@ export class QemuVMShim implements VM {
 
 	Events(): EventEmitter {
 		return this.vm;
+	}
+
+	async InsertMedia(kind: string, path: string): Promise<void> {
+		let device = this.mediaDevices[kind];
+		if (!device) {
+			this.logger.warn('no device defined for media kind %s, ignoring', kind);
+			return;
+		}
+
+		await this.vm.QmpCommand('blockdev-change-medium', {
+			'id': device,
+			'filename': path,
+			'read-only-mode': 'read-only',
+			'force': true
+		});
+	}
+
+	async EjectMedia(kind: string): Promise<void> {
+		let device = this.mediaDevices[kind];
+		if (!device) {
+			this.logger.warn('no device defined for media kind %s, ignoring', kind);
+			return;
+		}
+
+		await this.vm.QmpCommand('eject', {
+			id: device,
+			force: true
+		});
 	}
 }

@@ -31,4 +31,7 @@ export default interface VM {
 	SnapshotsSupported(): boolean;
 
 	Events(): EventEmitter;
+
+	InsertMedia(kind: string, path: string): Promise<void>;
+	EjectMedia(kind: string): Promise<void>;
 }

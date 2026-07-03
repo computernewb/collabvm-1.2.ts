@@ -1,5 +1,4 @@
 import { IProtocol } from './Protocol';
-import { User } from '../User';
 
 // The protocol manager.
 // Holds protocols, and provides the ability to obtain them by name.

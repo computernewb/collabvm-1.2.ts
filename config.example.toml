@@ -34,6 +34,7 @@ chat = true
 turn = false
 callForReset = false
 vote = true
+iaos = false
 
 [vm]
 # Configures the type of VM this server will use
@@ -49,6 +50,10 @@ qemuArgs = "qemu-system-x86_64"
 # VNC port to be used for this VM. Must be unique among all VMs. Only used on Windows, as unix sockets are used on Linux.
 vncPort = 5900
 snapshots = true
+# Map IAOS media kinds to QEMU devices (required for IAOS functionality)
+# Note that because of the way QMP works, you must give use Device IDs (NOT the blockdev names you would use with the "change" HMP command)
+# example qemu cli: -device ide-cd,id=vm.cd_drive -device isa-fdc -device floppy,id=vm.floppy
+mediaDevices = { iso = "vm.cd_drive", flp = "vm.floppy" }
 
 # Resource limits. 
 # Only works on Linux, with `Delegate=yes` set in your .service file. No-op on other platforms.
@@ -84,6 +89,10 @@ vncPort = 5900
 # stopCmd = ""
 # rebootCmd = ""
 # restoreCmd = ""
+
+# $KIND = media kind, $PATH = media path
+# insertMediaCmd = ""
+# ejectMediaCmd = ""
 
 [mysql]
 # Configures the MySQL database. This is ONLY required if you use the internal cvmban banning system (configured below)
@@ -127,10 +136,6 @@ automute = { enabled = true, seconds = 5, messages = 5 }
 tempMuteTime = 30
 # How long a turn lasts, in seconds
 turnTime = 20
-# How long a reset vote lasts, in seconds
-voteTime = 100
-# How long until another vote can be started, in seconds
-voteCooldown = 180
 # SHA256 sum of the admin and mod passwords. This can be generated with the following command:
 # printf "<password>" | sha256sum -
 # Example hash is hunter2 and hunter3
@@ -140,6 +145,33 @@ modpass = "fb8c2e2b85ca81eb4350199faddd983cb26af3064614e737ea9f479621cfa57a"
 turnwhitelist = false
 # SHA256 sum for the password to take a turn. Only takes effect if turnwhitelist == true. If set to an empty string or not provided, only admins and mods can take turns
 turnpass = ""
+
+# Configuration for voting
+[vote]
+# Vote to restore the VM
+reset = { enabled = true, voteTime = 100, voteCooldown = 180 }
+# Vote to hard-reboot the VM
+reboot = { enabled = true, voteTime = 30, voteCooldown = 60 }
+# Vote to insert media into the VM (has no effect if IAOS is disabled)
+iaosInsert = { enabled = true, voteTime = 30, voteCooldown = 60 }
+# Vote to eject media from the VM (has no effect if IAOS is disabled)
+iaosEject = { enabled = true, voteTime = 30, voteCooldown = 60 }
+
+# Configuration for the meta server
+# So far, this is only used for IAOS, but other functionality may be moved to it in the future
+# When using in production, make sure the meta server is reverse proxied in a way that public clients CANNOT
+# access endpoints on /private
+[meta]
+enabled = false
+publicApi = "http://127.0.0.1:8199/public"
+privateApi = "http://127.0.0.1:8199/private"
+
+# IAOS (Install Any OS) functionality
+# Requires meta server
+# Note that IAOS actions will require a vote if configured above, or will be instantaneous otherwise
+[iaos]
+enabled = false
+mediaKindSupported = ["iso", "flp"]
 
 # What a moderator can and can't do
 [collabvm.moderatorPermissions]
