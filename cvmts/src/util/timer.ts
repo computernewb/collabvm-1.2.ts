@@ -2,7 +2,7 @@ export class Timer {
 	private leftSeconds: number;
 	private timerInterval?: NodeJS.Timeout;
 	private intervalSeconds: number;
-	private onElapsedCb : () => void;
+	private onElapsedCb: () => void;
 
 	constructor(intervalSeconds: number, onElapsed: () => void) {
 		this.leftSeconds = 0;
@@ -11,15 +11,14 @@ export class Timer {
 	}
 
 	private removeInterval() {
-		if(this.timerInterval) {
+		if (this.timerInterval) {
 			clearInterval(this.timerInterval);
 			this.timerInterval = undefined;
 		}
 	}
 
 	private addInterval() {
-		if(this.timerInterval)
-			this.removeInterval();
+		if (this.timerInterval) this.removeInterval();
 		this.timerInterval = setInterval(this.onSecondElapsed.bind(this), 1000);
 	}
 
@@ -32,7 +31,7 @@ export class Timer {
 
 	private onSecondElapsed() {
 		this.leftSeconds--;
-		if (this.leftSeconds < 1) { 
+		if (this.leftSeconds < 1) {
 			this.onTimerElapsed();
 			return;
 		}
@@ -60,8 +59,7 @@ export class Timer {
 	}
 
 	unpause() {
-		if(this.wasArmed())
-			this.addInterval();
+		if (this.wasArmed()) this.addInterval();
 	}
 
 	getRemaining() {

@@ -1,4 +1,4 @@
-import { Size, Rect } from "../Utilities";
+import { Size, Rect } from '../Utilities';
 
 export function BatchRects(size: Size, rects: Array<Rect>): Rect {
 	var mergedX = size.width;

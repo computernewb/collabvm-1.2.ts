@@ -2,7 +2,7 @@ import { IProtocol } from './Protocol';
 import { User } from '../User';
 
 // The protocol manager.
-// Holds protocols, and provides the ability to obtain them by name. 
+// Holds protocols, and provides the ability to obtain them by name.
 //
 // Avoids direct dependency on a given list of protocols,
 // and allows (relatively simple) expansion of the supported protocols.

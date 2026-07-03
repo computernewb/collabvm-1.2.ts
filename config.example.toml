@@ -73,8 +73,7 @@ snapshots = true
 # is more than likely what you want, so the example configuration omits specifying this key.
 #
 # Commenting or removing this table from the configuration disables resource limiting entirely.
-resourceLimits = { cpuUsageMax = 100, runOnCpus = [ 2, 4 ] }
-
+resourceLimits = { cpuUsageMax = 100, runOnCpus = [2, 4] }
 
 # VNC options
 # Only used if vm.type is set to "vncvm"

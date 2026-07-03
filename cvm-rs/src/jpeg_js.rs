@@ -9,11 +9,9 @@ use rayon::{ThreadPool, ThreadPoolBuilder};
 
 use crate::jpeg_compressor::*;
 
-
 use resize::Pixel::RGBA8;
 use resize::Type::Triangle;
 use rgb::FromSlice;
-
 
 /// Gives a Rayon thread pool we use for parallelism
 fn rayon_pool() -> &'static ThreadPool {

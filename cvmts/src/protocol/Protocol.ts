@@ -107,7 +107,7 @@ export interface IProtocol {
 	sendAuth(user: User, authServer: string): void;
 
 	sendCapabilities(user: User, caps: ProtocolUpgradeCapability[]): void;
-	
+
 	sendDisconnect(user: User): void;
 
 	sendConnectFailResponse(user: User): void;

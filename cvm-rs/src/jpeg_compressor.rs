@@ -38,7 +38,8 @@ impl JpegCompressor {
 
 	pub fn compress_buffer<'a>(&self, image: &Image<'a>) -> Vec<u8> {
 		unsafe {
-			let tj_size: libc::c_ulong = tjBufSize(image.width as i32, image.height as i32, self.subsamp);
+			let tj_size: libc::c_ulong =
+				tjBufSize(image.width as i32, image.height as i32, self.subsamp);
 
 			// Catch cases where args are out of bounds and error reported
 			if tj_size == libc::c_ulong::MAX {

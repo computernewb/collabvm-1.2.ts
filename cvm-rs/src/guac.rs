@@ -92,7 +92,7 @@ pub fn decode_instruction(element_string: &String) -> DecodeResult<Elements> {
 		// We bound this anyways and do quite the checks, so even though it's not great,
 		// it should be generally fine (TM).
 		loop {
-			// Make sure scanning the element length does not try to 
+			// Make sure scanning the element length does not try to
 			// go out of bounds.
 			if current_position >= chars.len() {
 				return Err(DecodeError::InvalidFormat);

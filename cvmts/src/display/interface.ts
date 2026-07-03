@@ -1,7 +1,6 @@
 import EventEmitter from 'node:events';
 import { Size, Rect } from '../Utilities';
 
-
 // events:
 //
 // 'connected' -> () -> on successful connection

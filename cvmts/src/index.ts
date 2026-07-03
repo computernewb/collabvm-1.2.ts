@@ -35,7 +35,7 @@ try {
 	var configRaw = fs.readFileSync('config.toml').toString();
 	Config = toml.parse(configRaw);
 } catch (e) {
-	logger.error({err: e}, 'Fatal error: Failed to read or parse the config file');
+	logger.error({ err: e }, 'Fatal error: Failed to read or parse the config file');
 	process.exit(1);
 }
 
@@ -80,7 +80,7 @@ async function start() {
 				snapshot: Config.qemu.snapshots,
 				forceTcp: false,
 				vncHost: '127.0.0.1',
-				vncPort: Config.qemu.vncPort,
+				vncPort: Config.qemu.vncPort
 			};
 
 			VM = new QemuVMShim(def, Config.qemu.resourceLimits);
@@ -100,8 +100,8 @@ async function start() {
 	process.on('SIGTERM', async () => await stop());
 
 	// Register protocol(s) that the server supports
-	TheProtocolManager.registerProtocol("guacamole", () => new GuacamoleProtocol);
-	TheProtocolManager.registerProtocol("binary1", () => new BinRectsProtocol);
+	TheProtocolManager.registerProtocol('guacamole', () => new GuacamoleProtocol());
+	TheProtocolManager.registerProtocol('binary1', () => new BinRectsProtocol());
 
 	// Start up the server
 	var CVM = new CollabVMServer(Config, VM, banmgr, auth, geoipReader);

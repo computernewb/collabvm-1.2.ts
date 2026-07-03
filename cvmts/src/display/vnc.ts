@@ -19,7 +19,6 @@ export type VncRect = {
 	height: number;
 };
 
-
 // TODO: replace with a non-asshole VNC client (prefably one implemented
 // as a part of cvm-rs)
 export class VncDisplay extends EventEmitter implements VMDisplay {

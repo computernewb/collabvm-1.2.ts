@@ -2,7 +2,7 @@ import pino from 'pino';
 import { Rank, User } from './User.js';
 
 // Staff audit log.
-// TODO: 
+// TODO:
 //	- Hook this up to a db or something instead of misusing pino
 export class AuditLog {
 	private auditLogger = pino({

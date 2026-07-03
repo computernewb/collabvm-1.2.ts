@@ -34,7 +34,7 @@ export default interface IConfig {
 		qemuArgs: string;
 		vncPort: number;
 		snapshots: boolean;
-		resourceLimits?: CgroupLimits
+		resourceLimits?: CgroupLimits;
 	};
 	vncvm: VNCVMDef;
 	mysql: MySQLConfig;

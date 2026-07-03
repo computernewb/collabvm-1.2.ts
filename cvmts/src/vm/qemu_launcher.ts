@@ -24,8 +24,7 @@ function MakeValuesFromLimits(limits: CgroupLimits): CGroupValue[] {
 	let periodUs = 100 * 1000;
 
 	// Convert a user-configured period to us, since that's what cgroups2 expects.
-	if(limits.periodMs)
-		periodUs = limits.periodMs * 1000;
+	if (limits.periodMs) periodUs = limits.periodMs * 1000;
 
 	if (limits.cpuUsageMax) {
 		// cpu.max
@@ -36,7 +35,7 @@ function MakeValuesFromLimits(limits: CgroupLimits): CGroupValue[] {
 		});
 	}
 
-	if(limits.runOnCpus) {
+	if (limits.runOnCpus) {
 		// Make sure a CPU is not specified more than once. Bit hacky but oh well
 		let unique = [...new Set(limits.runOnCpus)];
 		option_array.push({
@@ -67,8 +66,7 @@ class CGroupLimitedProcess extends EventEmitter implements IProcess {
 		this.id = id;
 		this.limits = limits;
 
-		if(!this.limits.limitProcess)
-			this.limits.limitProcess = false;
+		if (!this.limits.limitProcess) this.limits.limitProcess = false;
 
 		this.process = execaCommand(command, opts);
 
@@ -80,7 +78,7 @@ class CGroupLimitedProcess extends EventEmitter implements IProcess {
 		this.process.on('spawn', () => {
 			self.initCgroup();
 
-			if(self.limits.limitProcess) {
+			if (self.limits.limitProcess) {
 				// it should have one!
 				self.cgroup.AttachProcess(self.process.pid!);
 			}
@@ -94,7 +92,7 @@ class CGroupLimitedProcess extends EventEmitter implements IProcess {
 
 	initCgroup() {
 		// Set cgroup keys.
-		for(const val of MakeValuesFromLimits(this.limits)) {
+		for (const val of MakeValuesFromLimits(this.limits)) {
 			let controller = this.cgroup.GetController(val.controller);
 			controller.WriteValue(val.key, val.value);
 		}
@@ -125,7 +123,7 @@ export class QemuResourceLimitedLauncher implements IProcessLauncher {
 		this.root = CGroup.Self();
 
 		// Make sure
-		if(limits.runOnCpus) {
+		if (limits.runOnCpus) {
 			this.root.InitControllers(true);
 		} else {
 			this.root.InitControllers(false);

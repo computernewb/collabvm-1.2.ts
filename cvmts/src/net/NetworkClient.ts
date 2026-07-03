@@ -1,4 +1,4 @@
-import { EventEmitter } from "stream";
+import { EventEmitter } from 'stream';
 
 interface NetworkClientEvents extends EventEmitter {
 	on(event: 'msg', listener: (buf: Buffer, binary: boolean) => void): this;

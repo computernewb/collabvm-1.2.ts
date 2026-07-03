@@ -13,8 +13,8 @@ import { BanManager } from '../../BanManager.js';
 import { v4 as uuid4 } from 'uuid';
 
 const kAllowedProtocols = [
-	"guacamole" // Regular ol' collabvm1 protocol
-]
+	'guacamole' // Regular ol' collabvm1 protocol
+];
 
 export default class WSServer extends EventEmitter implements NetworkServer {
 	private httpServer: http.Server;
@@ -31,15 +31,15 @@ export default class WSServer extends EventEmitter implements NetworkServer {
 		this.clients = [];
 		this.uuid = uuid4();
 		this.logger = pino().child({
-			stream: 'CVMTS.WSServer',
-			"uuid/websocket/server": this.uuid,
-			node: config.collabvm.node,
+			'stream': 'CVMTS.WSServer',
+			'uuid/websocket/server': this.uuid,
+			'node': config.collabvm.node
 		});
 		this.httpServer = http.createServer();
 		this.wsServer = new WebSocketServer({ noServer: true, perMessageDeflate: false, clientTracking: false });
 		this.httpServer.on('upgrade', (req: http.IncomingMessage, socket: internal.Duplex, head: Buffer) => this.httpOnUpgrade(req, socket, head));
 		this.httpServer.on('request', (req, res) => {
-			this.logger.debug({ event: "request", path: req.url });
+			this.logger.debug({ event: 'request', path: req.url });
 			res.writeHead(426);
 			res.write('This server only accepts WebSocket connections.');
 			res.end();
@@ -49,30 +49,30 @@ export default class WSServer extends EventEmitter implements NetworkServer {
 
 	start(): void {
 		this.logger.info({
-			event: "websocket server starting",
+			event: 'websocket server starting',
 			host: this.Config.http.host,
-			port: this.Config.http.port,
+			port: this.Config.http.port
 		});
 		this.httpServer.listen(this.Config.http.port, this.Config.http.host, () => {
 			this.logger.info({
-				event: "websocket server started",
+				event: 'websocket server started',
 				host: this.Config.http.host,
-				port: this.Config.http.port,
+				port: this.Config.http.port
 			});
 		});
 	}
 
 	stop(): void {
 		this.logger.info({
-			event: "websocket server stopping",
+			event: 'websocket server stopping',
 			host: this.Config.http.host,
-			port: this.Config.http.port,
+			port: this.Config.http.port
 		});
 		this.httpServer.close(() => {
 			this.logger.info({
-				event: "websocket server stopped",
+				event: 'websocket server stopped',
 				host: this.Config.http.host,
-				port: this.Config.http.port,
+				port: this.Config.http.port
 			});
 		});
 	}
@@ -173,10 +173,10 @@ export default class WSServer extends EventEmitter implements NetworkServer {
 	private onConnection(ws: WebSocket, req: http.IncomingMessage, ip: string, protocol: string) {
 		const uuid = uuid4();
 		const connectionId = {
-			"uuid/websocket/client": uuid,
-			src_ip: ip
+			'uuid/websocket/client': uuid,
+			'src_ip': ip
 		};
-		this.logger.info({ ...connectionId, event: "websocket client connecting" });
+		this.logger.info({ ...connectionId, event: 'websocket client connecting' });
 
 		let client = new WSClient(ws, ip, uuid);
 		this.clients.push(client);
@@ -184,21 +184,21 @@ export default class WSServer extends EventEmitter implements NetworkServer {
 		let user = new User(client, protocol, IPDataManager.GetIPData(ip), this.Config);
 		this.logger.info({
 			...connectionId,
-			event: "websocket client connection bound to user",
-			"uuid/user": user.uuid
+			'event': 'websocket client connection bound to user',
+			'uuid/user': user.uuid
 		});
 
 		this.emit('connect', user);
 
 		ws.on('error', (e) => {
-			this.logger.error({ ...connectionId, event: "websocket connection error" });
+			this.logger.error({ ...connectionId, event: 'websocket connection error' });
 			ws.close();
 		});
 
 		ws.on('close', () => {
-			this.logger.error({ ...connectionId, event: "websocket connection closed" });
+			this.logger.error({ ...connectionId, event: 'websocket connection closed' });
 		});
 
-		this.logger.info({ ...connectionId, event: "websocket client connected" });
+		this.logger.info({ ...connectionId, event: 'websocket client connected' });
 	}
 }
