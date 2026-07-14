@@ -101,7 +101,11 @@ export class TurnController {
 			// this is kind of ugly but basically this transitions into the correct
 			// state depending on the queue.
 			if (this.queue.size > 1) {
-				this.transitionToState(TurnState.Active);
+				if (this.state !== TurnState.Active) {
+					this.transitionToState(TurnState.Active);
+				} else {
+					this.turnTimer.arm();
+				}
 			} else if (this.queue.size == 1) {
 				this.transitionToState(TurnState.Active_OneUser);
 			} else if (this.queue.size == 0) {
