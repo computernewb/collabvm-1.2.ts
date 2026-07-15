@@ -40,8 +40,7 @@ export class TurnController {
 	}
 
 	private onTurnTimerElapsed() {
-		this.queue.dequeue();
-		this.updateStateMachine();
+		this.endCurrentTurn();
 	}
 
 	private transitionToState(newState: TurnState) {
@@ -101,11 +100,7 @@ export class TurnController {
 			// this is kind of ugly but basically this transitions into the correct
 			// state depending on the queue.
 			if (this.queue.size > 1) {
-				if (this.state !== TurnState.Active) {
-					this.transitionToState(TurnState.Active);
-				} else {
-					this.turnTimer.arm();
-				}
+				this.transitionToState(TurnState.Active);
 			} else if (this.queue.size == 1) {
 				this.transitionToState(TurnState.Active_OneUser);
 			} else if (this.queue.size == 0) {
@@ -156,6 +151,9 @@ export class TurnController {
 
 	endCurrentTurn() {
 		this.queue.dequeue();
+		if (this.queue.size > 1) {
+			this.turnTimer.arm();
+		}
 		this.updateStateMachine();
 	}
 
