@@ -1,0 +1,31 @@
+[categories]
+os = "Operating Systems"
+tools = "Tools & Utilities"
+
+
+[media.win98se]
+kind = "iso"
+path = "/srv/collabvm/iaos/win98se.iso"
+category = "os"
+name = "Windows 98 SE"
+description = "Windows 98 Second Edition install CD"
+year = "1999"
+image_url = "https://example.com/images/win98se.png"
+
+[media.dos622]
+kind = "flp"
+path = "/srv/collabvm/iaos/dos622.img"
+category = "os"
+name = "MS-DOS 6.22"
+description = "MS-DOS 6.22 boot floppy"
+year = "1994"
+image_url = "https://example.com/images/dos622.png"
+
+[media.norton_utils]
+kind = "iso"
+path = "/srv/collabvm/iaos/office2007.iso"
+category = "tools"
+name = "Microsoft Office 2007"
+description = "Microsoft Office 2007 installer"
+year = "2007"
+image_url = "https://example.com/images/office2007.png"
