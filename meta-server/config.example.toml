@@ -1,0 +1,8 @@
+[http]
+host = "127.0.0.1"
+port = 8199
+cors = true
+
+[iaos]
+enabled = true
+repository = "./media.toml"
