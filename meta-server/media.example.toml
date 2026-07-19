@@ -21,7 +21,7 @@ description = "MS-DOS 6.22 boot floppy"
 year = "1994"
 image_url = "https://example.com/images/dos622.png"
 
-[media.norton_utils]
+[media.office_2007]
 kind = "iso"
 path = "/srv/collabvm/iaos/office2007.iso"
 category = "tools"
