@@ -5,4 +5,8 @@ cors = true
 
 [iaos]
 enabled = true
+# Path to the IAOS media repository
 repository = "./media.toml"
+# You can also specify a directory name, in which case all .toml files in the directory will be recursively loaded.
+# This is useful if you have a lot of media files and want to sort them by category
+# repository = "./media/"

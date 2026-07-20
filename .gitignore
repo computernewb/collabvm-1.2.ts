@@ -3,6 +3,7 @@
 **/node_modules/
 config.toml
 media.toml
+media/
 
 # for now
 cvmts/attic

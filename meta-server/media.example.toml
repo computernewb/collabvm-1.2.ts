@@ -10,6 +10,8 @@ name = "Windows 98 SE"
 description = "Windows 98 Second Edition install CD"
 year = "1999"
 image_url = "https://example.com/images/win98se.png"
+build_number = "4.10.2222A"
+architecture = "i486"
 
 [media.dos622]
 kind = "flp"
@@ -19,6 +21,8 @@ name = "MS-DOS 6.22"
 description = "MS-DOS 6.22 boot floppy"
 year = "1994"
 image_url = "https://example.com/images/dos622.png"
+build_number = "6.22"
+architecture = "i86"
 
 [media.office_2007]
 kind = "iso"
@@ -28,3 +32,5 @@ name = "Microsoft Office 2007"
 description = "Microsoft Office 2007 installer"
 year = "2007"
 image_url = "https://example.com/images/office2007.png"
+build_number = "12.0.4518.1014"
+architecture = "i586"
