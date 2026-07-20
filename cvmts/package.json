@@ -7,7 +7,8 @@
 	"scripts": {
 		"build": "tsc -outDir dist -rootDir src/",
 		"serve": "node dist/index.js",
-		"format": "prettier --write ."
+		"format": "prettier --write .",
+		"checkformat": "prettier --check ."
 	},
 	"author": "Elijah R, modeco80",
 	"license": "GPL-3.0",
