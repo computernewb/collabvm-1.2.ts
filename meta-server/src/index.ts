@@ -1,23 +1,36 @@
 import fastify from 'fastify';
 import fastifyCors from '@fastify/cors';
 import pino from 'pino';
+import * as fs from 'fs';
+import * as toml from 'toml';
+import IConfig from './IConfig.js';
 import { IaosMediaRepository } from './iaos/iaos.js';
 import { MetaModule } from './module.js';
 
-// config values
-const LISTEN_HOST = process.env['META_HTTP_HOST'] || '127.0.0.1';
-const LISTEN_PORT = parseInt(process.env['META_HTTP_PORT'] || '8199');
-const REPO_PATH = process.env['META_IAOS_REPO'] || './media.toml';
-
 const logger = pino();
+
+let Config: IConfig;
+
+if (!fs.existsSync('config.toml')) {
+	logger.error('Fatal error: config.toml not found. Please copy config.example.toml and fill out fields');
+	process.exit(1);
+}
+try {
+	let configRaw = fs.readFileSync('config.toml').toString();
+	Config = toml.parse(configRaw);
+} catch (e) {
+	logger.error({ err: e }, 'Fatal error: Failed to read or parse the config file');
+	process.exit(1);
+}
 
 const Modules: Array<{ prefix: string; module: MetaModule }> = [];
 
-const iaos = new IaosMediaRepository(REPO_PATH, logger.child({ module: 'iaos' }));
-await iaos.loadRepo();
-Modules.push({ prefix: 'iaos', module: iaos });
+if (Config.iaos.enabled) {
+	const iaos = new IaosMediaRepository(Config.iaos.repository, logger.child({ module: 'iaos' }));
+	await iaos.loadRepo();
+	Modules.push({ prefix: 'iaos', module: iaos });
+}
 
-// reload listener
 process.on('SIGUSR1', () => {
 	for (let module of Modules) {
 		module.module.doReload();
@@ -29,10 +42,9 @@ const app = fastify({
 });
 
 await app.register(fastifyCors, {
-	origin: true
+	origin: Config.http.cors
 });
 
-// Public API
 await app.register(
 	async (fastify, opts) => {
 		for (let module of Modules) {
@@ -42,13 +54,12 @@ await app.register(
 	{ prefix: '/public' }
 );
 
-// Private API
 await app.register(
 	async (fastify, opts) => {
 		fastify.get('/info', () => {
 			return {
 				version: 1,
-				enabledFeatures: ['iaos']
+				enabledFeatures: Modules.map((module) => module.prefix)
 			};
 		});
 
@@ -59,4 +70,4 @@ await app.register(
 	{ prefix: '/private' }
 );
 
-app.listen({ host: LISTEN_HOST, port: LISTEN_PORT });
+app.listen({ host: Config.http.host, port: Config.http.port });
