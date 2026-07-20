@@ -2,7 +2,6 @@
 os = "Operating Systems"
 tools = "Tools & Utilities"
 
-
 [media.win98se]
 kind = "iso"
 path = "/srv/collabvm/iaos/win98se.iso"
