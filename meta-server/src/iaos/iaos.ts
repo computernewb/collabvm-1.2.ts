@@ -21,6 +21,8 @@ export type MediaEntryType = {
 	description: string | null;
 	year: string | null;
 	image_url: string | null;
+	build_number: string | null;
+	architecture: string | null;
 };
 
 export type MediaListEntryType = MediaEntryType & { id: string };
@@ -133,7 +135,9 @@ export class IaosMediaRepository implements MetaModule {
 							name: entry.name,
 							description: entry.description,
 							year: entry.year,
-							image_url: entry.image_url
+							image_url: entry.image_url,
+							build_number: entry.build_number,
+							architecture: entry.architecture
 						};
 					})
 				};
