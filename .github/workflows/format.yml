@@ -17,6 +17,9 @@ jobs:
       - name: Enable corepack
         run: sudo corepack enable
       - name: Install dependencies
-        run: yarn
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake nasm
+          yarn
       - name: Check formatting
         run: yarn checkformat
