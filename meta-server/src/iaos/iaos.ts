@@ -1,5 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import * as fs from 'fs/promises';
+import { statSync, realpathSync } from 'fs';
+import { join } from 'path';
 import * as toml from 'toml';
 import { MetaModule } from '../module';
 import { Logger } from 'pino';
@@ -40,24 +42,58 @@ export class IaosMediaRepository implements MetaModule {
 	}
 
 	async loadRepo() {
-		let confRaw = await fs.readFile(this.repoPath, { encoding: 'utf-8' });
-		let conf = toml.parse(confRaw) as RepositoryConfigType;
-
 		let categories: Map<string, MediaRepoCategoryType> = new Map();
 		let mediaEntries: Map<string, MediaEntryType> = new Map();
+		let realPath = await fs.realpath(this.repoPath);
+		let filesLoaded: number;
 
-		for (let categoryId of Object.keys(conf.categories)) {
-			categories.set(categoryId, { name: conf.categories[categoryId] });
-		}
+		let stat = await fs.stat(realPath);
 
-		for (let entryId of Object.keys(conf.media)) {
-			mediaEntries.set(entryId, conf.media[entryId]);
+		if (stat.isDirectory()) {
+			let dirEntries = await fs.readdir(realPath, { withFileTypes: true, recursive: true });
+			let repoFiles = dirEntries
+				.filter((e) => e.name.endsWith('.toml') && (e.isFile() || (e.isSymbolicLink() && statSync(realpathSync(e.name)).isFile())))
+				.map((e) => join(e.parentPath, e.name));
+
+			for (let repoFile of repoFiles) {
+				await this.loadRepoFile(repoFile, categories, mediaEntries);
+			}
+			filesLoaded = repoFiles.length;
+		} else if (stat.isFile()) {
+			await this.loadRepoFile(realPath, categories, mediaEntries);
+			filesLoaded = 1;
+		} else {
+			throw new Error(realPath + ' is not a file or directory');
 		}
 
 		this.categories = categories;
 		this.mediaEntries = mediaEntries;
 
-		this.logger.info({ event: 'repo/loaded', categories: this.categories.size, entries: this.mediaEntries.size });
+		this.logger.info({ event: 'repo/loaded', filesLoaded, categories: this.categories.size, entries: this.mediaEntries.size });
+	}
+
+	private async loadRepoFile(path: string, categories: Map<string, MediaRepoCategoryType>, mediaEntries: Map<string, MediaEntryType>) {
+		let confRaw = await fs.readFile(path, { encoding: 'utf-8' });
+		let conf = toml.parse(confRaw) as RepositoryConfigType;
+
+		let totalCategories = 0;
+		let totalEntries = 0;
+
+		if (conf.categories) {
+			for (let categoryId of Object.keys(conf.categories)) {
+				categories.set(categoryId, { name: conf.categories[categoryId] });
+				totalCategories++;
+			}
+		}
+
+		if (conf.media) {
+			for (let entryId of Object.keys(conf.media)) {
+				mediaEntries.set(entryId, conf.media[entryId]);
+				totalEntries++;
+			}
+		}
+
+		this.logger.info({ event: 'repo/loadedFile', file: path, categories: totalCategories, entries: totalEntries });
 	}
 
 	getCategories() {
