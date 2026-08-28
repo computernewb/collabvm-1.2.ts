@@ -86,7 +86,7 @@ __metadata:
     "@types/ws": "npm:^8.5.5"
     execa: "npm:^8.0.1"
     ip-address: "npm:^10.1.1"
-    mariadb: "npm:^3.3.1"
+    mariadb: "npm:^3.5.3"
     mnemonist: "npm:^0.39.5"
     msgpackr: "npm:^1.10.2"
     pino: "npm:^9.3.1"
@@ -1384,10 +1384,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/geojson@npm:^7946.0.14":
-  version: 7946.0.14
-  resolution: "@types/geojson@npm:7946.0.14"
-  checksum: 10c0/54f3997708fa2970c03eeb31f7e4540a0eb6387b15e9f8a60513a1409c23cafec8d618525404573468b59c6fecbfd053724b3327f7fca416729c26271d799f55
+"@types/geojson@npm:^7946.0.16":
+  version: 7946.0.16
+  resolution: "@types/geojson@npm:7946.0.16"
+  checksum: 10c0/1ff24a288bd5860b766b073ead337d31d73bdc715e5b50a2cee5cb0af57a1ed02cc04ef295f5fa68dc40fe3e4f104dd31282b2b818a5ba3231bc1001ba084e3c
   languageName: node
   linkType: hard
 
@@ -1407,7 +1407,16 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/node@npm:^20.11.17, @types/node@npm:^20.12.5, @types/node@npm:^20.14.10":
+"@types/node@npm:>=20":
+  version: 26.4.0
+  resolution: "@types/node@npm:26.4.0"
+  dependencies:
+    undici-types: "npm:~8.3.0"
+  checksum: 10c0/e6fc94ea3b58fb8040b38c465dec1c53c1fd9d2c092c81f699d28799726baf59f12e1600318e79e8e6f985bb919dab6ae820180b942b8e38c51acaad63e8aada
+  languageName: node
+  linkType: hard
+
+"@types/node@npm:^20.12.5, @types/node@npm:^20.14.10":
   version: 20.14.14
   resolution: "@types/node@npm:20.14.14"
   dependencies:
@@ -2521,12 +2530,21 @@ __metadata:
   languageName: node
   linkType: hard
 
-"iconv-lite@npm:^0.6.2, iconv-lite@npm:^0.6.3":
+"iconv-lite@npm:^0.6.2":
   version: 0.6.3
   resolution: "iconv-lite@npm:0.6.3"
   dependencies:
     safer-buffer: "npm:>= 2.1.2 < 3.0.0"
   checksum: 10c0/98102bc66b33fcf5ac044099d1257ba0b7ad5e3ccd3221f34dd508ab4070edff183276221684e1e0555b145fce0850c9f7d2b60a9fcac50fbb4ea0d6e845a3b1
+  languageName: node
+  linkType: hard
+
+"iconv-lite@npm:^0.7.2":
+  version: 0.7.3
+  resolution: "iconv-lite@npm:0.7.3"
+  dependencies:
+    safer-buffer: "npm:>= 2.1.2 < 3.0.0"
+  checksum: 10c0/be2fd2414f7e94be3a63063fa0ad5919c16bc7b6e00c77eea0765ced6db405739f38dd51016583058fba25cc1d0106ba30b83fbb7a7e32f824d4db76f23d8d33
   languageName: node
   linkType: hard
 
@@ -2973,6 +2991,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"lru-cache@npm:^11.5.0":
+  version: 11.5.2
+  resolution: "lru-cache@npm:11.5.2"
+  checksum: 10c0/ece1ad731f5b655e85d67047d04bfc13823dc77aa61c5454924a9869ba600a0104e39cc33d726021feef812bc347ca34a5608a5eb1972a5dd0870b7ecd42c3f2
+  languageName: node
+  linkType: hard
+
 "make-fetch-happen@npm:^13.0.0":
   version: 13.0.1
   resolution: "make-fetch-happen@npm:13.0.1"
@@ -2993,16 +3018,16 @@ __metadata:
   languageName: node
   linkType: hard
 
-"mariadb@npm:^3.3.1":
-  version: 3.3.1
-  resolution: "mariadb@npm:3.3.1"
+"mariadb@npm:^3.5.3":
+  version: 3.5.3
+  resolution: "mariadb@npm:3.5.3"
   dependencies:
-    "@types/geojson": "npm:^7946.0.14"
-    "@types/node": "npm:^20.11.17"
+    "@types/geojson": "npm:^7946.0.16"
+    "@types/node": "npm:>=20"
     denque: "npm:^2.1.0"
-    iconv-lite: "npm:^0.6.3"
-    lru-cache: "npm:^10.2.0"
-  checksum: 10c0/980358fd69be905b1f8e69a685c70bc8c7accedac3ab6aff8742e3f3dec649b7cedb060d7c834a460fc6c48f56eca2125b0fcb9e64198cbb54c69a85c3fdc9ee
+    iconv-lite: "npm:^0.7.2"
+    lru-cache: "npm:^11.5.0"
+  checksum: 10c0/c41a37574932df9cdac077dda7087cc21b059e2e4efab84e6bf7729ae2d769d1eeb96eae6e1063a1dea528ed31e06dcd2e68fe55dcd0f51e78271141ef0e4340
   languageName: node
   linkType: hard
 
@@ -4250,6 +4275,13 @@ __metadata:
   version: 6.13.0
   resolution: "undici-types@npm:6.13.0"
   checksum: 10c0/2de55181f569c77a4f08063f8bf2722fcbb6ea312a26a9e927bd1f5ea5cf3a281c5ddf23155061db083e0a25838f54813543ff13b0ac34d230d5c1205ead66c1
+  languageName: node
+  linkType: hard
+
+"undici-types@npm:~8.3.0":
+  version: 8.3.0
+  resolution: "undici-types@npm:8.3.0"
+  checksum: 10c0/c8aa7e2fbebfce519654dafadc0ece59be888d2ccaf180fb4495da875e7b536d2456345c384069c7e6f3e9c9ab7435f074957da306f142343eee86ff8048855a
   languageName: node
   linkType: hard
 

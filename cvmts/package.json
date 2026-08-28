@@ -19,7 +19,7 @@
 		"@maxmind/geoip2-node": "^5.0.0",
 		"execa": "^8.0.1",
 		"ip-address": "^10.1.1",
-		"mariadb": "^3.3.1",
+		"mariadb": "^3.5.3",
 		"mnemonist": "^0.39.5",
 		"msgpackr": "^1.10.2",
 		"pino": "^9.3.1",
