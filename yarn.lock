@@ -85,7 +85,7 @@ __metadata:
     "@types/node": "npm:^20.12.5"
     "@types/ws": "npm:^8.5.5"
     execa: "npm:^8.0.1"
-    ip-address: "npm:^10.1.1"
+    ip-address: "npm:^10.5.1"
     mariadb: "npm:^3.3.1"
     mnemonist: "npm:^0.39.5"
     msgpackr: "npm:^1.10.2"
@@ -2575,10 +2575,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"ip-address@npm:^10.1.1":
-  version: 10.2.0
-  resolution: "ip-address@npm:10.2.0"
-  checksum: 10c0/5a00aada6e922c9c69dfc800ed5d0fa3348675ebdeed0e1575f503f27ca385b5f534363c9af7ad1daf64c1f1409388cdd3cc2e9b9b0fe1c924a431378d55075a
+"ip-address@npm:^10.5.1":
+  version: 10.5.1
+  resolution: "ip-address@npm:10.5.1"
+  checksum: 10c0/12ac14dc85de4fd3ba65cb4468033268fa0c30472d25e93e025d918ed178473024fdcf67ffc37c7dca2af5d1256a6083af0099a1e96cea8c6897e3b7227ed636
   languageName: node
   linkType: hard
 
